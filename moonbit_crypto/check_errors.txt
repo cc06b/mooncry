@@ -1,0 +1,44 @@
+﻿failed: C:\Users\leo\.moon\bin\moonc.exe check -error-format json C:\Users\leo\Documents\GitHub\solo\moonbit_crypto\cmd\main\main.mbt -o C:\Users\leo\Documents\GitHub\solo\moonbit_crypto\_build\wasm-gc\debug\check\cmd\main\main.mi -pkg moonbit/crypto/cmd/main -is-main -std-path C:\Users\leo\.moon\lib\core\_build\wasm-gc\release\bundle -i C:\Users\leo\.moon\lib\core\_build\wasm-gc\release\bundle\prelude\prelude.mi:prelude -pkg-sources moonbit/crypto/cmd/main:C:\Users\leo\Documents\GitHub\solo\moonbit_crypto\cmd\main -target wasm-gc -workspace-path C:\Users\leo\Documents\GitHub\solo\moonbit_crypto -all-pkgs C:\Users\leo\Documents\GitHub\solo\moonbit_crypto\_build\wasm-gc\debug\check\all_pkgs.json
+moon : Error: [4015]
+At line:1 char:105
++ ... rs\leo\Documents\GitHub\solo\moonbit_crypto ; moon check 2>&1 | Out-F ...
++                                                   ~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Error: [4015]:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+    ╭─[ C:\Users\leo\Documents\GitHub\solo\moonbit_crypto\cmd\main\main.mbt:34:4 ]
+    │
+ 34 │   b[0] = b'H'
+    │    ─┬─  
+    │     ╰─── Type Bytes has no method op_set.
+────╯
+Error: [4015]
+    ╭─[ C:\Users\leo\Documents\GitHub\solo\moonbit_crypto\cmd\main\main.mbt:35:4 ]
+    │
+ 35 │   b[1] = b'e'
+    │    ─┬─  
+    │     ╰─── Type Bytes has no method op_set.
+────╯
+Error: [4015]
+    ╭─[ C:\Users\leo\Documents\GitHub\solo\moonbit_crypto\cmd\main\main.mbt:36:4 ]
+    │
+ 36 │   b[2] = b'l'
+    │    ─┬─  
+    │     ╰─── Type Bytes has no method op_set.
+────╯
+Error: [4015]
+    ╭─[ C:\Users\leo\Documents\GitHub\solo\moonbit_crypto\cmd\main\main.mbt:37:4 ]
+    │
+ 37 │   b[3] = b'l'
+    │    ─┬─  
+    │     ╰─── Type Bytes has no method op_set.
+────╯
+Error: [4015]
+    ╭─[ C:\Users\leo\Documents\GitHub\solo\moonbit_crypto\cmd\main\main.mbt:38:4 ]
+    │
+ 38 │   b[4] = b'o'
+    │    ─┬─  
+    │     ╰─── Type Bytes has no method op_set.
+────╯
+Failed with 0 warnings, 5 errors.
+Error: failed when checking project
