@@ -1,0 +1,9 @@
+// Package configuration for MoonBit Crypto main program
+
+import {
+  "moonbit/crypto" @lib,
+}
+
+options(
+  "is-main": true,
+)
