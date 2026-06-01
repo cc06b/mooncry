@@ -416,8 +416,7 @@ fn sha256_block_simd(state: Array[UInt], block: Array[UInt]) -> Unit {
 // ============================================================================
 
 pub fn sha256_simd(data: Bytes) -> Bytes {
-  let state = Array::make(8, 0U)
-  state[0] = 0x6a09e667U
+  let state = Array::make(8, 0x6a09e667U)
   state[1] = 0xbb67ae85U
   state[2] = 0x3c6ef372U
   state[3] = 0xa54ff53aU
@@ -427,51 +426,59 @@ pub fn sha256_simd(data: Bytes) -> Bytes {
   state[7] = 0x5be0cd19U
 
   let len = data.length()
-  let pad_len = 64 - ((len + 9) % 64)
-  let total_len = len + 9 + pad_len
-  let padded = Array::make(total_len, b'\x00')
+  let block = Array::make(16, 0U)
+  let num_full_blocks = len / 64
 
-  for i in 0..<len {
-    padded[i] = data[i]
-  }
-  padded[len] = b'\x80'
-
-  let bit_len = (len * 8).to_uint64()
-  let offset = len + 1 + pad_len
-  padded[offset] = ((bit_len >> 56) & 0xFFUL).to_byte()
-  padded[offset + 1] = ((bit_len >> 48) & 0xFFUL).to_byte()
-  padded[offset + 2] = ((bit_len >> 40) & 0xFFUL).to_byte()
-  padded[offset + 3] = ((bit_len >> 32) & 0xFFUL).to_byte()
-  padded[offset + 4] = ((bit_len >> 24) & 0xFFUL).to_byte()
-  padded[offset + 5] = ((bit_len >> 16) & 0xFFUL).to_byte()
-  padded[offset + 6] = ((bit_len >> 8) & 0xFFUL).to_byte()
-  padded[offset + 7] = (bit_len & 0xFFUL).to_byte()
-
-  let padded_bytes = Bytes::from_array(padded[:])
-  let num_blocks = padded_bytes.length() / 64
-
-  for i in 0..<num_blocks {
-    let block = Array::make(16, 0U)
+  for i in 0..<num_full_blocks {
     let base = i * 64
-    block[0] = (padded_bytes[base].to_uint() << 24) | (padded_bytes[base + 1].to_uint() << 16) | (padded_bytes[base + 2].to_uint() << 8) | padded_bytes[base + 3].to_uint()
-    block[1] = (padded_bytes[base + 4].to_uint() << 24) | (padded_bytes[base + 5].to_uint() << 16) | (padded_bytes[base + 6].to_uint() << 8) | padded_bytes[base + 7].to_uint()
-    block[2] = (padded_bytes[base + 8].to_uint() << 24) | (padded_bytes[base + 9].to_uint() << 16) | (padded_bytes[base + 10].to_uint() << 8) | padded_bytes[base + 11].to_uint()
-    block[3] = (padded_bytes[base + 12].to_uint() << 24) | (padded_bytes[base + 13].to_uint() << 16) | (padded_bytes[base + 14].to_uint() << 8) | padded_bytes[base + 15].to_uint()
-    block[4] = (padded_bytes[base + 16].to_uint() << 24) | (padded_bytes[base + 17].to_uint() << 16) | (padded_bytes[base + 18].to_uint() << 8) | padded_bytes[base + 19].to_uint()
-    block[5] = (padded_bytes[base + 20].to_uint() << 24) | (padded_bytes[base + 21].to_uint() << 16) | (padded_bytes[base + 22].to_uint() << 8) | padded_bytes[base + 23].to_uint()
-    block[6] = (padded_bytes[base + 24].to_uint() << 24) | (padded_bytes[base + 25].to_uint() << 16) | (padded_bytes[base + 26].to_uint() << 8) | padded_bytes[base + 27].to_uint()
-    block[7] = (padded_bytes[base + 28].to_uint() << 24) | (padded_bytes[base + 29].to_uint() << 16) | (padded_bytes[base + 30].to_uint() << 8) | padded_bytes[base + 31].to_uint()
-    block[8] = (padded_bytes[base + 32].to_uint() << 24) | (padded_bytes[base + 33].to_uint() << 16) | (padded_bytes[base + 34].to_uint() << 8) | padded_bytes[base + 35].to_uint()
-    block[9] = (padded_bytes[base + 36].to_uint() << 24) | (padded_bytes[base + 37].to_uint() << 16) | (padded_bytes[base + 38].to_uint() << 8) | padded_bytes[base + 39].to_uint()
-    block[10] = (padded_bytes[base + 40].to_uint() << 24) | (padded_bytes[base + 41].to_uint() << 16) | (padded_bytes[base + 42].to_uint() << 8) | padded_bytes[base + 43].to_uint()
-    block[11] = (padded_bytes[base + 44].to_uint() << 24) | (padded_bytes[base + 45].to_uint() << 16) | (padded_bytes[base + 46].to_uint() << 8) | padded_bytes[base + 47].to_uint()
-    block[12] = (padded_bytes[base + 48].to_uint() << 24) | (padded_bytes[base + 49].to_uint() << 16) | (padded_bytes[base + 50].to_uint() << 8) | padded_bytes[base + 51].to_uint()
-    block[13] = (padded_bytes[base + 52].to_uint() << 24) | (padded_bytes[base + 53].to_uint() << 16) | (padded_bytes[base + 54].to_uint() << 8) | padded_bytes[base + 55].to_uint()
-    block[14] = (padded_bytes[base + 56].to_uint() << 24) | (padded_bytes[base + 57].to_uint() << 16) | (padded_bytes[base + 58].to_uint() << 8) | padded_bytes[base + 59].to_uint()
-    block[15] = (padded_bytes[base + 60].to_uint() << 24) | (padded_bytes[base + 61].to_uint() << 16) | (padded_bytes[base + 62].to_uint() << 8) | padded_bytes[base + 63].to_uint()
-
+    block[0] = (data[base].to_uint() << 24) | (data[base + 1].to_uint() << 16) | (data[base + 2].to_uint() << 8) | data[base + 3].to_uint()
+    block[1] = (data[base + 4].to_uint() << 24) | (data[base + 5].to_uint() << 16) | (data[base + 6].to_uint() << 8) | data[base + 7].to_uint()
+    block[2] = (data[base + 8].to_uint() << 24) | (data[base + 9].to_uint() << 16) | (data[base + 10].to_uint() << 8) | data[base + 11].to_uint()
+    block[3] = (data[base + 12].to_uint() << 24) | (data[base + 13].to_uint() << 16) | (data[base + 14].to_uint() << 8) | data[base + 15].to_uint()
+    block[4] = (data[base + 16].to_uint() << 24) | (data[base + 17].to_uint() << 16) | (data[base + 18].to_uint() << 8) | data[base + 19].to_uint()
+    block[5] = (data[base + 20].to_uint() << 24) | (data[base + 21].to_uint() << 16) | (data[base + 22].to_uint() << 8) | data[base + 23].to_uint()
+    block[6] = (data[base + 24].to_uint() << 24) | (data[base + 25].to_uint() << 16) | (data[base + 26].to_uint() << 8) | data[base + 27].to_uint()
+    block[7] = (data[base + 28].to_uint() << 24) | (data[base + 29].to_uint() << 16) | (data[base + 30].to_uint() << 8) | data[base + 31].to_uint()
+    block[8] = (data[base + 32].to_uint() << 24) | (data[base + 33].to_uint() << 16) | (data[base + 34].to_uint() << 8) | data[base + 35].to_uint()
+    block[9] = (data[base + 36].to_uint() << 24) | (data[base + 37].to_uint() << 16) | (data[base + 38].to_uint() << 8) | data[base + 39].to_uint()
+    block[10] = (data[base + 40].to_uint() << 24) | (data[base + 41].to_uint() << 16) | (data[base + 42].to_uint() << 8) | data[base + 43].to_uint()
+    block[11] = (data[base + 44].to_uint() << 24) | (data[base + 45].to_uint() << 16) | (data[base + 46].to_uint() << 8) | data[base + 47].to_uint()
+    block[12] = (data[base + 48].to_uint() << 24) | (data[base + 49].to_uint() << 16) | (data[base + 50].to_uint() << 8) | data[base + 51].to_uint()
+    block[13] = (data[base + 52].to_uint() << 24) | (data[base + 53].to_uint() << 16) | (data[base + 54].to_uint() << 8) | data[base + 55].to_uint()
+    block[14] = (data[base + 56].to_uint() << 24) | (data[base + 57].to_uint() << 16) | (data[base + 58].to_uint() << 8) | data[base + 59].to_uint()
+    block[15] = (data[base + 60].to_uint() << 24) | (data[base + 61].to_uint() << 16) | (data[base + 62].to_uint() << 8) | data[base + 63].to_uint()
+    
     sha256_block_simd(state, block)
   }
+
+  let remaining = len - num_full_blocks * 64
+  let base = num_full_blocks * 64
+  
+  for j in 0..<16 {
+    block[j] = 0U
+  }
+  
+  for j in 0..<remaining {
+    let idx = base + j
+    let shift = (3 - (j % 4)) * 8
+    block[j / 4] = block[j / 4] | (data[idx].to_uint() << shift)
+  }
+  
+  let shift = (3 - (remaining % 4)) * 8
+  block[remaining / 4] = block[remaining / 4] | (0x80U << shift)
+
+  if remaining >= 56 {
+    sha256_block_simd(state, block)
+    for j in 0..<16 {
+      block[j] = 0U
+    }
+  }
+
+  let bit_len = (len * 8).to_uint64()
+  block[14] = ((bit_len >> 32) & 0xFFFFFFFFUL).to_uint()
+  block[15] = (bit_len & 0xFFFFFFFFUL).to_uint()
+
+  sha256_block_simd(state, block)
 
   let result = Array::make(32, b'\x00')
   for i in 0..<8 {
