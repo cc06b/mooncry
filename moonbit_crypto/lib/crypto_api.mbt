@@ -64,3 +64,47 @@ fn hex_char_to_int(c: Char) -> Int {
   }
   0
 }
+
+// 字符串到 Bytes 转换
+pub fn string_to_bytes(s: String) -> Bytes {
+  let len = s.length()
+  let arr = Array::make(len, b'\x00')
+  for i in 0..<len {
+    arr[i] = s[i].to_byte()
+  }
+  Bytes::from_array(arr[:])
+}
+
+// Bytes 到字符串转换
+pub fn bytes_to_string(data: Bytes) -> String {
+  let len = data.length()
+  let mut result = ""
+  for i in 0..<len {
+    result = result + data[i].to_char().to_string()
+  }
+  result
+}
+
+// 生成随机测试数据（伪随机）
+pub fn generate_random_data(size: Int, seed: Int) -> Bytes {
+  let arr = Array::make(size, b'\x00')
+  let mut s = seed
+  for i in 0..<size {
+    s = (s * 1103515245 + 12345) & 0x7FFFFFFF
+    arr[i] = (s & 0xFF).to_byte()
+  }
+  Bytes::from_array(arr[:])
+}
+
+// 比较两个Bytes是否相等
+pub fn bytes_equal(a: Bytes, b: Bytes) -> Bool {
+  if a.length() != b.length() {
+    return false
+  }
+  for i in 0..<a.length() {
+    if a[i] != b[i] {
+      return false
+    }
+  }
+  true
+}
