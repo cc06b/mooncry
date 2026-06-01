@@ -155,26 +155,48 @@ const GMUL14: Array[Int] = [
   0xd7, 0xd9, 0xcb, 0xc5, 0xef, 0xe1, 0xf3, 0xfd, 0xa7, 0xa9, 0xbb, 0xb5, 0x9f, 0x91, 0x83, 0x8d
 ]
 
-fn key_expansion(key: Bytes) -> Array[Array[Int]] {
+fn key_expansion(key: Bytes) -> Array<Array<Int>> {
   let w = Array::make(44, Array::make(4, 0))
-  for i in 0..<4 {
-    w[i][0] = key[i * 4].to_int()
-    w[i][1] = key[i * 4 + 1].to_int()
-    w[i][2] = key[i * 4 + 2].to_int()
-    w[i][3] = key[i * 4 + 3].to_int()
-  }
+  
+  w[0][0] = key[0].to_int()
+  w[0][1] = key[1].to_int()
+  w[0][2] = key[2].to_int()
+  w[0][3] = key[3].to_int()
+  w[1][0] = key[4].to_int()
+  w[1][1] = key[5].to_int()
+  w[1][2] = key[6].to_int()
+  w[1][3] = key[7].to_int()
+  w[2][0] = key[8].to_int()
+  w[2][1] = key[9].to_int()
+  w[2][2] = key[10].to_int()
+  w[2][3] = key[11].to_int()
+  w[3][0] = key[12].to_int()
+  w[3][1] = key[13].to_int()
+  w[3][2] = key[14].to_int()
+  w[3][3] = key[15].to_int()
+  
+  let mut t0 = 0
+  let mut t1 = 0
+  let mut t2 = 0
+  let mut t3 = 0
+  
   for i in 4..<44 {
-    let mut t = [w[i - 1][0], w[i - 1][1], w[i - 1][2], w[i - 1][3]]
+    t0 = w[i - 1][0]
+    t1 = w[i - 1][1]
+    t2 = w[i - 1][2]
+    t3 = w[i - 1][3]
+    
     if (i % 4) == 0 {
-      let tmp = t[0]
-      t[0] = t[1]; t[1] = t[2]; t[2] = t[3]; t[3] = tmp
-      t[0] = SBOX[t[0]]; t[1] = SBOX[t[1]]; t[2] = SBOX[t[2]]; t[3] = SBOX[t[3]]
-      t[0] = t[0] ^ RCON[i / 4 - 1]
+      let tmp = t0
+      t0 = t1; t1 = t2; t2 = t3; t3 = tmp
+      t0 = SBOX[t0]; t1 = SBOX[t1]; t2 = SBOX[t2]; t3 = SBOX[t3]
+      t0 = t0 ^ RCON[i / 4 - 1]
     }
-    w[i][0] = w[i - 4][0] ^ t[0]
-    w[i][1] = w[i - 4][1] ^ t[1]
-    w[i][2] = w[i - 4][2] ^ t[2]
-    w[i][3] = w[i - 4][3] ^ t[3]
+    
+    w[i][0] = w[i - 4][0] ^ t0
+    w[i][1] = w[i - 4][1] ^ t1
+    w[i][2] = w[i - 4][2] ^ t2
+    w[i][3] = w[i - 4][3] ^ t3
   }
   w
 }
