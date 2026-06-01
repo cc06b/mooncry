@@ -315,15 +315,14 @@ pub fn aes_encrypt_ultra(data: Bytes, key: Bytes) -> Bytes {
   let num_blocks = len / 16
   let w = key_expansion(key)
   let mut result = Array::make(len, b'\x00')
+  let state = Array::make(4, Array::make(4, 0))
 
   for block in 0..<num_blocks {
     let offset = block * 16
-    let block_data = Array::make(16, b'\x00')
+    
     for i in 0..<16 {
-      block_data[i] = padded[offset + i]
+      state[i % 4][i / 4] = padded[offset + i].to_int()
     }
-
-    let state = bytes_to_state(Bytes::from_array(block_data[:]))
 
     add_round_key(state, w, 0)
     for round in 1..<10 {
@@ -336,9 +335,8 @@ pub fn aes_encrypt_ultra(data: Bytes, key: Bytes) -> Bytes {
     shift_rows(state)
     add_round_key(state, w, 10)
 
-    let encrypted = state_to_bytes(state)
     for i in 0..<16 {
-      result[offset + i] = encrypted[i]
+      result[offset + i] = (state[i % 4][i / 4] & 0xFF).to_byte()
     }
   }
 
@@ -350,15 +348,14 @@ pub fn aes_decrypt_ultra(data: Bytes, key: Bytes) -> Bytes {
   let num_blocks = len / 16
   let w = key_expansion(key)
   let mut result = Array::make(len, b'\x00')
+  let state = Array::make(4, Array::make(4, 0))
 
   for block in 0..<num_blocks {
     let offset = block * 16
-    let block_data = Array::make(16, b'\x00')
+    
     for i in 0..<16 {
-      block_data[i] = data[offset + i]
+      state[i % 4][i / 4] = data[offset + i].to_int()
     }
-
-    let state = bytes_to_state(Bytes::from_array(block_data[:]))
 
     add_round_key(state, w, 10)
     for round in 9..>0 {
@@ -371,9 +368,8 @@ pub fn aes_decrypt_ultra(data: Bytes, key: Bytes) -> Bytes {
     inv_sub_bytes(state)
     add_round_key(state, w, 0)
 
-    let decrypted = state_to_bytes(state)
     for i in 0..<16 {
-      result[offset + i] = decrypted[i]
+      result[offset + i] = (state[i % 4][i / 4] & 0xFF).to_byte()
     }
   }
 
