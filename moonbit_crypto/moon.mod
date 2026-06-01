@@ -15,7 +15,7 @@ version = "0.1.0"
 
 readme = "README.mbt.md"
 
-repository = ""
+repository = "https://github.com/cc06b/mooncry"
 
 license = "Apache-2.0"
 
