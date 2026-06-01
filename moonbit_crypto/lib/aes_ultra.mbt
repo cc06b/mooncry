@@ -1,5 +1,15 @@
 // AES Ultra-Optimized Implementation
 // 极致性能优化：完整GMUL查表 + 常量优化
+//
+// 本模块提供高度优化的AES-128加密算法实现：
+// - 预计算完整的GMUL查找表（2, 3, 9, 11, 13, 14）
+// - 优化的密钥扩展算法，减少内存分配
+// - 优化的状态转换，内联bytes_to_state/state_to_bytes
+// - PKCS7填充和去填充
+// - 完整的AES加密和解密实现
+//
+// 作者：MoonBit Crypto Team
+// 版本：1.0.0
 
 const SBOX: Array[Int] = [
   0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5, 0x30, 0x01, 0x67, 0x2b, 0xfe, 0xd7, 0xab, 0x76,
