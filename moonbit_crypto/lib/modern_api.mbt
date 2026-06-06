@@ -4,10 +4,11 @@
 import crypto_interface.*
 import crypto_error.*
 import crypto_config.*
-import provider::provider_manager.*
-import hash::sha256_provider.*
-import cipher::aes_provider.*
+import provider.provider_manager.*
+import hash.sha256_provider.*
+import cipher.aes_provider.*
 import crypto_api.*
+import sha256_mega.*
 
 // 哈希模块
 pub module hash {
