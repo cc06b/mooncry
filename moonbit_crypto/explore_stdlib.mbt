@@ -12,9 +12,9 @@ test "explore stdlib" {
   println("UInt32数组: [" + arr[0].to_string() + ", " + arr[1].to_string() + "]")
   
   // 测试字节数组
-  let bytes = @array.make(16, 0x00)
-  bytes[0] = 0x01
-  bytes[1] = 0x02
+  let bytes = Array::make(16, 0x00U)
+  bytes[0] = 0x01U
+  bytes[1] = 0x02U
   println("Bytes: " + bytes[0].to_string() + ", " + bytes[1].to_string())
 }
 

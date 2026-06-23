@@ -255,9 +255,9 @@ pub fn bytes_to_hex(data: Bytes) -> String {
     let byte = data[i].to_int()
     let high = (byte >> 4) & 0xF
     let low = byte & 0xF
-    let high_char = String::make(1, hex_chars[high])
-    let low_char = String::make(1, hex_chars[low])
-    result = result + high_char + low_char
+    let high_char = ((hex_chars[high].to_int()).to_char()).unwrap()
+    let low_char = ((hex_chars[low].to_int()).to_char()).unwrap()
+    result = result + high_char.to_string() + low_char.to_string()
   }
   result
 }

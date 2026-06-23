@@ -373,7 +373,7 @@ pub fn bytes_to_hex(data: Bytes) -> String {
 }
 
 // ---------- main 测试 ----------
-fn main() -> Unit {
+fn test_sha256_main() -> Unit {
   println("=== SHA-256 测试 ===")
 
   // 空字符串
