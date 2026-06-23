@@ -237,15 +237,6 @@ fn gmul(a: Int, b: Int) -> Int {
   p
 }
 
-fn sub_word(word: Array[Int]) -> Array[Int] {
-  let sbox = get_sbox()
-  let result = Array::make(4, 0)
-  for i in 0..<4 {
-    result[i] = sbox[word[i]]
-  }
-  result
-}
-
 fn rot_word(word: Array[Int]) -> Array[Int] {
   [word[1], word[2], word[3], word[0]]
 }
@@ -694,7 +685,6 @@ fn create_test_data(size: Int) -> Bytes {
 }
 
 fn bytes_to_hex_str(data: Bytes) -> String {
-  let hex_chars = "0123456789abcdef"
   let len = data.length()
   let mut result = ""
   for i in 0..<len {
@@ -822,8 +812,8 @@ fn main() -> Unit {
   let sizes = [64, 1024, 4096]
   for size in sizes {
     let data = create_test_data(size)
-    let hash_result = sha256(data)
-    let aes_result = aes_encrypt_ecb(data, aes_key)
+    let _ = sha256(data)
+    let _ = aes_encrypt_ecb(data, aes_key)
     println("Size " + size.to_string() + " bytes: SHA-256 and AES-ECB completed")
   }
   

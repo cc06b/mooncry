@@ -46,10 +46,10 @@ fn int_to_hex(i: Int) -> String {
   (hi_char.to_char().unwrap()).to_string() + (lo_char.to_char().unwrap()).to_string()
 }
 
-fn main() -> Unit {
+fn test_convert_main() -> Unit {
   let data = b"\x48\x65\x6c\x6c\x6f\x2c\x20\x41\x45\x53\x2d\x45\x43\x42\x21\x00"
   
-  println("Original data: " + state_to_bytes(bytes_to_state(data)))
+  println("Original data: " + int_to_hex(data[0].to_int()) + " " + int_to_hex(data[1].to_int()) + "...")
   
   let state = bytes_to_state(data)
   println("State matrix (row-major):")
@@ -71,7 +71,7 @@ fn main() -> Unit {
   }
   
   let recovered = state_to_bytes(state)
-  println("Recovered: " + state_to_bytes(bytes_to_state(recovered)))
+  println("Recovered: " + int_to_hex(recovered[0].to_int()) + " " + int_to_hex(recovered[1].to_int()) + "...")
   println("Match: " + (if recovered == data { "YES" } else { "NO" }))
   
   let sbox = get_sbox()
