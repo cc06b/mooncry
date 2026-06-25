@@ -91,7 +91,6 @@ void sha256_hash(const char* data, int len) {
         memset(block_bytes, 0, sizeof(block_bytes));
     }
 
-    memset(block, 0, sizeof(block));
     block_bytes[56] = (uint8_t)(bits >> 56);
     block_bytes[57] = (uint8_t)(bits >> 48);
     block_bytes[58] = (uint8_t)(bits >> 40);
