@@ -398,7 +398,7 @@ fn aes_key_expand(key : Array[UInt]) -> Array[UInt] {
                    else if i / nk == 3 { 0x04U } else if i / nk == 4 { 0x08U }
                    else if i / nk == 5 { 0x10U } else if i / nk == 6 { 0x20U }
                    else if i / nk == 7 { 0x40U } else if i / nk == 8 { 0x80U }
-                   else { 0x1BU }
+                   else if i / nk == 9 { 0x1BU } else { 0x36U }
       temp = temp ^ (rcon_val << 24)
     } else if nk > 6 && i % nk == 4 {
       temp = aes_sbox_lookup((temp >> 24) & 0xFFU) << 24

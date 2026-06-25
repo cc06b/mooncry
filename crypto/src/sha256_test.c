@@ -69,44 +69,46 @@ void sha256_hash(const char* data, int len) {
     }
 
     // Last block with padding
+    uint8_t block_bytes[64] = {0};
     uint32_t block[16] = {0};
     int rem = len - full_bytes;
-    int block_idx = 0;
-    int byte_pos = full_bytes;
+    uint64_t bits = (uint64_t)len * 8;
 
-    while (byte_pos < len && block_idx < 14) {
-        uint32_t word_val = 0;
-        for (int j = 0; j < 4; j++) {
-            if (byte_pos < len)
-                word_val |= (uint8_t)data[byte_pos] << (24 - j*8);
-            byte_pos++;
+    if (rem > 0) {
+        memcpy(block_bytes, data + full_bytes, rem);
+    }
+    block_bytes[rem] = 0x80;
+
+    if (rem >= 56) {
+        for (int i = 0; i < 16; i++) {
+            int off = i * 4;
+            block[i] = ((uint32_t)block_bytes[off] << 24) |
+                       ((uint32_t)block_bytes[off + 1] << 16) |
+                       ((uint32_t)block_bytes[off + 2] << 8) |
+                       (uint32_t)block_bytes[off + 3];
         }
-        block[block_idx++] = word_val;
+        sha256_compress(state, block);
+        memset(block_bytes, 0, sizeof(block_bytes));
     }
 
-    // Add 0x80 padding
-    if (block_idx < 14) {
-        int pos_in_word = len % 4;
-        if (pos_in_word == 0) {
-            block[block_idx++] = 0x80 << 24;
-        } else {
-            block[block_idx++] |= 0x80 << (24 - pos_in_word * 8);
-        }
-    }
+    memset(block, 0, sizeof(block));
+    block_bytes[56] = (uint8_t)(bits >> 56);
+    block_bytes[57] = (uint8_t)(bits >> 48);
+    block_bytes[58] = (uint8_t)(bits >> 40);
+    block_bytes[59] = (uint8_t)(bits >> 32);
+    block_bytes[60] = (uint8_t)(bits >> 24);
+    block_bytes[61] = (uint8_t)(bits >> 16);
+    block_bytes[62] = (uint8_t)(bits >> 8);
+    block_bytes[63] = (uint8_t)bits;
 
-    // Add length
-    if (block_idx < 15) {
-        uint64_t bits = (uint64_t)len * 8;
-        block[14] = bits >> 32;
-        block[15] = bits & 0xFFFFFFFF;
-        sha256_compress(state, block);
-    } else {
-        block[14] = 0; block[15] = 0;
-        sha256_compress(state, block);
-        block[14] = ((uint64_t)len * 8) >> 32;
-        block[15] = ((uint64_t)len * 8) & 0xFFFFFFFF;
-        sha256_compress(state, block);
+    for (int i = 0; i < 16; i++) {
+        int off = i * 4;
+        block[i] = ((uint32_t)block_bytes[off] << 24) |
+                   ((uint32_t)block_bytes[off + 1] << 16) |
+                   ((uint32_t)block_bytes[off + 2] << 8) |
+                   (uint32_t)block_bytes[off + 3];
     }
+    sha256_compress(state, block);
 
     printf("SHA-256(\"%s\") = ", data);
     for (int i = 0; i < 8; i++) {
