@@ -343,6 +343,10 @@ let aes_inv_sbox : Array[Byte] = [
   0x17, 0x2b, 0x04, 0x7e, 0xba, 0x77, 0xd6, 0x26, 0xe1, 0x69, 0x14, 0x63, 0x55, 0x21, 0x0c, 0x7d,
 ]
 
+let aes_rcon : Array[UInt] = [
+  0U, 0x01U, 0x02U, 0x04U, 0x08U, 0x10U, 0x20U, 0x40U, 0x80U, 0x1BU, 0x36U,
+]
+
 /// GF(2^8) 乘法: a * 0x02
 fn gmul2(a : UInt) -> UInt {
   let lo = (a << 1) & 0xFFU
@@ -394,11 +398,7 @@ fn aes_key_expand(key : Array[UInt]) -> Array[UInt] {
            | aes_sbox_lookup((temp >> 8) & 0xFFU) << 8
            | aes_sbox_lookup(temp & 0xFFU)
       // Rcon
-      let rcon_val = if i / nk == 1 { 0x01U } else if i / nk == 2 { 0x02U }
-                   else if i / nk == 3 { 0x04U } else if i / nk == 4 { 0x08U }
-                   else if i / nk == 5 { 0x10U } else if i / nk == 6 { 0x20U }
-                   else if i / nk == 7 { 0x40U } else if i / nk == 8 { 0x80U }
-                   else if i / nk == 9 { 0x1BU } else { 0x36U }
+      let rcon_val = aes_rcon[i / nk]
       temp = temp ^ (rcon_val << 24)
     } else if nk > 6 && i % nk == 4 {
       temp = aes_sbox_lookup((temp >> 24) & 0xFFU) << 24
