@@ -1,7 +1,6 @@
 import {
-  "moonbit/crypto/lib",
+  "cc06b/mooncry/lib",
 }
-
 options(
   "is-main": true,
 )

@@ -4,6 +4,15 @@ target/
 target
 .mooncakes/
 .moonagent/
+
+# MoonBit generated artifacts
+*.bak
+*.core
+*.mi
+*.mbti
+*.log
+pkg.generated.mbti
+
 # Override root .gitignore's Python `lib/` rule — lib/ holds MoonBit source, not venv
 !lib/
 !lib/**

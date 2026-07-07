@@ -17,8 +17,10 @@ jobs:
           echo "$HOME/.moon/bin" >> $GITHUB_PATH
       - name: Moon check
         run: moon check
-      - name: Moon fmt check
-        run: moon fmt --check
+      - name: Moon fmt deny-warn
+        run: moon fmt --deny-warn
+      - name: Moon info deny-warn
+        run: moon info --deny-warn
       - name: Moon test
         run: moon test
       - name: Clean artifacts
