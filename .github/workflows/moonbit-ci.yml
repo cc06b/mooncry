@@ -1,0 +1,39 @@
+name: MoonBit CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install.sh | bash
+          echo "$HOME/.moon/bin" >> $GITHUB_PATH
+      - name: Moon check
+        run: moon check
+      - name: Moon fmt check
+        run: moon fmt --check
+      - name: Moon test
+        run: moon test
+      - name: Clean artifacts
+        run: |
+          rm -rf _build
+          rm -f *.bak *.core *.mi pkg.generated.mbti *.txt *.log
+
+  build:
+    runs-on: ubuntu-latest
+    needs: check
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install.sh | bash
+          echo "$HOME/.moon/bin" >> $GITHUB_PATH
+      - name: Moon build
+        run: moon build

@@ -1,7 +1,0 @@
-import {
-  "username/cryptoult" @lib,
-}
-
-options(
-  "is-main": true,
-)

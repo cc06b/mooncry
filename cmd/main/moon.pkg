@@ -1,0 +1,7 @@
+import {
+  "moonbit/crypto/lib",
+}
+
+options(
+  "is-main": true,
+)

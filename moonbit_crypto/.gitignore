@@ -1,9 +1,0 @@
-.DS_Store
-_build/
-target/
-target
-.mooncakes/
-.moonagent/
-# Override root .gitignore's Python `lib/` rule — lib/ holds MoonBit source, not venv
-!lib/
-!lib/**
