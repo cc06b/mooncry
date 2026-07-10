@@ -125,6 +125,22 @@ moon info
 moon test --deny-warn
 ```
 
+## Publishing (maintainers)
+
+The module metadata (`moon.mod.json`: name `cc06b/mooncry`, repository
+`github.com/cc06b/mooncry`, license `Apache-2.0`, version `0.1.0`) is set up
+for [mooncakes.io](https://mooncakes.io). Publishing requires the owner of the
+`cc06b` namespace to be logged in:
+
+```bash
+moon login            # one time, with the account that owns cc06b
+moon publish          # publishes the current version
+```
+
+Before publishing, ensure all four checks above pass and the tree is clean
+(`moon clean` to drop `_build/` and generated `.mbti` files, which are
+gitignored and must not be committed).
+
 ## License
 
 Apache-2.0
