@@ -1,4 +1,5 @@
 // ==================== SHA-512 (FIPS 180-4) ====================
+
 ///|
 /// SHA-512 constants — first 80 primes' cube-root fractional parts
 let sha512_k : Array[UInt64] = [
@@ -23,34 +24,42 @@ let sha512_k : Array[UInt64] = [
   0x28db77f523047d84UL, 0x32caab7b40c72493UL, 0x3c9ebe0a15c9bebcUL, 0x431d67c49c100d4cUL,
   0x4cc5d4becb3e42b6UL, 0x597f299cfc657e2aUL, 0x5fcb6fab3ad6faecUL, 0x6c44198c4a475817UL,
 ]
+
 ///|
 fn rotr64(x : UInt64, n : Int) -> UInt64 {
   (x >> n) | (x << (64 - n))
 }
+
 ///|
 fn sha512_sig0(x : UInt64) -> UInt64 {
   rotr64(x, 1) ^ rotr64(x, 8) ^ (x >> 7)
 }
+
 ///|
 fn sha512_sig1(x : UInt64) -> UInt64 {
   rotr64(x, 19) ^ rotr64(x, 61) ^ (x >> 6)
 }
+
 ///|
 fn sha512_cap_sig0(x : UInt64) -> UInt64 {
   rotr64(x, 28) ^ rotr64(x, 34) ^ rotr64(x, 39)
 }
+
 ///|
 fn sha512_cap_sig1(x : UInt64) -> UInt64 {
   rotr64(x, 14) ^ rotr64(x, 18) ^ rotr64(x, 41)
 }
+
 ///|
 fn sha512_ch(x : UInt64, y : UInt64, z : UInt64) -> UInt64 {
   (x & y) ^ ((0xFFFFFFFFFFFFFFFFUL ^ x) & z)
 }
+
 ///|
 fn sha512_maj(x : UInt64, y : UInt64, z : UInt64) -> UInt64 {
   (x & y) ^ (x & z) ^ (y & z)
 }
+
 ///|
 fn read_u64_be(data : Bytes, offset : Int) -> UInt64 {
   (data[offset].to_uint64() << 56) |
@@ -62,6 +71,7 @@ fn read_u64_be(data : Bytes, offset : Int) -> UInt64 {
   (data[offset + 6].to_uint64() << 8) |
   data[offset + 7].to_uint64()
 }
+
 ///|
 fn write_u64_be(arr : Array[Byte], offset : Int, val : UInt64) -> Unit {
   arr[offset] = ((val >> 56) & 0xFFUL).to_byte()
@@ -73,11 +83,12 @@ fn write_u64_be(arr : Array[Byte], offset : Int, val : UInt64) -> Unit {
   arr[offset + 6] = ((val >> 8) & 0xFFUL).to_byte()
   arr[offset + 7] = (val & 0xFFUL).to_byte()
 }
+
 ///|
 fn sha512_pad_message(data : Bytes) -> Array[Byte] {
   let original_len = data.length()
   let bit_len = (original_len * 8).to_uint64()
-  let pad_len = 112 - (original_len % 128)
+  let pad_len = 112 - original_len % 128
   let pad_len_final = if pad_len <= 0 { pad_len + 128 } else { pad_len }
   let final_len = original_len + pad_len_final + 16
   let padded = Array::make(final_len, b'\x00')
@@ -90,6 +101,7 @@ fn sha512_pad_message(data : Bytes) -> Array[Byte] {
   write_u64_be(padded, original_len + pad_len_final + 8, bit_len)
   padded
 }
+
 ///|
 fn sha512_process_block(state : Array[UInt64], block : Array[UInt64]) -> Unit {
   let mut a = state[0]
@@ -128,6 +140,7 @@ fn sha512_process_block(state : Array[UInt64], block : Array[UInt64]) -> Unit {
   state[6] = state[6] + g
   state[7] = state[7] + h
 }
+
 ///|
 /// Compute SHA-512 hash (FIPS 180-4). Returns 64-byte digest.
 pub fn sha512(data : Bytes) -> Bytes {

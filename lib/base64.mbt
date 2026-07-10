@@ -1,16 +1,15 @@
 // ==================== Base64 (RFC 4648) ====================
+
 ///|
 /// Standard Base64 alphabet
 let base64_alphabet : Array[Byte] = [
-  b'A', b'B', b'C', b'D', b'E', b'F', b'G', b'H',
-  b'I', b'J', b'K', b'L', b'M', b'N', b'O', b'P',
-  b'Q', b'R', b'S', b'T', b'U', b'V', b'W', b'X',
-  b'Y', b'Z', b'a', b'b', b'c', b'd', b'e', b'f',
-  b'g', b'h', b'i', b'j', b'k', b'l', b'm', b'n',
-  b'o', b'p', b'q', b'r', b's', b't', b'u', b'v',
-  b'w', b'x', b'y', b'z', b'0', b'1', b'2', b'3',
+  b'A', b'B', b'C', b'D', b'E', b'F', b'G', b'H', b'I', b'J', b'K', b'L', b'M', b'N',
+  b'O', b'P', b'Q', b'R', b'S', b'T', b'U', b'V', b'W', b'X', b'Y', b'Z', b'a', b'b',
+  b'c', b'd', b'e', b'f', b'g', b'h', b'i', b'j', b'k', b'l', b'm', b'n', b'o', b'p',
+  b'q', b'r', b's', b't', b'u', b'v', b'w', b'x', b'y', b'z', b'0', b'1', b'2', b'3',
   b'4', b'5', b'6', b'7', b'8', b'9', b'+', b'/',
 ]
+
 ///|
 /// Base64 encode (RFC 4648, standard alphabet with padding)
 pub fn base64_encode(data : Bytes) -> String {
@@ -34,7 +33,7 @@ pub fn base64_encode(data : Bytes) -> String {
     let idx2 = ((b1 & 0x0F) << 2) | (b2 >> 6)
     let idx3 = b2 & 0x3F
     let out_off = i * 4
-    output[out_off]     = base64_alphabet[idx0]
+    output[out_off] = base64_alphabet[idx0]
     output[out_off + 1] = base64_alphabet[idx1]
     output[out_off + 2] = base64_alphabet[idx2]
     output[out_off + 3] = base64_alphabet[idx3]
@@ -63,77 +62,89 @@ pub fn base64_encode(data : Bytes) -> String {
   }
   result
 }
+
 ///|
-/// Decode a single base64 character to its 6-bit value. Returns -1 for invalid input.
-fn base64_char_value(c : Byte) -> Int {
-  let code = c.to_int()
-  if code >= 65 && code <= 90 {   // A-Z
-    return code - 65
+/// Decode a single base64 code point to its 6-bit value. Returns -1 for invalid input.
+fn base64_char_value(code : Int) -> Int {
+  if code >= 65 && code <= 90 {
+    // A-Z
+    code - 65
+  } else if code >= 97 && code <= 122 {
+    // a-z
+    code - 71
+  } else if code >= 48 && code <= 57 {
+    // 0-9
+    code + 4
+  } else if code == 43 {
+    // '+'
+    62
+  } else if code == 47 {
+    // '/'
+    63
+  } else {
+    -1
   }
-  if code >= 97 && code <= 122 {  // a-z
-    return code - 71
-  }
-  if code >= 48 && code <= 57 {   // 0-9
-    return code + 4
-  }
-  if code == 43 { return 62 }      // +
-  if code == 47 { return 63 }      // /
-  -1
 }
+
 ///|
 /// Base64 decode (RFC 4648, standard alphabet). Returns empty Bytes on invalid input.
+/// MoonBit strings are UTF-16 internally; Base64 is ASCII, so we iterate code points.
 pub fn base64_decode(encoded : String) -> Bytes {
-  // Remove padding and validate
-  let mut clean_len = 0
-  let mut padding = 0
-  let enc_bytes = encoded.to_bytes()
-  let enc_len = enc_bytes.length()
-  // Count valid chars and trailing padding
-  for i in 0..<enc_len {
-    let c = enc_bytes[i]
-    if c == b'=' {
-      padding = padding + 1
-    } else if base64_char_value(c) >= 0 {
-      clean_len = clean_len + 1
+  // Collect 6-bit values of valid base64 characters.
+  let vals : Array[Int] = []
+  let mut seen_padding = false
+  for c in encoded.iter() {
+    let code = c.to_int()
+    if code == 61 {
+      // '='
+      seen_padding = true
+    } else {
+      let v = base64_char_value(code)
+      if v < 0 {
+        return b""
+      }
+      if seen_padding {
+        // data character after padding — invalid
+        return b""
+      }
+      vals.push(v)
     }
-    // Ignore whitespace? For strictness we don't.
   }
-  // Calculate output length
-  let groups = clean_len / 4
-  let remainder_clean = clean_len % 4
-  let mut output_len = groups * 3
-  if remainder_clean == 2 {
-    output_len = output_len + 1
-  } else if remainder_clean == 3 {
-    output_len = output_len + 2
+  let n = vals.length()
+  let groups = n / 4
+  let remainder = n % 4
+  // A single leftover 6-bit char cannot form any output byte.
+  if remainder == 1 {
+    return b""
   }
-  let output = Array::make(output_len, b'\x00')
-  let mut out_idx = 0
-  let mut in_idx = 0
-  // Process full 4-char groups
-  for _ in 0..<groups {
-    // Skip padding chars at end, but for full groups there shouldn't be any
-    let v0 = base64_char_value(enc_bytes[in_idx])
-    let v1 = base64_char_value(enc_bytes[in_idx + 1])
-    let v2 = base64_char_value(enc_bytes[in_idx + 2])
-    let v3 = base64_char_value(enc_bytes[in_idx + 3])
-    output[out_idx]     = ((v0 << 2) | (v1 >> 4)).to_byte()
-    output[out_idx + 1] = (((v1 & 0x0F) << 4) | (v2 >> 2)).to_byte()
-    output[out_idx + 2] = (((v2 & 0x03) << 6) | v3).to_byte()
-    in_idx = in_idx + 4
-    out_idx = out_idx + 3
+  let mut out_len = groups * 3
+  if remainder == 2 {
+    out_len = out_len + 1
+  } else if remainder == 3 {
+    out_len = out_len + 2
   }
-  // Process remaining chars
-  if remainder_clean == 2 {
-    let v0 = base64_char_value(enc_bytes[in_idx])
-    let v1 = base64_char_value(enc_bytes[in_idx + 1])
-    output[out_idx] = ((v0 << 2) | (v1 >> 4)).to_byte()
-  } else if remainder_clean == 3 {
-    let v0 = base64_char_value(enc_bytes[in_idx])
-    let v1 = base64_char_value(enc_bytes[in_idx + 1])
-    let v2 = base64_char_value(enc_bytes[in_idx + 2])
-    output[out_idx]     = ((v0 << 2) | (v1 >> 4)).to_byte()
-    output[out_idx + 1] = (((v1 & 0x0F) << 4) | (v2 >> 2)).to_byte()
+  let out = Array::make(out_len, b'\x00')
+  let mut oi = 0
+  for g in 0..<groups {
+    let v0 = vals[g * 4]
+    let v1 = vals[g * 4 + 1]
+    let v2 = vals[g * 4 + 2]
+    let v3 = vals[g * 4 + 3]
+    out[oi] = ((v0 << 2) | (v1 >> 4)).to_byte()
+    out[oi + 1] = (((v1 & 0x0F) << 4) | (v2 >> 2)).to_byte()
+    out[oi + 2] = (((v2 & 0x03) << 6) | v3).to_byte()
+    oi = oi + 3
   }
-  Bytes::from_array(output[:])
+  if remainder == 2 {
+    let v0 = vals[groups * 4]
+    let v1 = vals[groups * 4 + 1]
+    out[oi] = ((v0 << 2) | (v1 >> 4)).to_byte()
+  } else if remainder == 3 {
+    let v0 = vals[groups * 4]
+    let v1 = vals[groups * 4 + 1]
+    let v2 = vals[groups * 4 + 2]
+    out[oi] = ((v0 << 2) | (v1 >> 4)).to_byte()
+    out[oi + 1] = (((v1 & 0x0F) << 4) | (v2 >> 2)).to_byte()
+  }
+  Bytes::from_array(out[:])
 }
