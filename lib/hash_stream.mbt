@@ -2,14 +2,16 @@
 // Incremental hashing with update/finalize pattern for large or streaming data.
 
 // ==================== MD5 Streaming ====================
+
 ///|
 /// Incremental MD5 hasher
 pub struct Md5Hasher {
-  state : Array[UInt],
-  buffer : Array[Byte],
-  buf_len : Int,
-  total_len : UInt64,
+  state : Array[UInt]
+  buffer : Array[Byte]
+  mut buf_len : Int
+  mut total_len : UInt64
 }
+
 ///|
 /// Create a new MD5 hasher
 pub fn md5_new() -> Md5Hasher {
@@ -18,13 +20,14 @@ pub fn md5_new() -> Md5Hasher {
   state[1] = 0xefcdab89U
   state[2] = 0x98badcfeU
   state[3] = 0x10325476U
-  Md5Hasher@{
-    state: state,
+  Md5Hasher::{
+    state,
     buffer: Array::make(64, b'\x00'),
     buf_len: 0,
     total_len: 0UL,
   }
 }
+
 ///|
 /// Feed data into the MD5 hasher
 pub fn md5_update(hasher : Md5Hasher, data : Bytes) -> Unit {
@@ -72,12 +75,13 @@ pub fn md5_update(hasher : Md5Hasher, data : Bytes) -> Unit {
     hasher.buf_len = rem_count
   }
 }
+
 ///|
 /// Finalize and return the 16-byte MD5 digest
 pub fn md5_finalize(hasher : Md5Hasher) -> Bytes {
   // Pad the remaining buffer
   let bit_len = hasher.total_len * 8UL
-  let pad_len = 56 - (hasher.buf_len % 64)
+  let pad_len = 56 - hasher.buf_len % 64
   let pad_len_final = if pad_len <= 0 { pad_len + 64 } else { pad_len }
   // Create padded data from buffer + padding + length
   let final_block_len = hasher.buf_len + pad_len_final + 8
@@ -111,14 +115,16 @@ pub fn md5_finalize(hasher : Md5Hasher) -> Bytes {
 }
 
 // ==================== SHA-256 Streaming ====================
+
 ///|
 /// Incremental SHA-256 hasher
 pub struct Sha256Hasher {
-  state : Array[UInt],
-  buffer : Array[Byte],
-  buf_len : Int,
-  total_len : UInt64,
+  state : Array[UInt]
+  buffer : Array[Byte]
+  mut buf_len : Int
+  mut total_len : UInt64
 }
+
 ///|
 /// Create a new SHA-256 hasher
 pub fn sha256_new() -> Sha256Hasher {
@@ -131,13 +137,14 @@ pub fn sha256_new() -> Sha256Hasher {
   state[5] = 0x9b05688cU
   state[6] = 0x1f83d9abU
   state[7] = 0x5be0cd19U
-  Sha256Hasher@{
-    state: state,
+  Sha256Hasher::{
+    state,
     buffer: Array::make(64, b'\x00'),
     buf_len: 0,
     total_len: 0UL,
   }
 }
+
 ///|
 /// Feed data into the SHA-256 hasher
 pub fn sha256_update(hasher : Sha256Hasher, data : Bytes) -> Unit {
@@ -181,11 +188,12 @@ pub fn sha256_update(hasher : Sha256Hasher, data : Bytes) -> Unit {
     hasher.buf_len = rem_count
   }
 }
+
 ///|
 /// Finalize and return the 32-byte SHA-256 digest
 pub fn sha256_finalize(hasher : Sha256Hasher) -> Bytes {
   let bit_len = hasher.total_len * 8UL
-  let pad_len = 56 - (hasher.buf_len % 64)
+  let pad_len = 56 - hasher.buf_len % 64
   let pad_len_final = if pad_len <= 0 { pad_len + 64 } else { pad_len }
   let final_block_len = hasher.buf_len + pad_len_final + 8
   let padded = Array::make(final_block_len, b'\x00')
@@ -197,7 +205,7 @@ pub fn sha256_finalize(hasher : Sha256Hasher) -> Bytes {
   let hi = ((bit_len >> 32) & 0xFFFFFFFFUL).to_uint()
   let lo = (bit_len & 0xFFFFFFFFUL).to_uint()
   let len_offset = hasher.buf_len + pad_len_final
-  padded[len_offset]     = ((hi >> 24) & 0xFFU).to_byte()
+  padded[len_offset] = ((hi >> 24) & 0xFFU).to_byte()
   padded[len_offset + 1] = ((hi >> 16) & 0xFFU).to_byte()
   padded[len_offset + 2] = ((hi >> 8) & 0xFFU).to_byte()
   padded[len_offset + 3] = (hi & 0xFFU).to_byte()
@@ -218,7 +226,7 @@ pub fn sha256_finalize(hasher : Sha256Hasher) -> Bytes {
   let result_arr = Array::make(32, b'\x00')
   for i in 0..<=7 {
     let val = hasher.state[i]
-    result_arr[i * 4]     = ((val >> 24) & 0xFFU).to_byte()
+    result_arr[i * 4] = ((val >> 24) & 0xFFU).to_byte()
     result_arr[i * 4 + 1] = ((val >> 16) & 0xFFU).to_byte()
     result_arr[i * 4 + 2] = ((val >> 8) & 0xFFU).to_byte()
     result_arr[i * 4 + 3] = (val & 0xFFU).to_byte()
@@ -227,14 +235,16 @@ pub fn sha256_finalize(hasher : Sha256Hasher) -> Bytes {
 }
 
 // ==================== SHA-512 Streaming ====================
+
 ///|
 /// Incremental SHA-512 hasher
 pub struct Sha512Hasher {
-  state : Array[UInt64],
-  buffer : Array[Byte],
-  buf_len : Int,
-  total_len : UInt64,
+  state : Array[UInt64]
+  buffer : Array[Byte]
+  mut buf_len : Int
+  mut total_len : UInt64
 }
+
 ///|
 /// Create a new SHA-512 hasher
 pub fn sha512_new() -> Sha512Hasher {
@@ -247,13 +257,14 @@ pub fn sha512_new() -> Sha512Hasher {
   state[5] = 0x9b05688c2b3e6c1fUL
   state[6] = 0x1f83d9abfb41bd6bUL
   state[7] = 0x5be0cd19137e2179UL
-  Sha512Hasher@{
-    state: state,
+  Sha512Hasher::{
+    state,
     buffer: Array::make(128, b'\x00'),
     buf_len: 0,
     total_len: 0UL,
   }
 }
+
 ///|
 /// Feed data into the SHA-512 hasher
 pub fn sha512_update(hasher : Sha512Hasher, data : Bytes) -> Unit {
@@ -297,11 +308,12 @@ pub fn sha512_update(hasher : Sha512Hasher, data : Bytes) -> Unit {
     hasher.buf_len = rem_count
   }
 }
+
 ///|
 /// Finalize and return the 64-byte SHA-512 digest
 pub fn sha512_finalize(hasher : Sha512Hasher) -> Bytes {
   let bit_len = hasher.total_len * 8UL
-  let pad_len = 112 - (hasher.buf_len % 128)
+  let pad_len = 112 - hasher.buf_len % 128
   let pad_len_final = if pad_len <= 0 { pad_len + 128 } else { pad_len }
   let final_block_len = hasher.buf_len + pad_len_final + 16
   let padded = Array::make(final_block_len, b'\x00')

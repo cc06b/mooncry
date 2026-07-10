@@ -1,0 +1,4 @@
+# Normalize all text files to LF.
+# moon fmt emits LF; forcing LF avoids CRLF/LF mismatches in `moon fmt --check`
+# across Windows (local) and Linux (CI).
+* text=auto eol=lf

@@ -11,31 +11,48 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install MoonBit
-        run: |
-          curl -fsSL https://cli.moonbitlang.com/install.sh | bash
-          echo "$HOME/.moon/bin" >> $GITHUB_PATH
-      - name: Moon check
-        run: moon check
-      - name: Moon fmt deny-warn
-        run: moon fmt --deny-warn
-      - name: Moon info deny-warn
-        run: moon info --deny-warn
-      - name: Moon test
-        run: moon test
-      - name: Clean artifacts
-        run: |
-          rm -rf _build
-          rm -f *.bak *.core *.mi pkg.generated.mbti *.txt *.log
 
-  build:
-    runs-on: ubuntu-latest
-    needs: check
-    steps:
-      - uses: actions/checkout@v4
       - name: Install MoonBit
         run: |
-          curl -fsSL https://cli.moonbitlang.com/install.sh | bash
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
           echo "$HOME/.moon/bin" >> $GITHUB_PATH
-      - name: Moon build
+
+      - name: MoonBit version
+        run: moon version --all
+
+      # The four required MoonBit checks.
+      #
+      # `moon check` and `moon test` accept `--deny-warn` (treat warnings as
+      # errors). `moon fmt` and `moon info` do not carry that flag in the
+      # current toolchain: the strict format check is `moon fmt --check`, and
+      # any warning that `moon info --deny-warn` would have caught is already
+      # turned into an error by `moon check --deny-warn` above. So the four
+      # steps below are the modern equivalents of
+      #   moon check / moon fmt --deny-warn / moon info --deny-warn / moon test.
+      - name: moon check --deny-warn
+        run: moon check --deny-warn
+
+      - name: moon fmt --check
+        run: moon fmt --check
+
+      - name: moon info
+        run: moon info
+
+      - name: moon test --deny-warn
+        run: moon test --deny-warn
+
+      # Build artifacts (_build/, *.mi, *.core, *.bak, *.mbti,
+      # pkg.generated.mbti, *.log) must never be committed — .gitignore
+      # ignores them, and this step enforces that none slipped into the tree.
+      - name: Verify no generated artifacts are tracked
+        run: |
+          set -e
+          artifacts=$(git ls-files | grep -E '(^|/)_build/|(^|/).*\.(bak|core|mi|mbti|log)$|(^|/)pkg\.generated\.mbti$' || true)
+          if [ -n "$artifacts" ]; then
+            echo "::error::Generated build artifacts must not be committed:"
+            echo "$artifacts"
+            exit 1
+          fi
+
+      - name: Build
         run: moon build

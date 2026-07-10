@@ -1,6 +1,7 @@
 import {
   "cc06b/mooncry/lib",
 }
+
 options(
   "is-main": true,
 )

@@ -1,18 +1,16 @@
+# OS
 .DS_Store
+
+# MoonBit build output
 _build/
 target/
-target
 .mooncakes/
 .moonagent/
 
-# MoonBit generated artifacts
+# MoonBit generated artifacts — never commit these
 *.bak
 *.core
 *.mi
 *.mbti
-*.log
 pkg.generated.mbti
-
-# Override root .gitignore's Python `lib/` rule — lib/ holds MoonBit source, not venv
-!lib/
-!lib/**
+*.log
