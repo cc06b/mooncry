@@ -159,64 +159,12 @@ fn read_u32_be(data : Bytes, offset : Int) -> UInt {
 }
 
 ///|
-fn pad_message(data : Bytes) -> Array[Byte] {
-  let original_len = data.length()
-  let bit_len = original_len * 8
-  let pad_len = 64 - (original_len + 9) % 64
-  let final_len = original_len + 9 + pad_len
-
-  let padded = Array::make(final_len, b'\x00')
-  for i in 0..<original_len {
-    padded[i] = data[i]
-  }
-  padded[original_len] = b'\x80'
-
-  let bit_len_u64 = bit_len.to_uint64()
-  padded[original_len + 1 + pad_len] = ((bit_len_u64 >> 56) & 0xFFUL).to_byte()
-  padded[original_len + 2 + pad_len] = ((bit_len_u64 >> 48) & 0xFFUL).to_byte()
-  padded[original_len + 3 + pad_len] = ((bit_len_u64 >> 40) & 0xFFUL).to_byte()
-  padded[original_len + 4 + pad_len] = ((bit_len_u64 >> 32) & 0xFFUL).to_byte()
-  padded[original_len + 5 + pad_len] = ((bit_len_u64 >> 24) & 0xFFUL).to_byte()
-  padded[original_len + 6 + pad_len] = ((bit_len_u64 >> 16) & 0xFFUL).to_byte()
-  padded[original_len + 7 + pad_len] = ((bit_len_u64 >> 8) & 0xFFUL).to_byte()
-  padded[original_len + 8 + pad_len] = (bit_len_u64 & 0xFFUL).to_byte()
-  padded
-}
-
-///|
+/// Compute SHA-256 (FIPS 180-4), 32-byte digest. Delegates to the streaming
+/// hasher so the one-shot and incremental paths share a single source of truth.
 pub fn sha256(data : Bytes) -> Bytes {
-  let state = Array::make(8, 0U)
-  state[0] = 0x6a09e667U
-  state[1] = 0xbb67ae85U
-  state[2] = 0x3c6ef372U
-  state[3] = 0xa54ff53aU
-  state[4] = 0x510e527fU
-  state[5] = 0x9b05688cU
-  state[6] = 0x1f83d9abU
-  state[7] = 0x5be0cd19U
-
-  let padded_arr = pad_message(data)
-  let padded = Bytes::from_array(padded_arr[:])
-  let num_blocks = padded.length() / 64
-
-  for i in 0..<num_blocks {
-    let block = Array::make(16, 0U)
-    let offset = i * 64
-    for j in 0..<=15 {
-      block[j] = read_u32_be(padded, offset + j * 4)
-    }
-    process_block(state, block)
-  }
-
-  let result_arr = Array::make(32, b'\x00')
-  for i in 0..<=7 {
-    let val = state[i]
-    result_arr[i * 4] = ((val >> 24) & 0xFFU).to_byte()
-    result_arr[i * 4 + 1] = ((val >> 16) & 0xFFU).to_byte()
-    result_arr[i * 4 + 2] = ((val >> 8) & 0xFFU).to_byte()
-    result_arr[i * 4 + 3] = (val & 0xFFU).to_byte()
-  }
-  Bytes::from_array(result_arr[:])
+  let hasher = sha256_new()
+  sha256_update(hasher, data)
+  sha256_finalize(hasher)
 }
 
 // ==================== HMAC-SHA256 (RFC 2104) ====================

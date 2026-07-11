@@ -85,24 +85,6 @@ fn write_u64_be(arr : Array[Byte], offset : Int, val : UInt64) -> Unit {
 }
 
 ///|
-fn sha512_pad_message(data : Bytes) -> Array[Byte] {
-  let original_len = data.length()
-  let bit_len = (original_len * 8).to_uint64()
-  let pad_len = 112 - original_len % 128
-  let pad_len_final = if pad_len <= 0 { pad_len + 128 } else { pad_len }
-  let final_len = original_len + pad_len_final + 16
-  let padded = Array::make(final_len, b'\x00')
-  for i in 0..<original_len {
-    padded[i] = data[i]
-  }
-  padded[original_len] = b'\x80'
-  // SHA-512 appends 128-bit length (high 64 bits = 0 for messages < 2^64 bits)
-  write_u64_be(padded, original_len + pad_len_final, 0UL)
-  write_u64_be(padded, original_len + pad_len_final + 8, bit_len)
-  padded
-}
-
-///|
 fn sha512_process_block(state : Array[UInt64], block : Array[UInt64]) -> Unit {
   let mut a = state[0]
   let mut b = state[1]
@@ -142,31 +124,9 @@ fn sha512_process_block(state : Array[UInt64], block : Array[UInt64]) -> Unit {
 }
 
 ///|
-/// Compute SHA-512 hash (FIPS 180-4). Returns 64-byte digest.
+/// Compute SHA-512 (FIPS 180-4), 64-byte digest. Delegates to the streaming hasher.
 pub fn sha512(data : Bytes) -> Bytes {
-  let state = Array::make(8, 0UL)
-  state[0] = 0x6a09e667f3bcc908UL
-  state[1] = 0xbb67ae8584caa73bUL
-  state[2] = 0x3c6ef372fe94f82bUL
-  state[3] = 0xa54ff53a5f1d36f1UL
-  state[4] = 0x510e527fade682d1UL
-  state[5] = 0x9b05688c2b3e6c1fUL
-  state[6] = 0x1f83d9abfb41bd6bUL
-  state[7] = 0x5be0cd19137e2179UL
-  let padded_arr = sha512_pad_message(data)
-  let padded = Bytes::from_array(padded_arr[:])
-  let num_blocks = padded.length() / 128
-  for i in 0..<num_blocks {
-    let block = Array::make(16, 0UL)
-    let offset = i * 128
-    for j in 0..<=15 {
-      block[j] = read_u64_be(padded, offset + j * 8)
-    }
-    sha512_process_block(state, block)
-  }
-  let result_arr = Array::make(64, b'\x00')
-  for i in 0..<=7 {
-    write_u64_be(result_arr, i * 8, state[i])
-  }
-  Bytes::from_array(result_arr[:])
+  let hasher = sha512_new()
+  sha512_update(hasher, data)
+  sha512_finalize(hasher)
 }

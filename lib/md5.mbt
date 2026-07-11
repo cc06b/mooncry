@@ -67,27 +67,6 @@ fn write_u32_le(arr : Array[Byte], offset : Int, val : UInt) -> Unit {
 }
 
 ///|
-fn md5_pad_message(data : Bytes) -> Array[Byte] {
-  let original_len = data.length()
-  let bit_len = original_len * 8
-  let pad_len = 56 - original_len % 64
-  let pad_len_final = if pad_len <= 0 { pad_len + 64 } else { pad_len }
-  let final_len = original_len + pad_len_final + 8
-  let padded = Array::make(final_len, b'\x00')
-  for i in 0..<original_len {
-    padded[i] = data[i]
-  }
-  padded[original_len] = b'\x80'
-  // Append length in bits as 64-bit little-endian
-  let bit_len_u64 = bit_len.to_uint64()
-  let lo = (bit_len_u64 & 0xFFFFFFFFUL).to_uint()
-  let hi = ((bit_len_u64 >> 32) & 0xFFFFFFFFUL).to_uint()
-  write_u32_le(padded, original_len + pad_len_final, lo)
-  write_u32_le(padded, original_len + pad_len_final + 4, hi)
-  padded
-}
-
-///|
 fn md5_process_block(state : Array[UInt], block : Array[UInt]) -> Unit {
   let mut a = state[0]
   let mut b = state[1]
@@ -122,28 +101,9 @@ fn md5_process_block(state : Array[UInt], block : Array[UInt]) -> Unit {
 }
 
 ///|
-/// Compute MD5 hash (RFC 1321). Returns 16-byte digest.
+/// Compute MD5 (RFC 1321), 16-byte digest. Delegates to the streaming hasher.
 pub fn md5(data : Bytes) -> Bytes {
-  let state = Array::make(4, 0U)
-  state[0] = 0x67452301U
-  state[1] = 0xefcdab89U
-  state[2] = 0x98badcfeU
-  state[3] = 0x10325476U
-  let padded_arr = md5_pad_message(data)
-  let padded = Bytes::from_array(padded_arr[:])
-  let num_blocks = padded.length() / 64
-  for i in 0..<num_blocks {
-    let block = Array::make(16, 0U)
-    let offset = i * 64
-    for j in 0..<=15 {
-      block[j] = read_u32_le(padded, offset + j * 4)
-    }
-    md5_process_block(state, block)
-  }
-  let result_arr = Array::make(16, b'\x00')
-  write_u32_le(result_arr, 0, state[0])
-  write_u32_le(result_arr, 4, state[1])
-  write_u32_le(result_arr, 8, state[2])
-  write_u32_le(result_arr, 12, state[3])
-  Bytes::from_array(result_arr[:])
+  let hasher = md5_new()
+  md5_update(hasher, data)
+  md5_finalize(hasher)
 }
