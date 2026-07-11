@@ -11,12 +11,12 @@ been reviewed for side-channel resistance.
 ## Repositories
 
 - **GitHub** (canonical): <https://github.com/cc06b/mooncry>
-- **Gitlink** (mirror): <https://www.gitlink.org.cn/cc06b/mooncry>
+- **Gitlink** (mirror): <https://www.gitlink.org.cn/CC01/mooncry_mirror>
 
 Both are kept in sync. To add the mirror locally:
 
 ```bash
-git remote add gitlink https://www.gitlink.org.cn/cc06b/mooncry.git
+git remote add gitlink https://www.gitlink.org.cn/CC01/mooncry_mirror.git
 git push gitlink master
 ```
 
