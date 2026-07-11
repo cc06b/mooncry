@@ -8,6 +8,18 @@ hardened, audited production library. Constant-time practices are used where
 noted (tag comparison, PKCS#7 verification), but the implementations have not
 been reviewed for side-channel resistance.
 
+## Repositories
+
+- **GitHub** (canonical): <https://github.com/cc06b/mooncry>
+- **Gitlink** (mirror): <https://www.gitlink.org.cn/cc06b/mooncry>
+
+Both are kept in sync. To add the mirror locally:
+
+```bash
+git remote add gitlink https://www.gitlink.org.cn/cc06b/mooncry.git
+git push gitlink master
+```
+
 ## Algorithms
 
 ### Hash functions
@@ -65,6 +77,13 @@ fn main {
   assert_true(ok)
   ignore(plaintext)
 }
+```
+
+A runnable example that validates the implementation against NIST/RFC standard
+vectors lives in [`cmd/main`](cmd/main/main.mbt). Run it with:
+
+```bash
+moon run cmd/main
 ```
 
 ## Public API
