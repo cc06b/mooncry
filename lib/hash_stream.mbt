@@ -340,3 +340,100 @@ pub fn sha512_finalize(hasher : Sha512Hasher) -> Bytes {
   }
   Bytes::from_array(result_arr[:])
 }
+
+// ==================== SHA-224 Streaming (FIPS 180-4) ====================
+// SHA-224 = SHA-256 with a different IV, truncated to 28 bytes.
+
+///|
+/// Create a new SHA-224 hasher
+pub fn sha224_new() -> Sha256Hasher {
+  let state = Array::make(8, 0U)
+  state[0] = 0xc1059ed8U
+  state[1] = 0x367cd507U
+  state[2] = 0x3070dd17U
+  state[3] = 0xf70e5939U
+  state[4] = 0xffc00b31U
+  state[5] = 0x68581511U
+  state[6] = 0x64f98fa7U
+  state[7] = 0xbefa4fa4U
+  Sha256Hasher::{
+    state,
+    buffer: Array::make(64, b'\x00'),
+    buf_len: 0,
+    total_len: 0UL,
+  }
+}
+
+///|
+/// Feed data into the SHA-224 hasher (same compression as SHA-256)
+pub fn sha224_update(hasher : Sha256Hasher, data : Bytes) -> Unit {
+  sha256_update(hasher, data)
+}
+
+///|
+/// Finalize and return the 28-byte SHA-224 digest
+pub fn sha224_finalize(hasher : Sha256Hasher) -> Bytes {
+  // SHA-224 is SHA-256 with a different IV, truncated to 28 bytes (first 7 words)
+  let full = sha256_finalize(hasher)
+  let out = Array::make(28, b'\x00')
+  for i in 0..<28 {
+    out[i] = full[i]
+  }
+  Bytes::from_array(out[:])
+}
+
+///|
+/// Compute SHA-224 (FIPS 180-4), 28-byte digest
+pub fn sha224(data : Bytes) -> Bytes {
+  let hasher = sha224_new()
+  sha224_update(hasher, data)
+  sha224_finalize(hasher)
+}
+
+// ==================== SHA-384 Streaming (FIPS 180-4) ====================
+// SHA-384 = SHA-512 with a different IV, truncated to 48 bytes.
+
+///|
+/// Create a new SHA-384 hasher
+pub fn sha384_new() -> Sha512Hasher {
+  let state = Array::make(8, 0UL)
+  state[0] = 0xcbbb9d5dc1059ed8UL
+  state[1] = 0x629a292a367cd507UL
+  state[2] = 0x9159015a3070dd17UL
+  state[3] = 0x152fecd8f70e5939UL
+  state[4] = 0x67332667ffc00b31UL
+  state[5] = 0x8eb44a8768581511UL
+  state[6] = 0xdb0c2e0d64f98fa7UL
+  state[7] = 0x47b5481dbefa4fa4UL
+  Sha512Hasher::{
+    state,
+    buffer: Array::make(128, b'\x00'),
+    buf_len: 0,
+    total_len: 0UL,
+  }
+}
+
+///|
+/// Feed data into the SHA-384 hasher (same compression as SHA-512)
+pub fn sha384_update(hasher : Sha512Hasher, data : Bytes) -> Unit {
+  sha512_update(hasher, data)
+}
+
+///|
+/// Finalize and return the 48-byte SHA-384 digest
+pub fn sha384_finalize(hasher : Sha512Hasher) -> Bytes {
+  let full = sha512_finalize(hasher)
+  let out = Array::make(48, b'\x00')
+  for i in 0..<48 {
+    out[i] = full[i]
+  }
+  Bytes::from_array(out[:])
+}
+
+///|
+/// Compute SHA-384 (FIPS 180-4), 48-byte digest
+pub fn sha384(data : Bytes) -> Bytes {
+  let hasher = sha384_new()
+  sha384_update(hasher, data)
+  sha384_finalize(hasher)
+}

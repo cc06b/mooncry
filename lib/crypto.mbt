@@ -963,3 +963,24 @@ pub fn aes_gcm_decrypt(
 
   (plaintext, true)
 }
+
+// ==================== HMAC-SHA512 (RFC 2104) ====================
+
+///|
+/// Compute HMAC-SHA512. Block size for SHA-512 is 128 bytes.
+pub fn hmac_sha512(key : Bytes, message : Bytes) -> Bytes {
+  let block_size = 128
+  let k_prime = if key.length() > block_size {
+    sha512(key)
+  } else {
+    let padded = Array::make(block_size, b'\x00')
+    for i in 0..<key.length() {
+      padded[i] = key[i]
+    }
+    Bytes::from_array(padded[:])
+  }
+  let ipad = xor_bytes(k_prime, repeat_byte(b'\x36', block_size))
+  let opad = xor_bytes(k_prime, repeat_byte(b'\x5c', block_size))
+  let inner = sha512(concat_bytes(ipad, message))
+  sha512(concat_bytes(opad, inner))
+}

@@ -92,3 +92,32 @@ test "bench sha256 streaming 1KB (1-byte chunks)" (it : @bench.T) {
     it.keep(sha256_finalize(h))
   })
 }
+
+///|
+test "bench sha224 4KB" (it : @bench.T) {
+  let data = bench_input(4096)
+  it.bench(fn() { it.keep(sha224(data)) })
+}
+
+///|
+test "bench sha384 4KB" (it : @bench.T) {
+  let data = bench_input(4096)
+  it.bench(fn() { it.keep(sha384(data)) })
+}
+
+///|
+test "bench hmac_sha512 4KB" (it : @bench.T) {
+  let data = bench_input(4096)
+  let key = bench_input(64)
+  it.bench(fn() { it.keep(hmac_sha512(key, data)) })
+}
+
+///|
+test "bench pbkdf2_sha256 iter=100 dklen=32" (it : @bench.T) {
+  it.bench(fn() { it.keep(pbkdf2_hmac_sha256(b"password", b"salt", 100, 32)) })
+}
+
+///|
+test "bench hkdf_sha256 L=256" (it : @bench.T) {
+  it.bench(fn() { it.keep(hkdf_sha256(b"salt", bench_input(64), b"info", 256)) })
+}
