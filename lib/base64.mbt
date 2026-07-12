@@ -55,12 +55,12 @@ pub fn base64_encode(data : Bytes) -> String {
       output[out_off + 3] = b'='
     }
   }
-  // Convert bytes to string
-  let mut result = ""
+  // Convert bytes to string (O(n) via StringBuilder)
+  let buf = StringBuilder(size_hint=output_len)
   for i in 0..<output_len {
-    result = result + output[i].to_char().to_string()
+    buf.write_char(output[i].to_char())
   }
-  result
+  buf.to_string()
 }
 
 ///|

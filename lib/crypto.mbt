@@ -45,17 +45,18 @@ pub fn bytes_equal(a : Bytes, b : Bytes) -> Bool {
 }
 
 ///|
-/// Convert Bytes to lowercase hex string
+/// Convert Bytes to lowercase hex string (O(n) via StringBuilder)
 pub fn bytes_to_hex(data : Bytes) -> String {
   let hex_chars = [
-    "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a", "b", "c", "d", "e", "f",
+    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f',
   ]
-  let mut result = ""
+  let buf = StringBuilder(size_hint=data.length() * 2)
   for i in 0..<data.length() {
     let b = data[i].to_int() & 0xFF
-    result = result + hex_chars[(b >> 4) & 0xF] + hex_chars[b & 0xF]
+    buf.write_char(hex_chars[(b >> 4) & 0xF])
+    buf.write_char(hex_chars[b & 0xF])
   }
-  result
+  buf.to_string()
 }
 
 // ==================== SHA-256 (FIPS 180-4) ====================
