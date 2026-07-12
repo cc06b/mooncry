@@ -271,6 +271,40 @@ fn gmul(a : Int, b : Int) -> Int {
 }
 
 ///|
+/// Precomputed GF(2^8) product tables for the fixed AES coefficients.
+/// mix_columns uses mul2/mul3; inv_mix_columns uses mul9/mul11/mul13/mul14.
+/// Replacing the per-byte gmul loop with a single lookup is a large speedup,
+/// but like any table indexed by state bytes it is NOT constant-time (cache
+/// side channel on the AES state). Constant-time verification is retained
+/// for tag comparison (bytes_equal) and PKCS#7 padding. This is the standard
+/// software-AES tradeoff when AES-NI is unavailable.
+fn build_mul_table(m : Int) -> Array[Int] {
+  let t = Array::make(256, 0)
+  for i in 0..<256 {
+    t[i] = gmul(m, i)
+  }
+  t
+}
+
+///|
+let mul2 : Array[Int] = build_mul_table(0x02)
+
+///|
+let mul3 : Array[Int] = build_mul_table(0x03)
+
+///|
+let mul9 : Array[Int] = build_mul_table(0x09)
+
+///|
+let mul11 : Array[Int] = build_mul_table(0x0b)
+
+///|
+let mul13 : Array[Int] = build_mul_table(0x0d)
+
+///|
+let mul14 : Array[Int] = build_mul_table(0x0e)
+
+///|
 fn rot_word(word : Array[Int]) -> Array[Int] {
   [word[1], word[2], word[3], word[0]]
 }
@@ -413,10 +447,10 @@ fn mix_columns(state : Array[Array[Int]]) -> Unit {
     let s1 = state[1][j]
     let s2 = state[2][j]
     let s3 = state[3][j]
-    state[0][j] = gmul(0x02, s0) ^ gmul(0x03, s1) ^ s2 ^ s3
-    state[1][j] = s0 ^ gmul(0x02, s1) ^ gmul(0x03, s2) ^ s3
-    state[2][j] = s0 ^ s1 ^ gmul(0x02, s2) ^ gmul(0x03, s3)
-    state[3][j] = gmul(0x03, s0) ^ s1 ^ s2 ^ gmul(0x02, s3)
+    state[0][j] = mul2[s0] ^ mul3[s1] ^ s2 ^ s3
+    state[1][j] = s0 ^ mul2[s1] ^ mul3[s2] ^ s3
+    state[2][j] = s0 ^ s1 ^ mul2[s2] ^ mul3[s3]
+    state[3][j] = mul3[s0] ^ s1 ^ s2 ^ mul2[s3]
   }
 }
 
@@ -427,22 +461,10 @@ fn inv_mix_columns(state : Array[Array[Int]]) -> Unit {
     let s1 = state[1][j]
     let s2 = state[2][j]
     let s3 = state[3][j]
-    state[0][j] = gmul(0x0e, s0) ^
-      gmul(0x0b, s1) ^
-      gmul(0x0d, s2) ^
-      gmul(0x09, s3)
-    state[1][j] = gmul(0x09, s0) ^
-      gmul(0x0e, s1) ^
-      gmul(0x0b, s2) ^
-      gmul(0x0d, s3)
-    state[2][j] = gmul(0x0d, s0) ^
-      gmul(0x09, s1) ^
-      gmul(0x0e, s2) ^
-      gmul(0x0b, s3)
-    state[3][j] = gmul(0x0b, s0) ^
-      gmul(0x0d, s1) ^
-      gmul(0x09, s2) ^
-      gmul(0x0e, s3)
+    state[0][j] = mul14[s0] ^ mul11[s1] ^ mul13[s2] ^ mul9[s3]
+    state[1][j] = mul9[s0] ^ mul14[s1] ^ mul11[s2] ^ mul13[s3]
+    state[2][j] = mul13[s0] ^ mul9[s1] ^ mul14[s2] ^ mul11[s3]
+    state[3][j] = mul11[s0] ^ mul13[s1] ^ mul9[s2] ^ mul14[s3]
   }
 }
 
