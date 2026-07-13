@@ -984,3 +984,43 @@ pub fn hmac_sha512(key : Bytes, message : Bytes) -> Bytes {
   let inner = sha512(concat_bytes(ipad, message))
   sha512(concat_bytes(opad, inner))
 }
+
+// ==================== AES-CTR (NIST SP 800-38A) ====================
+
+///|
+/// AES-CTR encrypt/decrypt (symmetric — XOR keystream). key: 16/24/32 bytes,
+/// iv: 16-byte initial counter. Counter increments as 128-bit big-endian.
+pub fn aes_ctr(data : Bytes, key : Bytes, iv : Bytes) -> Bytes {
+  let nr = if key.length() == 16 {
+    10
+  } else if key.length() == 24 {
+    12
+  } else {
+    14
+  }
+  let round_keys = aes_key_expansion(key)
+  let len = data.length()
+  let output = Array::make(len, b'\x00')
+  let counter = Array::make(16, b'\x00')
+  for i in 0..<16 {
+    counter[i] = iv[i]
+  }
+  let num_blocks = (len + 15) / 16
+  for blk in 0..<num_blocks {
+    let keystream = encrypt_block(Bytes::from_array(counter[:]), round_keys, nr)
+    let offset = blk * 16
+    let block_len = if offset + 16 <= len { 16 } else { len - offset }
+    for j in 0..<block_len {
+      output[offset + j] = (data[offset + j].to_int() ^ keystream[j].to_int()).to_byte()
+    }
+    let mut k = 15
+    while k >= 0 {
+      counter[k] = ((counter[k].to_int() + 1) & 0xFF).to_byte()
+      if counter[k] != 0 {
+        break
+      }
+      k = k - 1
+    }
+  }
+  Bytes::from_array(output[:])
+}

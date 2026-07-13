@@ -164,3 +164,65 @@ pub fn sha3_384(data : Bytes) -> Bytes {
 pub fn sha3_512(data : Bytes) -> Bytes {
   sha3_sponge(72, data, 64)
 }
+
+// ==================== SHAKE (FIPS 202 XOF) ====================
+// Like SHA-3 sponge but domain suffix 0x1F and variable output length.
+
+///|
+/// SHAKE sponge: domain 0x1F, squeeze `out_len` bytes.
+fn shake_sponge(rate_bytes : Int, data : Bytes, out_len : Int) -> Bytes {
+  let st = new_state()
+  let data_len = data.length()
+  let num_blocks = data_len / rate_bytes + 1
+  let buf_len = num_blocks * rate_bytes
+  let buf = Array::make(buf_len, b'\x00')
+  for i in 0..<data_len {
+    buf[i] = data[i]
+  }
+  buf[data_len] = (buf[data_len].to_int() ^ 0x1F).to_byte()
+  buf[buf_len - 1] = (buf[buf_len - 1].to_int() ^ 0x80).to_byte()
+  let lanes_per_block = rate_bytes / 8
+  let mut off = 0
+  while off < buf_len {
+    for i in 0..<lanes_per_block {
+      let x = i % 5
+      let y = i / 5
+      st[x][y] = st[x][y] ^ read_lane_le(buf, off + i * 8)
+    }
+    keccak_f(st)
+    off = off + rate_bytes
+  }
+  let out = Array::make(out_len, b'\x00')
+  let mut out_off = 0
+  let mut lane_idx = 0
+  while out_off < out_len {
+    let x = lane_idx % 5
+    let y = lane_idx / 5
+    let lane = st[x][y]
+    for bi in 0..<8 {
+      if out_off >= out_len {
+        break
+      }
+      out[out_off] = ((lane >> (bi * 8)) & 0xFFUL).to_byte()
+      out_off = out_off + 1
+    }
+    lane_idx = lane_idx + 1
+    if lane_idx >= 25 && out_off < out_len {
+      keccak_f(st)
+      lane_idx = 0
+    }
+  }
+  Bytes::from_array(out[:])
+}
+
+///|
+/// Compute SHAKE128 (FIPS 202), variable-length output
+pub fn shake_128(data : Bytes, out_len : Int) -> Bytes {
+  shake_sponge(168, data, out_len)
+}
+
+///|
+/// Compute SHAKE256 (FIPS 202), variable-length output
+pub fn shake_256(data : Bytes, out_len : Int) -> Bytes {
+  shake_sponge(136, data, out_len)
+}
