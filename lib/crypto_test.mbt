@@ -1,30 +1,5 @@
 // ==================== Test Helpers ====================
 
-///|
-fn hex_char_to_int(c : Int) -> Int {
-  if c >= 0x30 && c <= 0x39 {
-    c - 0x30
-  } else if c >= 0x61 && c <= 0x66 {
-    c - 0x61 + 10
-  } else if c >= 0x41 && c <= 0x46 {
-    c - 0x41 + 10
-  } else {
-    0
-  }
-}
-
-///|
-fn hex_to_bytes(hex : String) -> Bytes {
-  let len = hex.length() / 2
-  let result = Array::make(len, b'\x00')
-  for i in 0..<len {
-    let hi = hex_char_to_int(hex[i * 2].to_int())
-    let lo = hex_char_to_int(hex[i * 2 + 1].to_int())
-    result[i] = ((hi << 4) | lo).to_byte()
-  }
-  Bytes::from_array(result[:])
-}
-
 // ==================== MD5 Tests (RFC 1321 test vectors) ====================
 
 ///|
