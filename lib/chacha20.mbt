@@ -77,6 +77,12 @@ pub fn chacha20_xor(
   nonce : Bytes,
   counter : UInt,
 ) -> Bytes {
+  if key.length() != 32 {
+    abort("chacha20_xor: key length must be 32 bytes (256 bits)")
+  }
+  if nonce.length() != 12 {
+    abort("chacha20_xor: nonce length must be 12 bytes (96 bits)")
+  }
   let len = input.length()
   let output = Array::make(len, b'\x00')
   let num_full_blocks = len / 64
