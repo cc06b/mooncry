@@ -62,6 +62,10 @@ pub fn sha3_update(h : Sha3Hasher, data : Bytes) -> Unit {
 /// Finalize: apply the domain-separation/padding, absorb the last block,
 /// and squeeze `out_len` bytes.
 pub fn sha3_finalize(h : Sha3Hasher) -> Bytes {
+  // Clear the unused tail (leftover from a previous absorbed block).
+  for i in h.buf_len..<h.rate {
+    h.buffer[i] = b'\x00'
+  }
   // pad10*1: domain suffix at buf_len, 0x80 at the last byte of the rate.
   h.buffer[h.buf_len] = (h.buffer[h.buf_len].to_int() ^ h.domain).to_byte()
   h.buffer[h.rate - 1] = (h.buffer[h.rate - 1].to_int() ^ 0x80).to_byte()
