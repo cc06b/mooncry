@@ -113,3 +113,53 @@ pub fn sha3_384_new() -> Sha3Hasher {
 pub fn sha3_512_new() -> Sha3Hasher {
   sha3_new(72, 64, 0x06)
 }
+
+// ==================== SHAKE Streaming (FIPS 202 XOF) ====================
+
+///|
+/// Squeeze `out_len` bytes from the sponge (variable-length output).
+fn sha3_squeeze(h : Sha3Hasher, out_len : Int) -> Bytes {
+  let out = Array::make(out_len, b'\x00')
+  let mut out_off = 0
+  let mut lane_idx = 0
+  while out_off < out_len {
+    let x = lane_idx % 5
+    let y = lane_idx / 5
+    let lane = h.state[x][y]
+    for bi in 0..<8 {
+      if out_off >= out_len {
+        break
+      }
+      out[out_off] = ((lane >> (bi * 8)) & 0xFFUL).to_byte()
+      out_off = out_off + 1
+    }
+    lane_idx = lane_idx + 1
+    if lane_idx >= 25 && out_off < out_len {
+      keccak_f(h.state)
+      lane_idx = 0
+    }
+  }
+  Bytes::from_array(out[:])
+}
+
+///|
+pub fn shake_128_new() -> Sha3Hasher {
+  sha3_new(168, 0, 0x1F)
+}
+
+///|
+pub fn shake_256_new() -> Sha3Hasher {
+  sha3_new(136, 0, 0x1F)
+}
+
+///|
+/// Finalize a SHAKE hasher and squeeze `out_len` bytes (domain 0x1F, XOF).
+pub fn shake_finalize(h : Sha3Hasher, out_len : Int) -> Bytes {
+  for i in h.buf_len..<h.rate {
+    h.buffer[i] = b'\x00'
+  }
+  h.buffer[h.buf_len] = (h.buffer[h.buf_len].to_int() ^ h.domain).to_byte()
+  h.buffer[h.rate - 1] = (h.buffer[h.rate - 1].to_int() ^ 0x80).to_byte()
+  sha3_absorb_block(h)
+  sha3_squeeze(h, out_len)
+}
