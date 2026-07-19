@@ -7,7 +7,7 @@ verified against official standard vectors.
 ## Highlights
 
 - **Correct** — every algorithm is checked against FIPS / NIST / RFC test
-  vectors (plus a Python reference for BLAKE2b/BLAKE3/Poly1305). 118 tests, run
+  vectors (plus a Python reference for BLAKE2b/BLAKE3/Poly1305). 151 tests, run
   with `moon test --deny-warn`.
 - **Broad** — MD5, the SHA-2 and SHA-3 families, SHAKE XOFs, BLAKE2b, BLAKE3,
   HMAC, Poly1305, AES-CBC/GCM/CTR, ChaCha20, ChaCha20-Poly1305 AEAD, HKDF,
@@ -100,9 +100,7 @@ import {
   "cc06b/mooncry/lib",
 }
 
-options(
-  "is-main": true,
-)
+pkgtype(kind: "executable")
 ```
 
 Edit `cmd/main/main.mbt`:
@@ -163,7 +161,7 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `chacha20_xor(input, key, nonce, counter) -> Bytes` | ChaCha20 encrypt/decrypt (symmetric) |
 | `chacha20_poly1305_encrypt(key, nonce, aad, pt) -> Bytes` | ChaCha20-Poly1305 AEAD → ct ‖ tag |
 | `chacha20_poly1305_decrypt(key, nonce, aad, input) -> Bytes` | AEAD decrypt, aborts on tag mismatch |
-| `hkdf_sha256(ikm, salt, info, len) -> Bytes` | HKDF-SHA256 (RFC 5869) |
+| `hkdf_sha256(salt, ikm, info, len) -> Bytes` | HKDF-SHA256 (RFC 5869) |
 | `pbkdf2_hmac_sha256(password, salt, iterations, len) -> Bytes` | PBKDF2-HMAC-SHA256 (RFC 8018) |
 | `base64_encode(data : Bytes) -> String` | Base64 encode (RFC 4648) |
 | `base64_decode(encoded : String) -> Bytes` | Base64 decode |
@@ -207,8 +205,9 @@ cause an `abort` with a descriptive message.
 
 ## Performance
 
-Throughput is measured by the `lib` benchmark suite (`moon bench`), on 1 KiB
-inputs:
+Throughput is measured by the `lib` benchmark suite (`moon bench`) on 1 KiB
+inputs. Figures below are from the development sandbox; absolute numbers vary
+by host — run `moon bench` locally for comparable figures.
 
 ```bash
 moon bench
@@ -216,18 +215,18 @@ moon bench
 
 | Algorithm | 1 KiB (approx.) |
 | --- | --- |
-| MD5 | ~6.9 µs |
-| SHA-256 | ~4.5 µs |
-| SHA-512 | ~8.1 µs |
-| SHA3-256 | ~12 µs |
-| BLAKE2b | ~10 µs |
-| BLAKE3 | ~9 µs |
-| HMAC-SHA256 | ~14.9 µs |
-| ChaCha20 | ~23.8 µs |
-| AES-256-CBC | ~165 µs (table-based GF mul) |
-| AES-256-GCM | ~170 µs (table-based) |
-| Base64 encode | ~5.5 µs |
-| Hex encode | ~3.4 µs |
+| MD5 | ~8.5 µs |
+| SHA-256 | ~16 µs |
+| SHA-512 | ~14 µs |
+| SHA3-256 | ~140 µs |
+| BLAKE2b | ~27 µs |
+| BLAKE3 | ~46 µs |
+| HMAC-SHA256 | ~23 µs |
+| ChaCha20 | ~46 µs |
+| AES-256-CBC | ~315 µs (table-based GF mul) |
+| AES-256-GCM | ~420 µs (table-based) |
+| Base64 encode | ~10 µs |
+| Hex encode | ~6.7 µs |
 
 Hashes, ChaCha20, and hex/Base64 are throughput-bound by the algorithm; AES
 trades constant-time property for ~5x speed via lookup tables (see
@@ -246,7 +245,7 @@ Coverage: MD5 (RFC 1321), SHA-2 family (FIPS 180-4 + million-`a`), SHA-3
 blake3), HMAC (RFC 4231), Poly1305 (RFC 8439), ChaCha20-Poly1305 (RFC 8439 +
 pycryptodome), HKDF (RFC 5869), PBKDF2 (RFC 6070), AES-CBC/GCM/CTR (NIST SP
 800-38A/D), ChaCha20 (RFC 8439), Base64 (RFC 4648), hex round-trip, and
-streaming-vs-one-shot consistency. **118 tests.**
+streaming-vs-one-shot consistency. **151 tests.**
 
 ## Development
 

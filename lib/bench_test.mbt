@@ -16,41 +16,41 @@ fn bench_input(len : Int) -> Bytes {
 }
 
 ///|
-test "bench sha256 4KB" (it : @bench.T) {
-  let data = bench_input(4096)
+test "bench sha256 1KiB" (it : @bench.T) {
+  let data = bench_input(1024)
   it.bench(fn() { it.keep(sha256(data)) })
 }
 
 ///|
-test "bench sha512 4KB" (it : @bench.T) {
-  let data = bench_input(4096)
+test "bench sha512 1KiB" (it : @bench.T) {
+  let data = bench_input(1024)
   it.bench(fn() { it.keep(sha512(data)) })
 }
 
 ///|
-test "bench md5 4KB" (it : @bench.T) {
-  let data = bench_input(4096)
+test "bench md5 1KiB" (it : @bench.T) {
+  let data = bench_input(1024)
   it.bench(fn() { it.keep(md5(data)) })
 }
 
 ///|
-test "bench hmac_sha256 4KB" (it : @bench.T) {
-  let data = bench_input(4096)
+test "bench hmac_sha256 1KiB" (it : @bench.T) {
+  let data = bench_input(1024)
   let key = bench_input(32)
   it.bench(fn() { it.keep(hmac_sha256(key, data)) })
 }
 
 ///|
-test "bench aes_cbc_encrypt 4KB (AES-256)" (it : @bench.T) {
-  let data = bench_input(4096)
+test "bench aes_cbc_encrypt 1KiB (AES-256)" (it : @bench.T) {
+  let data = bench_input(1024)
   let key = bench_input(32)
   let iv = bench_input(16)
   it.bench(fn() { it.keep(aes_encrypt_cbc(data, key, iv)) })
 }
 
 ///|
-test "bench aes_gcm_encrypt 4KB (AES-256)" (it : @bench.T) {
-  let data = bench_input(4096)
+test "bench aes_gcm_encrypt 1KiB (AES-256)" (it : @bench.T) {
+  let data = bench_input(1024)
   let key = bench_input(32)
   let iv = bench_input(12)
   let aad = bench_input(16)
@@ -62,27 +62,27 @@ test "bench aes_gcm_encrypt 4KB (AES-256)" (it : @bench.T) {
 }
 
 ///|
-test "bench chacha20_xor 4KB" (it : @bench.T) {
-  let data = bench_input(4096)
+test "bench chacha20_xor 1KiB" (it : @bench.T) {
+  let data = bench_input(1024)
   let key = bench_input(32)
   let nonce = bench_input(12)
   it.bench(fn() { it.keep(chacha20_xor(data, key, nonce, 0U)) })
 }
 
 ///|
-test "bench base64_encode 4KB" (it : @bench.T) {
-  let data = bench_input(4096)
+test "bench base64_encode 1KiB" (it : @bench.T) {
+  let data = bench_input(1024)
   it.bench(fn() { it.keep(base64_encode(data)) })
 }
 
 ///|
-test "bench bytes_to_hex 1KB" (it : @bench.T) {
+test "bench bytes_to_hex 1KiB" (it : @bench.T) {
   let data = bench_input(1024)
   it.bench(fn() { it.keep(bytes_to_hex(data)) })
 }
 
 ///|
-test "bench sha256 streaming 1KB (1-byte chunks)" (it : @bench.T) {
+test "bench sha256 streaming 1KiB (1-byte chunks)" (it : @bench.T) {
   let data = bench_input(1024)
   it.bench(fn() {
     let h = sha256_new()
@@ -94,20 +94,20 @@ test "bench sha256 streaming 1KB (1-byte chunks)" (it : @bench.T) {
 }
 
 ///|
-test "bench sha224 4KB" (it : @bench.T) {
-  let data = bench_input(4096)
+test "bench sha224 1KiB" (it : @bench.T) {
+  let data = bench_input(1024)
   it.bench(fn() { it.keep(sha224(data)) })
 }
 
 ///|
-test "bench sha384 4KB" (it : @bench.T) {
-  let data = bench_input(4096)
+test "bench sha384 1KiB" (it : @bench.T) {
+  let data = bench_input(1024)
   it.bench(fn() { it.keep(sha384(data)) })
 }
 
 ///|
-test "bench hmac_sha512 4KB" (it : @bench.T) {
-  let data = bench_input(4096)
+test "bench hmac_sha512 1KiB" (it : @bench.T) {
+  let data = bench_input(1024)
   let key = bench_input(64)
   it.bench(fn() { it.keep(hmac_sha512(key, data)) })
 }
