@@ -14,10 +14,18 @@ keywords = [
   "md5",
   "sha256",
   "sha512",
+  "sha3",
+  "shake",
+  "blake2",
+  "blake3",
+  "hmac",
+  "poly1305",
   "aes",
   "chacha20",
+  "aead",
+  "kdf",
   "base64",
-  "hmac",
+  "hex",
 ]
 
-description = "Pure MoonBit cryptographic primitives: MD5, SHA-256, SHA-512, HMAC-SHA256, AES-CBC/GCM, ChaCha20, Base64"
+description = "Pure-MoonBit crypto primitives: MD5, SHA-2/SHA-3, SHAKE, BLAKE2b/BLAKE3, HMAC/Poly1305, AES-CBC/GCM/CTR, ChaCha20(-Poly1305), HKDF/PBKDF2, Base64/Hex"
