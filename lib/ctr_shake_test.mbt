@@ -1,10 +1,19 @@
 // ==================== AES-CTR + SHAKE tests ====================
 
 ///|
+test "AES-128-CTR: NIST SP 800-38A F.5.1 block 1" {
+  let key = hex_to_bytes("2b7e151628aed2a6abf7158809cf4f3c")
+  let iv = hex_to_bytes("f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff")
+  let pt = hex_to_bytes("6bc1bee22e409f96e93d7e117393172a")
+  let expected = hex_to_bytes("874d6191b620e3261bef6864990db6ce")
+  assert_true(bytes_equal(expected, aes_ctr(pt, key, iv)))
+}
+
+///|
 test "AES-128-CTR: round-trip" {
   let key = hex_to_bytes("2b7e151628aed2a6abf7158809cf4f3c")
   let iv = hex_to_bytes("f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff")
-  let pt = bench_input(200)
+  let pt = Bytes::make(200, b'')
   let ct = aes_ctr(pt, key, iv)
   assert_true(bytes_equal(pt, aes_ctr(ct, key, iv)))
 }
