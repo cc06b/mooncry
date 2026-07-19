@@ -1,7 +1,6 @@
 ///|
-/// BLAKE3 (BLAKE3-team/BLAKE3 spec). 32-bit words, 7 rounds.
-/// Handles inputs up to 1024 bytes (one chunk). Longer inputs need tree mode (TODO).
-/// Output is an XOF (variable length). Uses UInt64 masked to 32 bits.
+/// BLAKE3 (BLAKE3-team/BLAKE3 spec). 32-bit words, 7 rounds, tree-Merkle.
+/// Arbitrary-length input via chunk tree. UInt64 masked to 32 bits.
 
 ///|
 let blake3_iv : Array[UInt64] = [
@@ -89,7 +88,6 @@ fn blake3_compress(
     block = blake3_permute(block)
   }
   blake3_round(v, block)
-  // output: state[i] ^= state[i+8]; state[i+8] ^= cv[i]
   for i in 0..<8 {
     let t = v[i] ^ v[i + 8]
     v[i + 8] = v[i + 8] ^ cv[i]
@@ -111,56 +109,254 @@ fn blake3_words_from_le(block : Array[Byte]) -> Array[UInt64] {
 }
 
 ///|
-/// BLAKE3 XOF, `out_len` bytes. Supports inputs up to 1024 bytes (one chunk).
-/// Longer inputs require the tree-Merkle mode (TODO).
-pub fn blake3_xof(data : Bytes, out_len : Int) -> Bytes {
-  if out_len < 0 {
-    abort("blake3_xof: out_len must be non-negative")
-  }
-  let len = data.length()
-  if len > 1024 {
-    abort("blake3_xof: inputs > 1024 bytes (tree mode) not yet supported")
-  }
-  let cv = Array::make(8, 0UL)
+fn b3_copy8(a : Array[UInt64]) -> Array[UInt64] {
+  let r = Array::make(8, 0UL)
   for i in 0..<8 {
-    cv[i] = blake3_iv[i]
+    r[i] = a[i]
   }
-  let mut blocks_compressed = 0
+  r
+}
+
+///|
+fn b3_first8(st : Array[UInt64]) -> Array[UInt64] {
+  b3_copy8(st)
+}
+
+// ==================== Chunk state ====================
+
+///|
+priv struct B3ChunkState {
+  mut cv : Array[UInt64]
+  chunk_counter : UInt64
+  block : Array[Byte]
+  mut block_len : Int
+  mut blocks_compressed : Int
+  flags : UInt64
+}
+
+///|
+fn b3_chunk_new(
+  key : Array[UInt64],
+  chunk_counter : UInt64,
+  flags : UInt64,
+) -> B3ChunkState {
+  B3ChunkState::{
+    cv: b3_copy8(key),
+    chunk_counter,
+    block: Array::make(64, b'\x00'),
+    block_len: 0,
+    blocks_compressed: 0,
+    flags,
+  }
+}
+
+///|
+fn b3_chunk_len(cs : B3ChunkState) -> Int {
+  64 * cs.blocks_compressed + cs.block_len
+}
+
+///|
+fn b3_start_flag(cs : B3ChunkState) -> UInt64 {
+  if cs.blocks_compressed == 0 {
+    1UL
+  } else {
+    0UL
+  }
+}
+
+///|
+fn b3_chunk_update(cs : B3ChunkState, input : Bytes) -> Unit {
   let mut off = 0
-  // full 64-byte blocks (not CHUNK_END; more may come)
-  while off + 64 < len {
-    let block = Array::make(64, b'\x00')
-    for i in 0..<64 {
-      block[i] = data[off + i]
+  let len = input.length()
+  while off < len {
+    if cs.block_len == 64 {
+      let words = blake3_words_from_le(cs.block)
+      let st = blake3_compress(
+        cs.cv,
+        words,
+        cs.chunk_counter,
+        64UL,
+        cs.flags | b3_start_flag(cs),
+      )
+      cs.cv = b3_first8(st)
+      cs.blocks_compressed = cs.blocks_compressed + 1
+      cs.block_len = 0
     }
-    let words = blake3_words_from_le(block)
-    let flags = if blocks_compressed == 0 { 1UL } else { 0UL }
-    let st = blake3_compress(cv, words, 0UL, 64UL, flags)
-    for i in 0..<8 {
-      cv[i] = st[i]
+    let take = if 64 - cs.block_len < len - off {
+      64 - cs.block_len
+    } else {
+      len - off
     }
-    blocks_compressed = blocks_compressed + 1
-    off = off + 64
+    for i in 0..<take {
+      cs.block[cs.block_len + i] = input[off + i]
+    }
+    cs.block_len = cs.block_len + take
+    off = off + take
   }
-  // last (partial or empty) block: CHUNK_END (and CHUNK_START if no full block)
-  let rem = len - off
-  let last_block = Array::make(64, b'\x00')
-  for i in 0..<rem {
-    last_block[i] = data[off + i]
+}
+
+// ==================== Output / parent ====================
+
+///|
+priv struct B3Output {
+  input_cv : Array[UInt64]
+  block_words : Array[UInt64]
+  counter : UInt64
+  block_len : UInt64
+  flags : UInt64
+}
+
+///|
+fn b3_chaining_value(o : B3Output) -> Array[UInt64] {
+  b3_first8(
+    blake3_compress(o.input_cv, o.block_words, o.counter, o.block_len, o.flags),
+  )
+}
+
+///|
+fn b3_parent_output(
+  left : Array[UInt64],
+  right : Array[UInt64],
+  key : Array[UInt64],
+  flags : UInt64,
+) -> B3Output {
+  let bw = Array::make(16, 0UL)
+  for i in 0..<8 {
+    bw[i] = left[i]
+    bw[8 + i] = right[i]
   }
-  let last_words = blake3_words_from_le(last_block)
-  let last_flags = (if blocks_compressed == 0 { 1UL } else { 0UL }) | 2UL
-  // root output: re-compress the last block with ROOT + output counter
+  B3Output::{
+    input_cv: key,
+    block_words: bw,
+    counter: 0UL,
+    block_len: 64UL,
+    flags: 4UL | flags,
+  } // PARENT=4
+}
+
+///|
+fn b3_chunk_output(cs : B3ChunkState) -> B3Output {
+  B3Output::{
+    input_cv: cs.cv,
+    block_words: blake3_words_from_le(cs.block),
+    counter: cs.chunk_counter,
+    block_len: cs.block_len.to_uint64(),
+    flags: cs.flags | b3_start_flag(cs) | 2UL, // CHUNK_END=2
+  }
+}
+
+// ==================== Hasher (tree) ====================
+
+///|
+priv struct B3Hasher {
+  mut chunk_state : B3ChunkState
+  key : Array[UInt64]
+  cv_stack : Array[Array[UInt64]]
+  mut cv_stack_len : Int
+  flags : UInt64
+}
+
+///|
+fn b3_new_stack() -> Array[Array[UInt64]] {
+  let s : Array[Array[UInt64]] = []
+  for _ in 0..<54 {
+    s.push(Array::make(8, 0UL))
+  }
+  s
+}
+
+///|
+fn b3_hasher_new() -> B3Hasher {
+  B3Hasher::{
+    chunk_state: b3_chunk_new(blake3_iv, 0UL, 0UL),
+    key: blake3_iv,
+    cv_stack: b3_new_stack(),
+    cv_stack_len: 0,
+    flags: 0UL,
+  }
+}
+
+///|
+/// Push a completed chunk's cv, merging completed subtrees (trailing-zero rule).
+fn b3_add_cv(
+  h : B3Hasher,
+  new_cv : Array[UInt64],
+  total_chunks : UInt64,
+) -> Unit {
+  let mut tc = total_chunks
+  let mut cv = b3_copy8(new_cv)
+  while (tc & 1UL) == 0UL {
+    h.cv_stack_len = h.cv_stack_len - 1
+    let left = h.cv_stack[h.cv_stack_len]
+    cv = b3_first8(
+      // parent: input_cv=key, block=[left||cv], counter=0, block_len=64, flags=PARENT|h.flags
+      blake3_compress(
+        h.key,
+        {
+          let bw = Array::make(16, 0UL)
+          for i in 0..<8 {
+            bw[i] = left[i]
+            bw[8 + i] = cv[i]
+          }
+          bw
+        },
+        0UL,
+        64UL,
+        4UL | h.flags,
+      ),
+    )
+    tc = tc >> 1
+  }
+  h.cv_stack[h.cv_stack_len] = cv
+  h.cv_stack_len = h.cv_stack_len + 1
+}
+
+///|
+fn b3_hasher_update(h : B3Hasher, input : Bytes) -> Unit {
+  let mut off = 0
+  let len = input.length()
+  while off < len {
+    if b3_chunk_len(h.chunk_state) == 1024 {
+      let cs = h.chunk_state
+      let chunk_cv = b3_chaining_value(b3_chunk_output(cs))
+      b3_add_cv(h, chunk_cv, cs.chunk_counter + 1UL)
+      h.chunk_state = b3_chunk_new(h.key, cs.chunk_counter + 1UL, h.flags)
+    }
+    let want = 1024 - b3_chunk_len(h.chunk_state)
+    let take = if want < len - off { want } else { len - off }
+    let b = Array::make(take, b'\x00')
+    for i in 0..<take {
+      b[i] = input[off + i]
+    }
+    b3_chunk_update(h.chunk_state, Bytes::from_array(b[:]))
+    off = off + take
+  }
+}
+
+///|
+fn b3_hasher_finalize(h : B3Hasher, out_len : Int) -> Bytes {
+  let mut output = b3_chunk_output(h.chunk_state)
+  let mut i = h.cv_stack_len - 1
+  while i >= 0 {
+    output = b3_parent_output(
+      h.cv_stack[i],
+      b3_chaining_value(output),
+      h.key,
+      h.flags,
+    )
+    i = i - 1
+  }
+  // root output: re-compress with ROOT + output block counter
   let out = Array::make(out_len, b'\x00')
   let mut out_off = 0
   let mut out_counter = 0UL
   while out_off < out_len {
     let st = blake3_compress(
-      cv,
-      last_words,
+      output.input_cv,
+      output.block_words,
       out_counter,
-      rem.to_uint64(),
-      last_flags | 8UL,
+      output.block_len,
+      output.flags | 8UL, // ROOT=8
     )
     for i in 0..<16 {
       if out_off >= out_len {
@@ -178,6 +374,17 @@ pub fn blake3_xof(data : Bytes, out_len : Int) -> Bytes {
     out_counter = out_counter + 1UL
   }
   Bytes::from_array(out[:])
+}
+
+///|
+/// BLAKE3 XOF, `out_len` bytes. Arbitrary-length input (tree-Merkle).
+pub fn blake3_xof(data : Bytes, out_len : Int) -> Bytes {
+  if out_len < 0 {
+    abort("blake3_xof: out_len must be non-negative")
+  }
+  let h = b3_hasher_new()
+  b3_hasher_update(h, data)
+  b3_hasher_finalize(h, out_len)
 }
 
 ///|
