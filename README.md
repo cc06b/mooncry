@@ -45,7 +45,7 @@ git push gitlink master
 - **SHA-384 / SHA-512** (FIPS 180-4) — 384 / 512-bit digest
 - **SHA-3** (FIPS 202) — SHA3-224 / 256 / 384 / 512 (Keccak-f[1600] sponge)
 - **BLAKE2b** (RFC 7693) — 1..64-byte digest
-- **BLAKE3** (BLAKE3 spec) — 32-byte default digest, XOF (single-chunk, ≤1024 B; tree mode TODO)
+- **BLAKE3** (BLAKE3 spec) — 32-byte default digest, XOF (arbitrary-length via tree-Merkle)
 
 ### Extendable-output functions (XOF)
 - **SHAKE128 / SHAKE256** (FIPS 202) — variable-length output
@@ -153,7 +153,7 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `shake_128 / shake_256(data : Bytes, out_len : Int) -> Bytes` | SHAKE XOF, `out_len` bytes |
 | `blake2b(data : Bytes, out_len : Int) -> Bytes` | BLAKE2b (RFC 7693), `out_len` 1..64 |
 | `blake3(data : Bytes) -> Bytes` | BLAKE3, 32-byte digest |
-| `blake3_xof(data : Bytes, out_len : Int) -> Bytes` | BLAKE3 XOF (≤1024 B input) |
+| `blake3_xof(data : Bytes, out_len : Int) -> Bytes` | BLAKE3 XOF (arbitrary-length) |
 | `hmac_sha256 / hmac_sha512(key, msg : Bytes) -> Bytes` | HMAC (RFC 2104) |
 | `poly1305(key, msg : Bytes) -> Bytes` | Poly1305 MAC (RFC 8439), 16-byte tag |
 | `aes_encrypt_cbc / aes_decrypt_cbc(data, key, iv) -> Bytes` | AES-CBC (IV prepended, PKCS#7) |
@@ -198,10 +198,8 @@ cause an `abort` with a descriptive message.
   compatibility with existing protocols.
 - **MD5 is collision-broken.** It is included for legacy compatibility only —
   do not sign or authenticate with it.
-- **BLAKE3 is single-chunk (≤1024 B) so far.** Inputs longer than 1024 bytes
-  need the tree-Merkle mode (not yet implemented; `blake3_xof` aborts with a
-  message). Most hash inputs fit in one chunk; full arbitrary-length support is
-  a TODO.
+- **BLAKE3 supports arbitrary-length input** via the tree-Merkle mode (verified
+  vs the reference `blake3` Python package up to 5000 bytes).
 - **Inputs are validated, not silently padded.** Wrong key / IV / nonce / tag
   lengths `abort` immediately rather than producing wrong output.
 - **No RNG.** The library provides deterministic primitives; obtain keys, IVs,
