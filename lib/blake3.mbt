@@ -236,6 +236,10 @@ fn b3_parent_output(
 
 ///|
 fn b3_chunk_output(cs : B3ChunkState) -> B3Output {
+  // Clear the stale tail left over from a previously-absorbed full block.
+  for i in cs.block_len..<64 {
+    cs.block[i] = b'\x00'
+  }
   B3Output::{
     input_cv: cs.cv,
     block_words: blake3_words_from_le(cs.block),
