@@ -8,12 +8,12 @@ verified against official standard vectors.
 
 - **Correct** — every algorithm is checked against FIPS / NIST / RFC test
   vectors (plus Python references for BLAKE2b/BLAKE3/Poly1305/CMAC/SipHash/scrypt).
-  235 tests, run with `moon test --deny-warn`.
-- **Broad** — MD5, the SHA-2 and SHA-3 families, SHAKE XOFs, BLAKE2b, BLAKE3,
-  HMAC (incl. HMAC-SHA3), Poly1305, CMAC-AES, AES-CBC/GCM/CTR, ChaCha20,
+  270 tests, run with `moon test --deny-warn`.
+- **Broad** — MD5, **SHA-1**, the SHA-2 and SHA-3 families, SHAKE XOFs, BLAKE2b, BLAKE3,
+  HMAC (incl. HMAC-SHA3), Poly1305, CMAC-AES, AES-CBC/GCM/CTR/**KW**, ChaCha20,
   **Salsa20**, ChaCha20-Poly1305 AEAD, HKDF, PBKDF2, **scrypt**, **RSA
-  (PKCS1-v1.5/OAEP/PSS)**, **Ed25519**, **X25519**, SipHash-2-4, CRC32/CRC32C,
-  a sealed-box AEAD envelope, Base64, Hex.
+  (PKCS1-v1.5/OAEP/PSS)**, **Ed25519**, **X25519**, **HOTP/TOTP**, SipHash-2-4,
+  CRC32/CRC32C, a sealed-box AEAD envelope, Base64, Hex.
 - **Fast where it matters** — hex / Base64 encoding are O(n); AES MixColumns
   uses precomputed GF(2^8) tables (~5x over bit-sliced math); throughput is
   measured by `moon bench`.
@@ -331,7 +331,7 @@ pycryptodome), **Ed25519** (RFC 8032 + cryptography lib), **X25519** (RFC 7748 +
 **SipHash-2-4** (Python reference), **Salsa20** (eSTREAM + pycryptodome), **SHA-1** (hashlib) + **HOTP/TOTP** (RFC 4226/6238), Base64 (RFC 4648), hex round-trip,
 **sealed-box** round-trip + tamper, and property-based round-trip checks
 (deterministic PRNG) for every cipher + streaming-vs-one-shot consistency.
-**261 tests.**
+**270 tests.**
 
 ## Development
 
