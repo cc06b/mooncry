@@ -7,17 +7,19 @@ verified against official standard vectors.
 ## Highlights
 
 - **Correct** — every algorithm is checked against FIPS / NIST / RFC test
-  vectors (plus a Python reference for BLAKE2b/BLAKE3/Poly1305). 151 tests, run
-  with `moon test --deny-warn`.
+  vectors (plus Python references for BLAKE2b/BLAKE3/Poly1305/CMAC/SipHash).
+  196 tests, run with `moon test --deny-warn`.
 - **Broad** — MD5, the SHA-2 and SHA-3 families, SHAKE XOFs, BLAKE2b, BLAKE3,
-  HMAC, Poly1305, AES-CBC/GCM/CTR, ChaCha20, ChaCha20-Poly1305 AEAD, HKDF,
-  PBKDF2, Base64, Hex.
+  HMAC (incl. HMAC-SHA3), Poly1305, CMAC-AES, AES-CBC/GCM/CTR, ChaCha20,
+  ChaCha20-Poly1305 AEAD, HKDF, PBKDF2, SipHash-2-4, CRC32/CRC32C, a
+  sealed-box AEAD envelope, Base64, Hex.
 - **Fast where it matters** — hex / Base64 encoding are O(n); AES MixColumns
   uses precomputed GF(2^8) tables (~5x over bit-sliced math); throughput is
   measured by `moon bench`.
 - **Fail-fast input validation** — AES / ChaCha20 / SHAKE / hex functions abort
   with a clear message on wrong key / IV / nonce / tag lengths instead of
-  producing garbage.
+  producing garbage. Graceful `Result`-returning variants (`hex_to_bytes_or`,
+  `base64_decode_or`) are provided for callers that prefer to branch on error.
 - **Single source of truth** — one-shot hash entry points delegate to the
   streaming hashers, so the incremental and one-shot paths share one
   implementation.
@@ -52,7 +54,9 @@ git push gitlink master
 
 ### Message authentication
 - **HMAC-SHA256 / HMAC-SHA512** (RFC 2104)
+- **HMAC-SHA3-256 / HMAC-SHA3-512** (RFC 2104 over FIPS 202)
 - **Poly1305** (RFC 8439) — one-time MAC
+- **AES-CMAC** (NIST SP 800-38B) — 128-bit tag, 128/192/256-bit keys
 
 ### Symmetric ciphers / AEAD
 - **AES-CBC** (NIST SP 800-38A) — PKCS#7 padding, 128/192/256-bit keys, IV prepended
@@ -64,6 +68,15 @@ git push gitlink master
 ### Key derivation
 - **HKDF-SHA256** (RFC 5869) — extract + expand
 - **PBKDF2-HMAC-SHA256** (RFC 8018) — password-based key derivation
+
+### Checksums / PRFs
+- **CRC32** (IEEE 802.3, poly 0xEDB88320 reflected)
+- **CRC32C** (Castagnoli, poly 0x82F63B78 reflected) — iSCSI / ext4
+- **SipHash-2-4** (Aumasson & Bernstein 2012) — 64-bit short-input PRF
+
+### Composite envelope
+- **Sealed box** — versioned AEAD envelope: HKDF-SHA256 (key derivation) +
+  AES-256-GCM (AEAD). Wire format: `version(1) ‖ nonce(12) ‖ ciphertext ‖ tag(16)`.
 
 ### Encoding
 - **Base64** (RFC 4648) — standard alphabet with padding
@@ -119,6 +132,16 @@ fn main {
   let status = if ok { "OK" } else { "FAIL" }
   println("AES-GCM round-trip: " + status)
   println("Recovered: " + @lib.bytes_to_hex(plaintext))
+
+  // Sealed-box envelope: HKDF-SHA256 derives the AES-256-GCM key from a
+  // master key + context, then encrypts into a versioned envelope.
+  let master = Bytes::make(32, b'\x07')
+  let nonce = Bytes::make(12, b'\x01')
+  let envelope = @lib.sealed_box_seal(master, nonce, b"plaintext", b"aad", b"tenant-1")
+  match @lib.sealed_box_open(master, envelope, b"aad", b"tenant-1") {
+    Ok(pt) => println("Sealed box: " + @lib.bytes_to_hex(pt))
+    Err(msg) => println("Sealed box failed: " + msg)
+  }
 }
 ```
 
@@ -153,7 +176,9 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `blake3(data : Bytes) -> Bytes` | BLAKE3, 32-byte digest |
 | `blake3_xof(data : Bytes, out_len : Int) -> Bytes` | BLAKE3 XOF (arbitrary-length) |
 | `hmac_sha256 / hmac_sha512(key, msg : Bytes) -> Bytes` | HMAC (RFC 2104) |
+| `hmac_sha3_256 / hmac_sha3_512(key, msg : Bytes) -> Bytes` | HMAC over SHA-3 (RFC 2104 + FIPS 202) |
 | `poly1305(key, msg : Bytes) -> Bytes` | Poly1305 MAC (RFC 8439), 16-byte tag |
+| `cmac_aes(data, key : Bytes) -> Bytes` | AES-CMAC (NIST SP 800-38B), 16-byte tag |
 | `aes_encrypt_cbc / aes_decrypt_cbc(data, key, iv) -> Bytes` | AES-CBC (IV prepended, PKCS#7) |
 | `aes_gcm_encrypt(pt, key, iv, aad) -> (Bytes, Bytes)` | AES-GCM encrypt → (ct, 16-byte tag) |
 | `aes_gcm_decrypt(ct, key, iv, aad, tag) -> (Bytes, Bool)` | AES-GCM decrypt, constant-time tag verify |
@@ -163,10 +188,16 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `chacha20_poly1305_decrypt(key, nonce, aad, input) -> Bytes` | AEAD decrypt, aborts on tag mismatch |
 | `hkdf_sha256(salt, ikm, info, len) -> Bytes` | HKDF-SHA256 (RFC 5869) |
 | `pbkdf2_hmac_sha256(password, salt, iterations, len) -> Bytes` | PBKDF2-HMAC-SHA256 (RFC 8018) |
+| `crc32 / crc32c(data : Bytes) -> Bytes` | CRC-32 (IEEE) / CRC-32C, 4-byte big-endian |
+| `siphash_2_4(key, data : Bytes) -> Bytes` | SipHash-2-4 (64-bit), key 16 bytes → 8 bytes |
+| `sealed_box_seal(master_key, nonce, pt, aad, ctx) -> Bytes` | AEAD envelope (HKDF + AES-256-GCM) |
+| `sealed_box_open(master_key, envelope, aad, ctx) -> Result[Bytes, String]` | Open envelope, `Err` on auth failure |
 | `base64_encode(data : Bytes) -> String` | Base64 encode (RFC 4648) |
 | `base64_decode(encoded : String) -> Bytes` | Base64 decode |
+| `base64_decode_or(encoded : String) -> Result[Bytes, String]` | Base64 decode, `Err` on malformed input |
 | `bytes_to_hex(data : Bytes) -> String` | Bytes → lowercase hex |
-| `hex_to_bytes(hex : String) -> Bytes` | hex → Bytes (rejects odd length / non-hex) |
+| `hex_to_bytes(hex : String) -> Bytes` | hex → Bytes (aborts on bad input) |
+| `hex_to_bytes_or(hex : String) -> Result[Bytes, String]` | hex → Bytes, `Err` on bad input |
 | `bytes_equal(a, b : Bytes) -> Bool` | Constant-time comparison |
 
 Streaming hashers (`<algo>_new` / `sha3_update` / `sha3_finalize` /
@@ -222,6 +253,12 @@ moon bench
 | BLAKE2b | ~27 µs |
 | BLAKE3 | ~46 µs |
 | HMAC-SHA256 | ~23 µs |
+| HMAC-SHA3-256 | ~213 µs |
+| HMAC-SHA3-512 | ~338 µs |
+| AES-128-CMAC | ~347 µs |
+| SipHash-2-4 | ~4.2 µs |
+| CRC32 / CRC32C | ~4.7 µs |
+| sealed_box_seal | ~588 µs (HKDF + AES-256-GCM) |
 | ChaCha20 | ~46 µs |
 | AES-256-CBC | ~315 µs (table-based GF mul) |
 | AES-256-GCM | ~420 µs (table-based) |
@@ -242,10 +279,14 @@ moon test
 
 Coverage: MD5 (RFC 1321), SHA-2 family (FIPS 180-4 + million-`a`), SHA-3
 (NIST KAT), SHAKE (FIPS 202), BLAKE2b (RFC 7693 + hashlib), BLAKE3 (python
-blake3), HMAC (RFC 4231), Poly1305 (RFC 8439), ChaCha20-Poly1305 (RFC 8439 +
+blake3), HMAC (RFC 4231), **HMAC-SHA3** (hashlib), **Poly1305** (RFC 8439),
+**AES-CMAC** (NIST SP 800-38B + pycryptodome), ChaCha20-Poly1305 (RFC 8439 +
 pycryptodome), HKDF (RFC 5869), PBKDF2 (RFC 6070), AES-CBC/GCM/CTR (NIST SP
-800-38A/D), ChaCha20 (RFC 8439), Base64 (RFC 4648), hex round-trip, and
-streaming-vs-one-shot consistency. **151 tests.**
+800-38A/D), ChaCha20 (RFC 8439), **CRC32/CRC32C** (zlib + manual ref),
+**SipHash-2-4** (Python reference), Base64 (RFC 4648), hex round-trip,
+**sealed-box** round-trip + tamper, and property-based round-trip checks
+(deterministic PRNG) for every cipher + streaming-vs-one-shot consistency.
+**196 tests.**
 
 ## Development
 
