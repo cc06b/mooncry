@@ -8,11 +8,12 @@ verified against official standard vectors.
 
 - **Correct** — every algorithm is checked against FIPS / NIST / RFC test
   vectors (plus Python references for BLAKE2b/BLAKE3/Poly1305/CMAC/SipHash/scrypt).
-  229 tests, run with `moon test --deny-warn`.
+  235 tests, run with `moon test --deny-warn`.
 - **Broad** — MD5, the SHA-2 and SHA-3 families, SHAKE XOFs, BLAKE2b, BLAKE3,
   HMAC (incl. HMAC-SHA3), Poly1305, CMAC-AES, AES-CBC/GCM/CTR, ChaCha20,
-  ChaCha20-Poly1305 AEAD, HKDF, PBKDF2, **scrypt**, **RSA (PKCS1-v1.5/OAEP/PSS)**,
-  **Ed25519**, **X25519**, SipHash-2-4, CRC32/CRC32C, a sealed-box AEAD envelope, Base64, Hex.
+  **Salsa20**, ChaCha20-Poly1305 AEAD, HKDF, PBKDF2, **scrypt**, **RSA
+  (PKCS1-v1.5/OAEP/PSS)**, **Ed25519**, **X25519**, SipHash-2-4, CRC32/CRC32C,
+  a sealed-box AEAD envelope, Base64, Hex.
 - **Fast where it matters** — hex / Base64 encoding are O(n); AES MixColumns
   uses precomputed GF(2^8) tables (~5x over bit-sliced math); throughput is
   measured by `moon bench`.
@@ -63,6 +64,8 @@ git push gitlink master
 - **AES-GCM** (NIST SP 800-38D) — authenticated encryption with AAD, 96-bit nonce
 - **AES-CTR** (NIST SP 800-38A) — 128-bit big-endian counter, stream cipher
 - **ChaCha20** (RFC 8439) — 256-bit key, 96-bit nonce, stream cipher
+- **Salsa20** (eSTREAM, 20-round) — 16/32-byte key, 8-byte nonce, stream
+  cipher
 - **ChaCha20-Poly1305** (RFC 8439) — AEAD (ciphertext || 16-byte tag)
 
 ### Key derivation
@@ -205,6 +208,8 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `aes_gcm_decrypt(ct, key, iv, aad, tag) -> (Bytes, Bool)` | AES-GCM decrypt, constant-time tag verify |
 | `aes_ctr(data, key, iv) -> Bytes` | AES-CTR encrypt/decrypt (symmetric) |
 | `chacha20_xor(input, key, nonce, counter) -> Bytes` | ChaCha20 encrypt/decrypt (symmetric) |
+| `salsa20_keystream_block(key, nonce, counter) -> Bytes` | Salsa20 keystream block (64 bytes) |
+| `salsa20_xor(key, nonce, counter, data) -> Bytes` | Salsa20 stream cipher encrypt/decrypt (symmetric) |
 | `chacha20_poly1305_encrypt(key, nonce, aad, pt) -> Bytes` | ChaCha20-Poly1305 AEAD → ct ‖ tag |
 | `chacha20_poly1305_decrypt(key, nonce, aad, input) -> Bytes` | AEAD decrypt, aborts on tag mismatch |
 | `hkdf_sha256(salt, ikm, info, len) -> Bytes` | HKDF-SHA256 (RFC 5869) |
@@ -323,10 +328,10 @@ pycryptodome), HKDF (RFC 5869), PBKDF2 (RFC 6070), **scrypt** (RFC 7914 +
 hashlib.scrypt), AES-CBC/GCM/CTR (NIST SP
 800-38A/D), ChaCha20 (RFC 8439), **RSA** (RFC 8017 PKCS1-v1.5/OAEP/PSS +
 pycryptodome), **Ed25519** (RFC 8032 + cryptography lib), **X25519** (RFC 7748 + cryptography lib), **CRC32/CRC32C** (zlib + manual ref),
-**SipHash-2-4** (Python reference), Base64 (RFC 4648), hex round-trip,
+**SipHash-2-4** (Python reference), **Salsa20** (eSTREAM + pycryptodome), Base64 (RFC 4648), hex round-trip,
 **sealed-box** round-trip + tamper, and property-based round-trip checks
 (deterministic PRNG) for every cipher + streaming-vs-one-shot consistency.
-**229 tests.**
+**235 tests.**
 
 ## Development
 
