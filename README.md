@@ -8,11 +8,11 @@ verified against official standard vectors.
 
 - **Correct** — every algorithm is checked against FIPS / NIST / RFC test
   vectors (plus Python references for BLAKE2b/BLAKE3/Poly1305/CMAC/SipHash/scrypt).
-  223 tests, run with `moon test --deny-warn`.
+  229 tests, run with `moon test --deny-warn`.
 - **Broad** — MD5, the SHA-2 and SHA-3 families, SHAKE XOFs, BLAKE2b, BLAKE3,
   HMAC (incl. HMAC-SHA3), Poly1305, CMAC-AES, AES-CBC/GCM/CTR, ChaCha20,
   ChaCha20-Poly1305 AEAD, HKDF, PBKDF2, **scrypt**, **RSA (PKCS1-v1.5/OAEP/PSS)**,
-  **Ed25519**, SipHash-2-4, CRC32/CRC32C, a sealed-box AEAD envelope, Base64, Hex.
+  **Ed25519**, **X25519**, SipHash-2-4, CRC32/CRC32C, a sealed-box AEAD envelope, Base64, Hex.
 - **Fast where it matters** — hex / Base64 encoding are O(n); AES MixColumns
   uses precomputed GF(2^8) tables (~5x over bit-sliced math); throughput is
   measured by `moon bench`.
@@ -67,7 +67,9 @@ git push gitlink master
 
 ### Key derivation
 - **HKDF-SHA256** (RFC 5869) — extract + expand
+- **HKDF-SHA3-256** (RFC 5869 over FIPS 202)
 - **PBKDF2-HMAC-SHA256** (RFC 8018) — password-based key derivation
+- **PBKDF2-HMAC-SHA3-256** (RFC 8018 over FIPS 202)
 - **scrypt** (RFC 7914) — memory-hard password-based KDF (Salsa20/8 + BlockMix + ROMix)
 
 ### Checksums / PRFs
@@ -92,6 +94,10 @@ git push gitlink master
 - **Ed25519** (RFC 8032, ed25519-sha-512) — deterministic sign/verify.
   Field arithmetic over GF(2^255-19) uses `@bigint`; the twisted-Edwards
   base point is recovered from y = 4/5. Signing is deterministic (no RNG).
+
+### Key agreement (X25519)
+- **X25519** (RFC 7748) — Diffie-Hellman over Curve25519 via the
+  x-coordinate-only Montgomery ladder. Reuses the GF(2^255-19) field ops.
 
 ### Encoding
 - **Base64** (RFC 4648) — standard alphabet with padding
@@ -203,6 +209,8 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `chacha20_poly1305_decrypt(key, nonce, aad, input) -> Bytes` | AEAD decrypt, aborts on tag mismatch |
 | `hkdf_sha256(salt, ikm, info, len) -> Bytes` | HKDF-SHA256 (RFC 5869) |
 | `pbkdf2_hmac_sha256(password, salt, iterations, len) -> Bytes` | PBKDF2-HMAC-SHA256 (RFC 8018) |
+| `hkdf_sha3_256(salt, ikm, info, len) -> Bytes` | HKDF-SHA3-256 (RFC 5869 over FIPS 202) |
+| `pbkdf2_hmac_sha3_256(password, salt, iterations, len) -> Bytes` | PBKDF2-HMAC-SHA3-256 (RFC 8018 over FIPS 202) |
 | `scrypt(password, salt, n, r, p, dklen) -> Bytes` | scrypt memory-hard KDF (RFC 7914), `n` power of two |
 | `rsa_pkcs1_v15_encrypt(msg, n, e, rand_ps) -> Bytes` | RSAES-PKCS1-v1.5 encrypt (RFC 8017 §7.2) |
 | `rsa_pkcs1_v15_decrypt(ct, n, d) -> Bytes` | RSAES-PKCS1-v1.5 decrypt |
@@ -215,6 +223,8 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `ed25519_public_key(seed) -> Bytes` | Derive 32-byte Ed25519 public key |
 | `ed25519_sign(seed, message) -> Bytes` | Ed25519 sign (RFC 8032), 64-byte sig |
 | `ed25519_verify(public_key, message, sig) -> Bool` | Ed25519 verify |
+| `x25519(scalar, u) -> Bytes` | X25519 scalar mult (RFC 7748), DH shared secret |
+| `x25519_public_key(private_key) -> Bytes` | Derive X25519 public key (base u=9) |
 | `crc32 / crc32c(data : Bytes) -> Bytes` | CRC-32 (IEEE) / CRC-32C, 4-byte big-endian |
 | `siphash_2_4(key, data : Bytes) -> Bytes` | SipHash-2-4 (64-bit), key 16 bytes → 8 bytes |
 | `sealed_box_seal(master_key, nonce, pt, aad, ctx) -> Bytes` | AEAD envelope (HKDF + AES-256-GCM) |
@@ -312,11 +322,11 @@ blake3), HMAC (RFC 4231), **HMAC-SHA3** (hashlib), **Poly1305** (RFC 8439),
 pycryptodome), HKDF (RFC 5869), PBKDF2 (RFC 6070), **scrypt** (RFC 7914 +
 hashlib.scrypt), AES-CBC/GCM/CTR (NIST SP
 800-38A/D), ChaCha20 (RFC 8439), **RSA** (RFC 8017 PKCS1-v1.5/OAEP/PSS +
-pycryptodome), **Ed25519** (RFC 8032 + cryptography lib), **CRC32/CRC32C** (zlib + manual ref),
+pycryptodome), **Ed25519** (RFC 8032 + cryptography lib), **X25519** (RFC 7748 + cryptography lib), **CRC32/CRC32C** (zlib + manual ref),
 **SipHash-2-4** (Python reference), Base64 (RFC 4648), hex round-trip,
 **sealed-box** round-trip + tamper, and property-based round-trip checks
 (deterministic PRNG) for every cipher + streaming-vs-one-shot consistency.
-**223 tests.**
+**229 tests.**
 
 ## Development
 
