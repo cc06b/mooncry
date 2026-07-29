@@ -58,3 +58,10 @@ test "bench sealed_box_seal 1KiB" (it : @bench.T) {
   let nonce = Bytes::make(12, b'\x00')
   it.bench(fn() { it.keep(sealed_box_seal(key, nonce, pt, b"", b"ctx")) })
 }
+
+///|
+/// scrypt is a memory-hard KDF, not a throughput primitive; this measures a
+/// moderate-cost derivation (N=1024, r=8, p=1) for a relative reference.
+test "bench scrypt N=1024 r=8 p=1 dklen=32" (it : @bench.T) {
+  it.bench(fn() { it.keep(scrypt(b"password", b"salt", 1024, 8, 1, 32)) })
+}

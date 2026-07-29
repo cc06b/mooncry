@@ -7,11 +7,11 @@ verified against official standard vectors.
 ## Highlights
 
 - **Correct** — every algorithm is checked against FIPS / NIST / RFC test
-  vectors (plus Python references for BLAKE2b/BLAKE3/Poly1305/CMAC/SipHash).
-  196 tests, run with `moon test --deny-warn`.
+  vectors (plus Python references for BLAKE2b/BLAKE3/Poly1305/CMAC/SipHash/scrypt).
+  201 tests, run with `moon test --deny-warn`.
 - **Broad** — MD5, the SHA-2 and SHA-3 families, SHAKE XOFs, BLAKE2b, BLAKE3,
   HMAC (incl. HMAC-SHA3), Poly1305, CMAC-AES, AES-CBC/GCM/CTR, ChaCha20,
-  ChaCha20-Poly1305 AEAD, HKDF, PBKDF2, SipHash-2-4, CRC32/CRC32C, a
+  ChaCha20-Poly1305 AEAD, HKDF, PBKDF2, **scrypt**, SipHash-2-4, CRC32/CRC32C, a
   sealed-box AEAD envelope, Base64, Hex.
 - **Fast where it matters** — hex / Base64 encoding are O(n); AES MixColumns
   uses precomputed GF(2^8) tables (~5x over bit-sliced math); throughput is
@@ -68,6 +68,7 @@ git push gitlink master
 ### Key derivation
 - **HKDF-SHA256** (RFC 5869) — extract + expand
 - **PBKDF2-HMAC-SHA256** (RFC 8018) — password-based key derivation
+- **scrypt** (RFC 7914) — memory-hard password-based KDF (Salsa20/8 + BlockMix + ROMix)
 
 ### Checksums / PRFs
 - **CRC32** (IEEE 802.3, poly 0xEDB88320 reflected)
@@ -188,6 +189,7 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `chacha20_poly1305_decrypt(key, nonce, aad, input) -> Bytes` | AEAD decrypt, aborts on tag mismatch |
 | `hkdf_sha256(salt, ikm, info, len) -> Bytes` | HKDF-SHA256 (RFC 5869) |
 | `pbkdf2_hmac_sha256(password, salt, iterations, len) -> Bytes` | PBKDF2-HMAC-SHA256 (RFC 8018) |
+| `scrypt(password, salt, n, r, p, dklen) -> Bytes` | scrypt memory-hard KDF (RFC 7914), `n` power of two |
 | `crc32 / crc32c(data : Bytes) -> Bytes` | CRC-32 (IEEE) / CRC-32C, 4-byte big-endian |
 | `siphash_2_4(key, data : Bytes) -> Bytes` | SipHash-2-4 (64-bit), key 16 bytes → 8 bytes |
 | `sealed_box_seal(master_key, nonce, pt, aad, ctx) -> Bytes` | AEAD envelope (HKDF + AES-256-GCM) |
@@ -259,6 +261,7 @@ moon bench
 | SipHash-2-4 | ~4.2 µs |
 | CRC32 / CRC32C | ~4.7 µs |
 | sealed_box_seal | ~588 µs (HKDF + AES-256-GCM) |
+| scrypt (N=1024,r=8,p=1,dk32) | ~84 ms (memory-hard KDF) |
 | ChaCha20 | ~46 µs |
 | AES-256-CBC | ~315 µs (table-based GF mul) |
 | AES-256-GCM | ~420 µs (table-based) |
@@ -281,12 +284,13 @@ Coverage: MD5 (RFC 1321), SHA-2 family (FIPS 180-4 + million-`a`), SHA-3
 (NIST KAT), SHAKE (FIPS 202), BLAKE2b (RFC 7693 + hashlib), BLAKE3 (python
 blake3), HMAC (RFC 4231), **HMAC-SHA3** (hashlib), **Poly1305** (RFC 8439),
 **AES-CMAC** (NIST SP 800-38B + pycryptodome), ChaCha20-Poly1305 (RFC 8439 +
-pycryptodome), HKDF (RFC 5869), PBKDF2 (RFC 6070), AES-CBC/GCM/CTR (NIST SP
+pycryptodome), HKDF (RFC 5869), PBKDF2 (RFC 6070), **scrypt** (RFC 7914 +
+hashlib.scrypt), AES-CBC/GCM/CTR (NIST SP
 800-38A/D), ChaCha20 (RFC 8439), **CRC32/CRC32C** (zlib + manual ref),
 **SipHash-2-4** (Python reference), Base64 (RFC 4648), hex round-trip,
 **sealed-box** round-trip + tamper, and property-based round-trip checks
 (deterministic PRNG) for every cipher + streaming-vs-one-shot consistency.
-**196 tests.**
+**201 tests.**
 
 ## Development
 
