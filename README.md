@@ -331,7 +331,7 @@ pycryptodome), **Ed25519** (RFC 8032 + cryptography lib), **X25519** (RFC 7748 +
 **SipHash-2-4** (Python reference), **Salsa20** (eSTREAM + pycryptodome), **SHA-1** (hashlib) + **HOTP/TOTP** (RFC 4226/6238), Base64 (RFC 4648), hex round-trip,
 **sealed-box** round-trip + tamper, and property-based round-trip checks
 (deterministic PRNG) for every cipher + streaming-vs-one-shot consistency.
-**270 tests.**
+**282 tests.**
 
 ## Development
 
