@@ -8,11 +8,11 @@ verified against official standard vectors.
 
 - **Correct** — every algorithm is checked against FIPS / NIST / RFC test
   vectors (plus Python references for BLAKE2b/BLAKE3/Poly1305/CMAC/SipHash/scrypt).
-  212 tests, run with `moon test --deny-warn`.
+  223 tests, run with `moon test --deny-warn`.
 - **Broad** — MD5, the SHA-2 and SHA-3 families, SHAKE XOFs, BLAKE2b, BLAKE3,
   HMAC (incl. HMAC-SHA3), Poly1305, CMAC-AES, AES-CBC/GCM/CTR, ChaCha20,
   ChaCha20-Poly1305 AEAD, HKDF, PBKDF2, **scrypt**, **RSA (PKCS1-v1.5/OAEP/PSS)**,
-  SipHash-2-4, CRC32/CRC32C, a sealed-box AEAD envelope, Base64, Hex.
+  **Ed25519**, SipHash-2-4, CRC32/CRC32C, a sealed-box AEAD envelope, Base64, Hex.
 - **Fast where it matters** — hex / Base64 encoding are O(n); AES MixColumns
   uses precomputed GF(2^8) tables (~5x over bit-sliced math); throughput is
   measured by `moon bench`.
@@ -87,6 +87,11 @@ git push gitlink master
 - **RSASSA-PKCS1-v1.5** (RFC 8017 §8.2) — sign/verify over SHA-256
   (deterministic)
 - **RSASSA-PSS** (RFC 8017 §8.1) — SHA-256 + MGF1-SHA256, caller-supplied salt
+
+### Asymmetric signatures (Ed25519)
+- **Ed25519** (RFC 8032, ed25519-sha-512) — deterministic sign/verify.
+  Field arithmetic over GF(2^255-19) uses `@bigint`; the twisted-Edwards
+  base point is recovered from y = 4/5. Signing is deterministic (no RNG).
 
 ### Encoding
 - **Base64** (RFC 4648) — standard alphabet with padding
@@ -207,6 +212,9 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `rsa_oaep_decrypt(ct, n, d, label) -> Bytes` | RSAES-OAEP decrypt |
 | `rsa_pss_sign(msg, n, d, salt) -> Bytes` | RSASSA-PSS sign (SHA-256) |
 | `rsa_pss_verify(msg, sig, n, e, salt_len) -> Bool` | RSASSA-PSS verify |
+| `ed25519_public_key(seed) -> Bytes` | Derive 32-byte Ed25519 public key |
+| `ed25519_sign(seed, message) -> Bytes` | Ed25519 sign (RFC 8032), 64-byte sig |
+| `ed25519_verify(public_key, message, sig) -> Bool` | Ed25519 verify |
 | `crc32 / crc32c(data : Bytes) -> Bytes` | CRC-32 (IEEE) / CRC-32C, 4-byte big-endian |
 | `siphash_2_4(key, data : Bytes) -> Bytes` | SipHash-2-4 (64-bit), key 16 bytes → 8 bytes |
 | `sealed_box_seal(master_key, nonce, pt, aad, ctx) -> Bytes` | AEAD envelope (HKDF + AES-256-GCM) |
@@ -304,11 +312,11 @@ blake3), HMAC (RFC 4231), **HMAC-SHA3** (hashlib), **Poly1305** (RFC 8439),
 pycryptodome), HKDF (RFC 5869), PBKDF2 (RFC 6070), **scrypt** (RFC 7914 +
 hashlib.scrypt), AES-CBC/GCM/CTR (NIST SP
 800-38A/D), ChaCha20 (RFC 8439), **RSA** (RFC 8017 PKCS1-v1.5/OAEP/PSS +
-pycryptodome), **CRC32/CRC32C** (zlib + manual ref),
+pycryptodome), **Ed25519** (RFC 8032 + cryptography lib), **CRC32/CRC32C** (zlib + manual ref),
 **SipHash-2-4** (Python reference), Base64 (RFC 4648), hex round-trip,
 **sealed-box** round-trip + tamper, and property-based round-trip checks
 (deterministic PRNG) for every cipher + streaming-vs-one-shot consistency.
-**212 tests.**
+**223 tests.**
 
 ## Development
 
