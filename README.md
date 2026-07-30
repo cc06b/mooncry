@@ -8,7 +8,7 @@ verified against official standard vectors.
 
 - **Correct** — every algorithm is checked against FIPS / NIST / RFC test
   vectors (plus Python references for BLAKE2b/BLAKE3/Poly1305/CMAC/SipHash/scrypt).
-  307 tests, run with `moon test --deny-warn`.
+  311 tests, run with `moon test --deny-warn`.
 - **Broad** — MD5, **SHA-1**, the SHA-2 and SHA-3 families, SHAKE XOFs, BLAKE2b, BLAKE3,
   HMAC (incl. HMAC-SHA3), Poly1305, CMAC-AES, AES-CBC/GCM/CTR/**KW**/**SIV**, ChaCha20,
   **Salsa20**, ChaCha20-Poly1305 AEAD, HKDF, PBKDF2, **scrypt**, **Argon2**,
@@ -302,6 +302,11 @@ moon bench
 | CRC32 / CRC32C | ~4.7 µs |
 | sealed_box_seal | ~588 µs (HKDF + AES-256-GCM) |
 | scrypt (N=1024,r=8,p=1,dk32) | ~84 ms (memory-hard KDF) |
+| Argon2id (t=1,m=64,p=1,dk16) | ~1 ms (memory-hard KDF) |
+| ECDSA P-256 sign | ~270 ms (BigInt affine, correctness-first) |
+| ECDSA P-256 verify | ~540 ms (two scalar mults) |
+| AES-256-SIV encrypt 1KiB | ~950 µs (S2V + AES-CTR) |
+| AES-128-KW wrap 32B | ~146 µs |
 | ChaCha20 | ~46 µs |
 | AES-256-CBC | ~315 µs (table-based GF mul) |
 | AES-256-GCM | ~420 µs (table-based) |
@@ -331,7 +336,7 @@ pycryptodome), **Ed25519** (RFC 8032 + cryptography lib), **X25519** (RFC 7748 +
 **SipHash-2-4** (Python reference), **Salsa20** (eSTREAM + pycryptodome), **SHA-1** (hashlib) + **HOTP/TOTP** (RFC 4226/6238), Base64 (RFC 4648), hex round-trip,
 **sealed-box** round-trip + tamper, and property-based round-trip checks
 (deterministic PRNG) for every cipher + streaming-vs-one-shot consistency.
-**307 tests.**
+**311 tests.**
 
 ## Development
 
