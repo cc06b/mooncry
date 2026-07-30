@@ -8,9 +8,9 @@ verified against official standard vectors.
 
 - **Correct** — every algorithm is checked against FIPS / NIST / RFC test
   vectors (plus Python references for BLAKE2b/BLAKE3/Poly1305/CMAC/SipHash/scrypt).
-  290 tests, run with `moon test --deny-warn`.
+  307 tests, run with `moon test --deny-warn`.
 - **Broad** — MD5, **SHA-1**, the SHA-2 and SHA-3 families, SHAKE XOFs, BLAKE2b, BLAKE3,
-  HMAC (incl. HMAC-SHA3), Poly1305, CMAC-AES, AES-CBC/GCM/CTR/**KW**, ChaCha20,
+  HMAC (incl. HMAC-SHA3), Poly1305, CMAC-AES, AES-CBC/GCM/CTR/**KW**/**SIV**, ChaCha20,
   **Salsa20**, ChaCha20-Poly1305 AEAD, HKDF, PBKDF2, **scrypt**, **Argon2**,
   **RSA (PKCS1-v1.5/OAEP/PSS)**, **ECDSA P-256**, **Ed25519**, **X25519**,
   **HOTP/TOTP**, SipHash-2-4, CRC32/CRC32C, a sealed-box AEAD envelope, Base64, Hex.
@@ -331,7 +331,7 @@ pycryptodome), **Ed25519** (RFC 8032 + cryptography lib), **X25519** (RFC 7748 +
 **SipHash-2-4** (Python reference), **Salsa20** (eSTREAM + pycryptodome), **SHA-1** (hashlib) + **HOTP/TOTP** (RFC 4226/6238), Base64 (RFC 4648), hex round-trip,
 **sealed-box** round-trip + tamper, and property-based round-trip checks
 (deterministic PRNG) for every cipher + streaming-vs-one-shot consistency.
-**290 tests.**
+**307 tests.**
 
 ## Development
 
