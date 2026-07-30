@@ -1,0 +1,97 @@
+// ==================== Argon2 (RFC 9106) ====================
+// Vectors cross-checked against argon2-cffi (hash_secret_raw).
+
+///|
+test "Argon2 2d (t=2 m=64 p=1 hlen=24)" {
+  let tag = argon2d(
+    b"\x70\x61\x73\x73\x77\x6f\x72\x64", b"\x73\x6f\x6d\x65\x73\x61\x6c\x74", 2,
+    64, 1, 24,
+  )
+  assert_true(
+    bytes_equal(
+      tag, b"\x3b\xe9\xec\x79\xa6\x9b\x75\xd3\x75\x2a\xcb\x59\xa1\xfb\xb8\xb2\x95\xa4\x65\x29\xc4\x8f\xbb\x75",
+    ),
+  )
+}
+
+///|
+test "Argon2 2i (t=2 m=64 p=1 hlen=24)" {
+  let tag = argon2i(
+    b"\x70\x61\x73\x73\x77\x6f\x72\x64", b"\x73\x6f\x6d\x65\x73\x61\x6c\x74", 2,
+    64, 1, 24,
+  )
+  assert_true(
+    bytes_equal(
+      tag, b"\x8c\xf3\xd8\xf7\x6a\x66\x17\xaf\xe3\x5f\xac\x48\xeb\x0b\x74\x33\xa9\xa6\x70\xca\x4a\x07\xed\x64",
+    ),
+  )
+}
+
+///|
+test "Argon2 2id (t=2 m=64 p=1 hlen=24)" {
+  let tag = argon2id(
+    b"\x70\x61\x73\x73\x77\x6f\x72\x64", b"\x73\x6f\x6d\x65\x73\x61\x6c\x74", 2,
+    64, 1, 24,
+  )
+  assert_true(
+    bytes_equal(
+      tag, b"\x06\x8d\x62\xb2\x64\x55\x93\x6a\xa6\xeb\xe6\x00\x60\xb0\xa6\x58\x70\xdb\xfa\x3d\xdf\x8d\x41\xf7",
+    ),
+  )
+}
+
+///|
+test "Argon2 2id_mini (t=1 m=8 p=1 hlen=16)" {
+  let tag = argon2id(
+    b"\x70\x61\x73\x73\x77\x6f\x72\x64", b"\x31\x32\x33\x34\x35\x36\x37\x38", 1,
+    8, 1, 16,
+  )
+  assert_true(
+    bytes_equal(
+      tag, b"\x90\xf0\x44\x36\x0a\x57\x24\xac\xc7\xa0\x95\xa5\x48\x84\xf7\x25",
+    ),
+  )
+}
+
+///|
+test "Argon2 2id_p2 (t=1 m=16 p=2 hlen=20)" {
+  let tag = argon2id(
+    b"\x70\x77", b"\x73\x61\x6c\x74\x31\x32\x33\x34", 1, 16, 2, 20,
+  )
+  assert_true(
+    bytes_equal(
+      tag, b"\xc2\x76\x90\x0a\x53\xaa\xbb\xe8\xc1\x35\x2f\xc8\x2d\xcd\x85\x1d\x84\x58\x69\x2e",
+    ),
+  )
+}
+
+///|
+test "Argon2 2d_big (t=2 m=32 p=1 hlen=32)" {
+  let tag = argon2d(
+    b"\x6c\x6f\x6e\x67\x65\x72\x20\x70\x61\x73\x73\x77\x6f\x72\x64\x20\x68\x65\x72\x65",
+    b"\x73\x61\x6c\x74\x73\x61\x6c\x74", 2, 32, 1, 32,
+  )
+  assert_true(
+    bytes_equal(
+      tag, b"\x4f\x1d\x4e\x4c\xa7\xa8\xc4\xc7\x93\xf4\x18\x89\x4c\x85\x43\x3d\x95\xb3\x09\x67\x5b\x65\xaa\x2d\xd2\xd9\x49\x1a\x17\x40\x0f\xf3",
+    ),
+  )
+}
+
+///|
+test "Argon2 2i_32 (t=1 m=12 p=1 hlen=16)" {
+  let tag = argon2i(b"\x6b", b"\x61\x62\x63\x64\x65\x66\x67\x68", 1, 12, 1, 16)
+  assert_true(
+    bytes_equal(
+      tag, b"\x27\xe0\xa6\x3a\x24\x50\x01\xa5\xd8\xa1\x9f\x37\x64\xf9\xf0\xbe",
+    ),
+  )
+}
+
+///|
+test "Argon2 via variant arg (2id via argon2(...,2))" {
+  let tag = argon2(b"password", b"somesalt", 2, 64, 1, 24, 2)
+  assert_true(
+    bytes_equal(tag, argon2id(b"password", b"somesalt", 2, 64, 1, 24)),
+  )
+}
