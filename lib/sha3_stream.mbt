@@ -5,7 +5,7 @@
 ///|
 /// Streaming SHA-3 hasher. `rate`/`out_len`/`domain` are fixed per variant.
 pub struct Sha3Hasher {
-  state : Array[Array[UInt64]]
+  state : Array[UInt64]
   buffer : Array[Byte]
   mut buf_len : Int
   rate : Int
@@ -30,9 +30,7 @@ fn sha3_new(rate : Int, out_len : Int, domain : Int) -> Sha3Hasher {
 fn sha3_absorb_block(h : Sha3Hasher) -> Unit {
   let lanes = h.rate / 8
   for i in 0..<lanes {
-    let x = i % 5
-    let y = i / 5
-    h.state[x][y] = h.state[x][y] ^ read_lane_le(h.buffer, i * 8)
+    h.state[i] = h.state[i] ^ read_lane_le(h.buffer, i * 8)
   }
   keccak_f(h.state)
 }
@@ -70,14 +68,12 @@ pub fn sha3_finalize(h : Sha3Hasher) -> Bytes {
   h.buffer[h.buf_len] = (h.buffer[h.buf_len].to_int() ^ h.domain).to_byte()
   h.buffer[h.rate - 1] = (h.buffer[h.rate - 1].to_int() ^ 0x80).to_byte()
   sha3_absorb_block(h)
-  // squeeze
+  // squeeze: read rate/8 lanes per permutation round
   let out = Array::make(h.out_len, b'\x00')
   let mut out_off = 0
   let mut lane_idx = 0
   while out_off < h.out_len {
-    let x = lane_idx % 5
-    let y = lane_idx / 5
-    let lane = h.state[x][y]
+    let lane = h.state[lane_idx]
     for bi in 0..<8 {
       if out_off >= h.out_len {
         break
@@ -123,9 +119,7 @@ fn sha3_squeeze(h : Sha3Hasher, out_len : Int) -> Bytes {
   let mut out_off = 0
   let mut lane_idx = 0
   while out_off < out_len {
-    let x = lane_idx % 5
-    let y = lane_idx / 5
-    let lane = h.state[x][y]
+    let lane = h.state[lane_idx]
     for bi in 0..<8 {
       if out_off >= out_len {
         break

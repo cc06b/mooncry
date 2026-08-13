@@ -1,6 +1,9 @@
 // ============================================================
 // SHA-3 / Keccak (FIPS 202). Keccak-f[1600] permutation + sponge.
 // Implements SHA3-224/256/384/512. Explicit theta/rho/pi/chi/iota.
+// State is a flat 25-lane Array[UInt64] (lane index = x + 5*y) —
+// v0.18.0 perf: flattened from 5x5 nested arrays to avoid the inner
+// array indirection in the hot permutation loop.
 // ============================================================
 
 ///|
@@ -44,56 +47,57 @@ fn read_lane_le(buf : Array[Byte], off : Int) -> UInt64 {
 }
 
 ///|
-/// Build a fresh 5x5 state with distinct rows (Array::make would share one row)
-fn new_state() -> Array[Array[UInt64]] {
-  let s : Array[Array[UInt64]] = []
-  for _ in 0..<5 {
-    s.push(Array::make(5, 0UL))
-  }
-  s
+/// Build a fresh flat 25-lane Keccak state (lane index = x + 5*y)
+fn new_state() -> Array[UInt64] {
+  Array::make(25, 0UL)
 }
 
 ///|
-/// Keccak-f[1600] permutation on a 5x5 state st[x][y] in place
-fn keccak_f(st : Array[Array[UInt64]]) -> Unit {
+/// Keccak-f[1600] permutation on a flat 25-lane state in place
+fn keccak_f(st : Array[UInt64]) -> Unit {
   let c = Array::make(5, 0UL)
   let d = Array::make(5, 0UL)
-  let b = new_state()
+  let b = Array::make(25, 0UL)
   for round in 0..<24 {
     // Theta
     for x in 0..<5 {
-      c[x] = st[x][0] ^ st[x][1] ^ st[x][2] ^ st[x][3] ^ st[x][4]
+      c[x] = st[x] ^ st[x + 5] ^ st[x + 10] ^ st[x + 15] ^ st[x + 20]
     }
     for x in 0..<5 {
       d[x] = c[(x + 4) % 5] ^ rotl64(c[(x + 1) % 5], 1)
     }
     for x in 0..<5 {
       for y in 0..<5 {
-        st[x][y] = st[x][y] ^ d[x]
+        st[x + 5 * y] = st[x + 5 * y] ^ d[x]
       }
     }
-    // Rho and Pi: b[y][(2x+3y) mod 5] = rot(st[x][y], r[x][y])
+    // Rho and Pi: b[y + 5*((2x+3y) mod 5)] = rot(st[x + 5y], r[x][y])
     for x in 0..<5 {
       for y in 0..<5 {
-        b[y][(2 * x + 3 * y) % 5] = rotl64(st[x][y], keccak_rho[x][y])
+        b[y + 5 * ((2 * x + 3 * y) % 5)] = rotl64(
+          st[x + 5 * y],
+          keccak_rho[x][y],
+        )
       }
     }
-    // Chi: st[x][y] = b[x][y] ^ ((~b[(x+1)%5][y]) & b[(x+2)%5][y])
+    // Chi: st[x+5y] = b[x+5y] ^ ((~b[(x+1)%5 + 5y]) & b[(x+2)%5 + 5y])
     for x in 0..<5 {
       for y in 0..<5 {
-        st[x][y] = b[x][y] ^
-          ((0xFFFFFFFFFFFFFFFFUL ^ b[(x + 1) % 5][y]) & b[(x + 2) % 5][y])
+        st[x + 5 * y] = b[x + 5 * y] ^
+          (
+            (0xFFFFFFFFFFFFFFFFUL ^ b[(x + 1) % 5 + 5 * y]) &
+            b[(x + 2) % 5 + 5 * y]
+          )
       }
     }
     // Iota
-    st[0][0] = st[0][0] ^ keccak_rndc[round]
+    st[0] = st[0] ^ keccak_rndc[round]
   }
 }
 
 ///|
 /// SHA-3 sponge: absorb `data` (domain 0x06), squeeze `out_len` bytes.
 fn sha3_sponge(rate_bytes : Int, data : Bytes, out_len : Int) -> Bytes {
-  // state st[x][y], lane index = x + 5*y
   let st = new_state()
   let data_len = data.length()
   // pad: data || 0x06 ... 0x80, block-aligned to rate_bytes
@@ -110,21 +114,18 @@ fn sha3_sponge(rate_bytes : Int, data : Bytes, out_len : Int) -> Bytes {
   let mut off = 0
   while off < buf_len {
     for i in 0..<lanes_per_block {
-      let x = i % 5
-      let y = i / 5
-      st[x][y] = st[x][y] ^ read_lane_le(buf, off + i * 8)
+      st[i] = st[i] ^ read_lane_le(buf, off + i * 8)
     }
     keccak_f(st)
     off = off + rate_bytes
   }
-  // squeeze: output lanes 0,1,2,... (lane i = x + 5*y) little-endian
+  // squeeze: output lanes 0,1,2,... little-endian, re-permuting after
+  // every rate/8 lanes (only rate bytes may be read per round)
   let out = Array::make(out_len, b'\x00')
   let mut out_off = 0
   let mut lane_idx = 0
   while out_off < out_len {
-    let x = lane_idx % 5
-    let y = lane_idx / 5
-    let lane = st[x][y]
+    let lane = st[lane_idx]
     for bi in 0..<8 {
       if out_off >= out_len {
         break
@@ -185,9 +186,7 @@ fn shake_sponge(rate_bytes : Int, data : Bytes, out_len : Int) -> Bytes {
   let mut off = 0
   while off < buf_len {
     for i in 0..<lanes_per_block {
-      let x = i % 5
-      let y = i / 5
-      st[x][y] = st[x][y] ^ read_lane_le(buf, off + i * 8)
+      st[i] = st[i] ^ read_lane_le(buf, off + i * 8)
     }
     keccak_f(st)
     off = off + rate_bytes
@@ -196,9 +195,7 @@ fn shake_sponge(rate_bytes : Int, data : Bytes, out_len : Int) -> Bytes {
   let mut out_off = 0
   let mut lane_idx = 0
   while out_off < out_len {
-    let x = lane_idx % 5
-    let y = lane_idx / 5
-    let lane = st[x][y]
+    let lane = st[lane_idx]
     for bi in 0..<8 {
       if out_off >= out_len {
         break

@@ -351,6 +351,8 @@ moon bench
 | SHA-256 | ~16 µs |
 | SHA-512 | ~14 µs |
 | SHA3-256 | ~140 µs |
+| SHAKE128 1KiB (out=32) | ~80 µs |
+| SHAKE256 1KiB (out=64) | ~92 µs |
 | BLAKE2b | ~27 µs |
 | BLAKE3 | ~46 µs |
 | HMAC-SHA256 | ~23 µs |
@@ -366,10 +368,18 @@ moon bench
 | ECDSA P-256 verify | ~540 ms (two scalar mults) |
 | AES-256-SIV encrypt 1KiB | ~950 µs (S2V + AES-CTR) |
 | AES-128-KW wrap 32B | ~146 µs |
-| ChaCha20 | ~46 µs |
+| ChaCha20 | ~48 µs |
 | AES-256-CBC | ~315 µs (table-based GF mul) |
 | AES-256-GCM | ~420 µs (table-based) |
 | Base64 encode | ~10 µs |
+
+**v0.18.0 perf pass.** The Keccak-f[1600] state was flattened from a
+nested 5×5 `Array[Array[UInt64]]` to a flat 25-lane array (removing the
+inner-array indirection from the hot permutation loop), and ChaCha20 now
+expands the key/nonce words once per call instead of per block. Measured
+on 1 KiB inputs: SHAKE128 ~123 → ~80 µs (**-35%**), SHAKE256 ~136 → ~92 µs
+(**-32%**), ChaCha20 ~54 → ~48 µs (**-11%**). Deeper work (GHASH tables for
+AES-GCM, Poly1305/ECDSA field representations) is planned for a follow-up.
 | Hex encode | ~6.7 µs |
 
 Hashes, ChaCha20, and hex/Base64 are throughput-bound by the algorithm; AES
