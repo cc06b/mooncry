@@ -8,15 +8,16 @@ verified against official standard vectors.
 
 - **Correct** — every algorithm is checked against FIPS / NIST / RFC test
   vectors (plus Python references for BLAKE2b/BLAKE3/Poly1305/CMAC/SipHash/scrypt).
-  403 tests, run with `moon test --deny-warn`.
+  432 tests, run with `moon test --deny-warn`.
 - **Broad** — MD5, **SHA-1**, the SHA-2 and SHA-3 families (incl. **SHA-512/224
   and SHA-512/256**), **Keccak-256**,
   SHAKE/**cSHAKE** XOFs, **KMAC128/256**, BLAKE2b, **BLAKE2s**, BLAKE3,
-  HMAC (incl. HMAC-SHA3), Poly1305, CMAC-AES, AES-CBC/GCM/CTR/**KW**/**SIV**, ChaCha20,
+  **RIPEMD-160**,
+  HMAC (incl. HMAC-SHA3), Poly1305, CMAC-AES, AES-CBC/GCM/CTR/**CCM**/**KW**/**SIV**, ChaCha20,
   **Salsa20**, ChaCha20-Poly1305 AEAD, **XChaCha20 / XChaCha20-Poly1305**
   (24-byte nonce), HKDF, PBKDF2, **scrypt**, **Argon2**,
   **RSA (PKCS1-v1.5/OAEP/PSS)**, **ECDSA P-256**, **Ed25519**, **X25519**,
-  **HOTP/TOTP**, SipHash-2-4, CRC32/CRC32C/**CRC-64**, a sealed-box AEAD envelope, Base64, Hex.
+  **HOTP/TOTP** (incl. **SHA-256/SHA-512** variants), SipHash-2-4, CRC32/CRC32C/**CRC-64**, a sealed-box AEAD envelope, Base64, Hex.
 - **Fast where it matters** — hex / Base64 encoding are O(n); AES MixColumns
   uses precomputed GF(2^8) tables (~5x over bit-sliced math); throughput is
   measured by `moon bench`.
@@ -54,6 +55,7 @@ git push gitlink master
 - **Keccak-256** (original Keccak submission, domain 0x01) — the Ethereum hash
 - **BLAKE2b** (RFC 7693) — 1..64-byte digest
 - **BLAKE2s** (RFC 7693) — 1..32-byte digest (32-bit words, 64-byte blocks)
+- **RIPEMD-160** (Dobbertin et al. 1996) — 160-bit digest (Bitcoin legacy)
 - **BLAKE3** (BLAKE3 spec) — 32-byte default digest, XOF (arbitrary-length via tree-Merkle)
 
 ### Extendable-output functions (XOF)
@@ -73,6 +75,8 @@ git push gitlink master
 ### Symmetric ciphers / AEAD
 - **AES-CBC** (NIST SP 800-38A) — PKCS#7 padding, 128/192/256-bit keys, IV prepended
 - **AES-GCM** (NIST SP 800-38D) — authenticated encryption with AAD, 96-bit nonce
+- **AES-CCM** (NIST SP 800-38C / RFC 3610) — CBC-MAC + CTR AEAD, 7..13-byte
+  nonce, 4..16-byte tag
 - **AES-CTR** (NIST SP 800-38A) — 128-bit big-endian counter, stream cipher
 - **ChaCha20** (RFC 8439) — 256-bit key, 96-bit nonce, stream cipher
 - **Salsa20** (eSTREAM, 20-round) — 16/32-byte key, 8-byte nonce, stream
@@ -85,8 +89,10 @@ git push gitlink master
 
 ### Key derivation
 - **HKDF-SHA256** (RFC 5869) — extract + expand
+- **HKDF-SHA512** (RFC 5869) — extract + expand over SHA-512
 - **HKDF-SHA3-256** (RFC 5869 over FIPS 202)
 - **PBKDF2-HMAC-SHA256** (RFC 8018) — password-based key derivation
+- **PBKDF2-HMAC-SHA512** (RFC 8018) — password-based key derivation
 - **PBKDF2-HMAC-SHA3-256** (RFC 8018 over FIPS 202)
 - **scrypt** (RFC 7914) — memory-hard password-based KDF (Salsa20/8 + BlockMix + ROMix)
 
@@ -212,6 +218,7 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `md5(data : Bytes) -> Bytes` | MD5 one-shot, 16-byte digest |
 | `sha224 / sha256 / sha384 / sha512(data : Bytes) -> Bytes` | SHA-2 family (FIPS 180-4) |
 | `sha512_224 / sha512_256(data : Bytes) -> Bytes` | SHA-512/224 / SHA-512/256 (FIPS 180-4 §5.3.6) |
+| `ripemd160(data : Bytes) -> Bytes` | RIPEMD-160, 20-byte digest |
 | `sha3_224 / sha3_256 / sha3_384 / sha3_512(data : Bytes) -> Bytes` | SHA-3 (FIPS 202) |
 | `keccak_256(data : Bytes) -> Bytes` | Keccak-256 (legacy 0x01 padding, Ethereum), 32 bytes |
 | `shake_128 / shake_256(data : Bytes, out_len : Int) -> Bytes` | SHAKE XOF, `out_len` bytes |
@@ -230,6 +237,8 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `aes_encrypt_cbc / aes_decrypt_cbc(data, key, iv) -> Bytes` | AES-CBC (IV prepended, PKCS#7) |
 | `aes_gcm_encrypt(pt, key, iv, aad) -> (Bytes, Bytes)` | AES-GCM encrypt → (ct, 16-byte tag) |
 | `aes_gcm_decrypt(ct, key, iv, aad, tag) -> (Bytes, Bool)` | AES-GCM decrypt, constant-time tag verify |
+| `aes_ccm_encrypt(pt, key, nonce, aad, mac_len) -> Bytes` | AES-CCM AEAD (SP 800-38C) → ct ‖ tag |
+| `aes_ccm_decrypt(input, key, nonce, aad, mac_len) -> Bytes` | AES-CCM decrypt, aborts on tag mismatch |
 | `aes_ctr(data, key, iv) -> Bytes` | AES-CTR encrypt/decrypt (symmetric) |
 | `chacha20_xor(input, key, nonce, counter) -> Bytes` | ChaCha20 encrypt/decrypt (symmetric) |
 | `salsa20_keystream_block(key, nonce, counter) -> Bytes` | Salsa20 keystream block (64 bytes) |
@@ -240,8 +249,12 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `xchacha20_xor(input, key, nonce24, counter) -> Bytes` | XChaCha20 stream cipher, 24-byte nonce (symmetric) |
 | `xchacha20_poly1305_encrypt(key, nonce24, aad, pt) -> Bytes` | XChaCha20-Poly1305 AEAD → ct ‖ tag |
 | `xchacha20_poly1305_decrypt(key, nonce24, aad, input) -> Bytes` | XChaCha20-Poly1305 AEAD decrypt, aborts on tag mismatch |
+| `hotp_sha256 / hotp_sha512(key, counter, digits) -> String` | HOTP (RFC 4226) with HMAC-SHA256/512 |
+| `totp_sha256 / totp_sha512(key, unix_time, step, digits) -> String` | TOTP (RFC 6238) with HMAC-SHA256/512 |
 | `hkdf_sha256(salt, ikm, info, len) -> Bytes` | HKDF-SHA256 (RFC 5869) |
+| `hkdf_sha512(salt, ikm, info, len) -> Bytes` | HKDF-SHA512 (RFC 5869) |
 | `pbkdf2_hmac_sha256(password, salt, iterations, len) -> Bytes` | PBKDF2-HMAC-SHA256 (RFC 8018) |
+| `pbkdf2_hmac_sha512(password, salt, iterations, len) -> Bytes` | PBKDF2-HMAC-SHA512 (RFC 8018) |
 | `hkdf_sha3_256(salt, ikm, info, len) -> Bytes` | HKDF-SHA3-256 (RFC 5869 over FIPS 202) |
 | `pbkdf2_hmac_sha3_256(password, salt, iterations, len) -> Bytes` | PBKDF2-HMAC-SHA3-256 (RFC 8018 over FIPS 202) |
 | `scrypt(password, salt, n, r, p, dklen) -> Bytes` | scrypt memory-hard KDF (RFC 7914), `n` power of two |
@@ -369,10 +382,14 @@ samples + pycryptodome, differential-tested), **CRC-64/XZ + CRC-64/GO-ISO**
 (CRC RevEng check values), **SHA-512/224 / SHA-512/256** (FIPS 180-4 +
 hashlib), **BLAKE2s** (RFC 7693 + hashlib), **HMAC-SHA3-224/384** (stdlib
 hmac), **XChaCha20 / XChaCha20-Poly1305** (draft-irtf-cfrg-xchacha official
-vectors + libsodium, differential-tested),
+vectors + libsodium, differential-tested), **TOTP-SHA256/512** (RFC 6238
+Table 1, all 12 rows), **HKDF-SHA512 / PBKDF2-HMAC-SHA512** (RFC 5869
+construction anchored on TC1 + hashlib), **RIPEMD-160** (official paper
+suite incl. million-`a`, + hashlib), **AES-CCM** (RFC 3610 Packet Vector
+#1 + pycryptodome),
 **sealed-box** round-trip + tamper, and property-based round-trip checks
 (deterministic PRNG) for every cipher + streaming-vs-one-shot consistency.
-**403 tests.**
+**432 tests.**
 
 ## Development
 
