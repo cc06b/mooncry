@@ -1,6 +1,6 @@
 name = "cc06b/mooncry"
 
-version = "0.13.1"
+version = "0.14.0"
 
 readme = "README.md"
 
@@ -45,6 +45,10 @@ keywords = [
   "ecdsa",
   "argon2",
   "aes-siv",
+  "keccak256",
+  "cshake",
+  "kmac",
+  "crc64",
 ]
 
-description = "Pure-MoonBit crypto primitives: SHA-1/2/3, SHAKE, BLAKE2b/BLAKE3, HMAC/Poly1305/CMAC, AES-CBC/GCM/CTR/KW/SIV, ChaCha20 + Salsa20, HKDF/PBKDF2/scrypt/Argon2, RSA (PKCS1-v1.5/OAEP/PSS), ECDSA P-256, Ed25519, X25519, HOTP/TOTP, SipHash, CRC32/CRC32C, Base64/Hex, sealed-box envelope"
+description = "Pure-MoonBit crypto primitives: SHA-1/2/3, Keccak-256, SHAKE/cSHAKE, BLAKE2b/BLAKE3, HMAC/Poly1305/CMAC/KMAC, AES-CBC/GCM/CTR/KW/SIV, ChaCha20 + Salsa20, HKDF/PBKDF2/scrypt/Argon2, RSA (PKCS1-v1.5/OAEP/PSS), ECDSA P-256, Ed25519, X25519, HOTP/TOTP, SipHash, CRC32/CRC32C/CRC-64, Base64/Hex, sealed-box envelope"

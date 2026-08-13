@@ -8,12 +8,13 @@ verified against official standard vectors.
 
 - **Correct** — every algorithm is checked against FIPS / NIST / RFC test
   vectors (plus Python references for BLAKE2b/BLAKE3/Poly1305/CMAC/SipHash/scrypt).
-  311 tests, run with `moon test --deny-warn`.
-- **Broad** — MD5, **SHA-1**, the SHA-2 and SHA-3 families, SHAKE XOFs, BLAKE2b, BLAKE3,
+  360 tests, run with `moon test --deny-warn`.
+- **Broad** — MD5, **SHA-1**, the SHA-2 and SHA-3 families, **Keccak-256**,
+  SHAKE/**cSHAKE** XOFs, **KMAC128/256**, BLAKE2b, BLAKE3,
   HMAC (incl. HMAC-SHA3), Poly1305, CMAC-AES, AES-CBC/GCM/CTR/**KW**/**SIV**, ChaCha20,
   **Salsa20**, ChaCha20-Poly1305 AEAD, HKDF, PBKDF2, **scrypt**, **Argon2**,
   **RSA (PKCS1-v1.5/OAEP/PSS)**, **ECDSA P-256**, **Ed25519**, **X25519**,
-  **HOTP/TOTP**, SipHash-2-4, CRC32/CRC32C, a sealed-box AEAD envelope, Base64, Hex.
+  **HOTP/TOTP**, SipHash-2-4, CRC32/CRC32C/**CRC-64**, a sealed-box AEAD envelope, Base64, Hex.
 - **Fast where it matters** — hex / Base64 encoding are O(n); AES MixColumns
   uses precomputed GF(2^8) tables (~5x over bit-sliced math); throughput is
   measured by `moon bench`.
@@ -47,17 +48,22 @@ git push gitlink master
 - **SHA-224 / SHA-256** (FIPS 180-4) — 224 / 256-bit digest
 - **SHA-384 / SHA-512** (FIPS 180-4) — 384 / 512-bit digest
 - **SHA-3** (FIPS 202) — SHA3-224 / 256 / 384 / 512 (Keccak-f[1600] sponge)
+- **Keccak-256** (original Keccak submission, domain 0x01) — the Ethereum hash
 - **BLAKE2b** (RFC 7693) — 1..64-byte digest
 - **BLAKE3** (BLAKE3 spec) — 32-byte default digest, XOF (arbitrary-length via tree-Merkle)
 
 ### Extendable-output functions (XOF)
 - **SHAKE128 / SHAKE256** (FIPS 202) — variable-length output
+- **cSHAKE128 / cSHAKE256** (NIST SP 800-185) — customizable XOFs
+  (function name N + customization string S; degenerate to SHAKE when both empty)
 
 ### Message authentication
 - **HMAC-SHA256 / HMAC-SHA512** (RFC 2104)
 - **HMAC-SHA3-256 / HMAC-SHA3-512** (RFC 2104 over FIPS 202)
 - **Poly1305** (RFC 8439) — one-time MAC
 - **AES-CMAC** (NIST SP 800-38B) — 128-bit tag, 128/192/256-bit keys
+- **KMAC128 / KMAC256** (NIST SP 800-185) — Keccak-based MAC with
+  customization string; **KMACXOF128 / KMACXOF256** variable-length variants
 
 ### Symmetric ciphers / AEAD
 - **AES-CBC** (NIST SP 800-38A) — PKCS#7 padding, 128/192/256-bit keys, IV prepended
@@ -78,6 +84,8 @@ git push gitlink master
 ### Checksums / PRFs
 - **CRC32** (IEEE 802.3, poly 0xEDB88320 reflected)
 - **CRC32C** (Castagnoli, poly 0x82F63B78 reflected) — iSCSI / ext4
+- **CRC-64/XZ** (poly 0x42F0E1EBA9EA3693 reflected) — xz / lzma
+- **CRC-64/GO-ISO** (poly 0x000000000000001B reflected) — Go hash/crc64 ISO
 - **SipHash-2-4** (Aumasson & Bernstein 2012) — 64-bit short-input PRF
 
 ### Composite envelope
@@ -195,7 +203,11 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `md5(data : Bytes) -> Bytes` | MD5 one-shot, 16-byte digest |
 | `sha224 / sha256 / sha384 / sha512(data : Bytes) -> Bytes` | SHA-2 family (FIPS 180-4) |
 | `sha3_224 / sha3_256 / sha3_384 / sha3_512(data : Bytes) -> Bytes` | SHA-3 (FIPS 202) |
+| `keccak_256(data : Bytes) -> Bytes` | Keccak-256 (legacy 0x01 padding, Ethereum), 32 bytes |
 | `shake_128 / shake_256(data : Bytes, out_len : Int) -> Bytes` | SHAKE XOF, `out_len` bytes |
+| `cshake_128 / cshake_256(data, n, s : Bytes, out_len : Int) -> Bytes` | cSHAKE (SP 800-185); N=S="" ⇒ SHAKE |
+| `kmac_128 / kmac_256(key, data, s : Bytes, out_len : Int) -> Bytes` | KMAC fixed-length MAC (SP 800-185) |
+| `kmac_xof_128 / kmac_xof_256(key, data, s : Bytes, out_len : Int) -> Bytes` | KMACXOF variable-length variant |
 | `blake2b(data : Bytes, out_len : Int) -> Bytes` | BLAKE2b (RFC 7693), `out_len` 1..64 |
 | `blake3(data : Bytes) -> Bytes` | BLAKE3, 32-byte digest |
 | `blake3_xof(data : Bytes, out_len : Int) -> Bytes` | BLAKE3 XOF (arbitrary-length) |
@@ -231,6 +243,7 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `x25519(scalar, u) -> Bytes` | X25519 scalar mult (RFC 7748), DH shared secret |
 | `x25519_public_key(private_key) -> Bytes` | Derive X25519 public key (base u=9) |
 | `crc32 / crc32c(data : Bytes) -> Bytes` | CRC-32 (IEEE) / CRC-32C, 4-byte big-endian |
+| `crc64_xz / crc64_go_iso(data : Bytes) -> Bytes` | CRC-64/XZ / CRC-64/GO-ISO, 8-byte big-endian |
 | `siphash_2_4(key, data : Bytes) -> Bytes` | SipHash-2-4 (64-bit), key 16 bytes → 8 bytes |
 | `sealed_box_seal(master_key, nonce, pt, aad, ctx) -> Bytes` | AEAD envelope (HKDF + AES-256-GCM) |
 | `sealed_box_open(master_key, envelope, aad, ctx) -> Result[Bytes, String]` | Open envelope, `Err` on auth failure |
@@ -334,9 +347,12 @@ hashlib.scrypt), AES-CBC/GCM/CTR (NIST SP
 800-38A/D), ChaCha20 (RFC 8439), **RSA** (RFC 8017 PKCS1-v1.5/OAEP/PSS +
 pycryptodome), **Ed25519** (RFC 8032 + cryptography lib), **X25519** (RFC 7748 + cryptography lib), **CRC32/CRC32C** (zlib + manual ref),
 **SipHash-2-4** (Python reference), **Salsa20** (eSTREAM + pycryptodome), **SHA-1** (hashlib) + **HOTP/TOTP** (RFC 4226/6238), Base64 (RFC 4648), hex round-trip,
+**Keccak-256 / cSHAKE128/256 / KMAC128/256/XOF** (NIST SP 800-185 official
+samples + pycryptodome, differential-tested), **CRC-64/XZ + CRC-64/GO-ISO**
+(CRC RevEng check values),
 **sealed-box** round-trip + tamper, and property-based round-trip checks
 (deterministic PRNG) for every cipher + streaming-vs-one-shot consistency.
-**311 tests.**
+**360 tests.**
 
 ## Development
 

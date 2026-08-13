@@ -133,7 +133,7 @@ fn sha3_sponge(rate_bytes : Int, data : Bytes, out_len : Int) -> Bytes {
       out_off = out_off + 1
     }
     lane_idx = lane_idx + 1
-    if lane_idx >= 25 && out_off < out_len {
+    if lane_idx >= rate_bytes / 8 && out_off < out_len {
       keccak_f(st)
       lane_idx = 0
     }
@@ -207,7 +207,7 @@ fn shake_sponge(rate_bytes : Int, data : Bytes, out_len : Int) -> Bytes {
       out_off = out_off + 1
     }
     lane_idx = lane_idx + 1
-    if lane_idx >= 25 && out_off < out_len {
+    if lane_idx >= rate_bytes / 8 && out_off < out_len {
       keccak_f(st)
       lane_idx = 0
     }
