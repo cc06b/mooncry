@@ -1,6 +1,6 @@
 name = "cc06b/mooncry"
 
-version = "0.16.0"
+version = "0.17.0"
 
 readme = "README.md"
 
@@ -58,6 +58,12 @@ keywords = [
   "aes-ccm",
   "hkdf-sha512",
   "totp-sha256",
+  "ed25519ctx",
+  "ed25519ph",
+  "gmac",
+  "adler32",
+  "blake2-keyed",
+  "pbkdf2-sha1",
 ]
 
-description = "Pure-MoonBit crypto primitives: SHA-1/2 (incl. SHA-512/224/256), SHA-3, Keccak-256, SHAKE/cSHAKE, BLAKE2b/BLAKE2s/BLAKE3, RIPEMD-160, HMAC/Poly1305/CMAC/KMAC, AES-CBC/GCM/CTR/CCM/KW/SIV, ChaCha20/XChaCha20 + Salsa20, HKDF/PBKDF2/scrypt/Argon2, RSA (PKCS1-v1.5/OAEP/PSS), ECDSA P-256, Ed25519, X25519, HOTP/TOTP (SHA-1/256/512), SipHash, CRC32/CRC32C/CRC-64, Base64/Hex, sealed-box envelope"
+description = "Pure-MoonBit crypto primitives: SHA-1/2 (incl. SHA-512/224/256), SHA-3, Keccak-256, SHAKE/cSHAKE, BLAKE2b/BLAKE2s/BLAKE3 (+keyed), RIPEMD-160, HMAC/Poly1305/CMAC/KMAC/GMAC, AES-CBC/GCM/CTR/CCM/KW/SIV, ChaCha20/XChaCha20 + Salsa20, HKDF/PBKDF2/scrypt/Argon2, RSA (PKCS1-v1.5/OAEP/PSS), ECDSA P-256, Ed25519/Ed25519ctx/Ed25519ph, X25519, HOTP/TOTP (SHA-1/256/512), SipHash, CRC32/CRC32C/CRC-64/Adler-32, Base64/Hex, sealed-box envelope"

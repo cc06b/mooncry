@@ -8,16 +8,18 @@ verified against official standard vectors.
 
 - **Correct** — every algorithm is checked against FIPS / NIST / RFC test
   vectors (plus Python references for BLAKE2b/BLAKE3/Poly1305/CMAC/SipHash/scrypt).
-  432 tests, run with `moon test --deny-warn`.
+  471 tests, run with `moon test --deny-warn`.
 - **Broad** — MD5, **SHA-1**, the SHA-2 and SHA-3 families (incl. **SHA-512/224
   and SHA-512/256**), **Keccak-256**,
   SHAKE/**cSHAKE** XOFs, **KMAC128/256**, BLAKE2b, **BLAKE2s**, BLAKE3,
   **RIPEMD-160**,
-  HMAC (incl. HMAC-SHA3), Poly1305, CMAC-AES, AES-CBC/GCM/CTR/**CCM**/**KW**/**SIV**, ChaCha20,
+  HMAC (incl. HMAC-SHA3), Poly1305, CMAC-AES, **keyed BLAKE2b/2s**, **GMAC**,
+  AES-CBC/GCM/CTR/**CCM**/**KW**/**SIV**, ChaCha20,
   **Salsa20**, ChaCha20-Poly1305 AEAD, **XChaCha20 / XChaCha20-Poly1305**
   (24-byte nonce), HKDF, PBKDF2, **scrypt**, **Argon2**,
-  **RSA (PKCS1-v1.5/OAEP/PSS)**, **ECDSA P-256**, **Ed25519**, **X25519**,
-  **HOTP/TOTP** (incl. **SHA-256/SHA-512** variants), SipHash-2-4, CRC32/CRC32C/**CRC-64**, a sealed-box AEAD envelope, Base64, Hex.
+  **RSA (PKCS1-v1.5/OAEP/PSS)**, **ECDSA P-256**, **Ed25519** (incl.
+  **Ed25519ctx / Ed25519ph**), **X25519**,
+  **HOTP/TOTP** (incl. **SHA-256/SHA-512** variants), SipHash-2-4, CRC32/CRC32C/**CRC-64**/**Adler-32**, a sealed-box AEAD envelope, Base64, Hex.
 - **Fast where it matters** — hex / Base64 encoding are O(n); AES MixColumns
   uses precomputed GF(2^8) tables (~5x over bit-sliced math); throughput is
   measured by `moon bench`.
@@ -53,8 +55,9 @@ git push gitlink master
 - **SHA-512/224 / SHA-512/256** (FIPS 180-4 §5.3.6) — truncated SHA-512 variants
 - **SHA-3** (FIPS 202) — SHA3-224 / 256 / 384 / 512 (Keccak-f[1600] sponge)
 - **Keccak-256** (original Keccak submission, domain 0x01) — the Ethereum hash
-- **BLAKE2b** (RFC 7693) — 1..64-byte digest
-- **BLAKE2s** (RFC 7693) — 1..32-byte digest (32-bit words, 64-byte blocks)
+- **BLAKE2b** (RFC 7693) — 1..64-byte digest; **keyed** variant (MAC, 1..64-byte key)
+- **BLAKE2s** (RFC 7693) — 1..32-byte digest (32-bit words, 64-byte blocks);
+  **keyed** variant (MAC, 1..32-byte key)
 - **RIPEMD-160** (Dobbertin et al. 1996) — 160-bit digest (Bitcoin legacy)
 - **BLAKE3** (BLAKE3 spec) — 32-byte default digest, XOF (arbitrary-length via tree-Merkle)
 
@@ -71,12 +74,14 @@ git push gitlink master
 - **AES-CMAC** (NIST SP 800-38B) — 128-bit tag, 128/192/256-bit keys
 - **KMAC128 / KMAC256** (NIST SP 800-185) — Keccak-based MAC with
   customization string; **KMACXOF128 / KMACXOF256** variable-length variants
+- **GMAC** (NIST SP 800-38D) — AES-GCM authentication-only mode (16-byte tag)
 
 ### Symmetric ciphers / AEAD
 - **AES-CBC** (NIST SP 800-38A) — PKCS#7 padding, 128/192/256-bit keys, IV prepended
 - **AES-GCM** (NIST SP 800-38D) — authenticated encryption with AAD, 96-bit nonce
 - **AES-CCM** (NIST SP 800-38C / RFC 3610) — CBC-MAC + CTR AEAD, 7..13-byte
   nonce, 4..16-byte tag
+- **Adler-32** (RFC 1950) — zlib rolling checksum
 - **AES-CTR** (NIST SP 800-38A) — 128-bit big-endian counter, stream cipher
 - **ChaCha20** (RFC 8439) — 256-bit key, 96-bit nonce, stream cipher
 - **Salsa20** (eSTREAM, 20-round) — 16/32-byte key, 8-byte nonce, stream
@@ -92,6 +97,7 @@ git push gitlink master
 - **HKDF-SHA512** (RFC 5869) — extract + expand over SHA-512
 - **HKDF-SHA3-256** (RFC 5869 over FIPS 202)
 - **PBKDF2-HMAC-SHA256** (RFC 8018) — password-based key derivation
+- **PBKDF2-HMAC-SHA1** (RFC 8018 / RFC 6070 vectors) — legacy KDF (WPA2)
 - **PBKDF2-HMAC-SHA512** (RFC 8018) — password-based key derivation
 - **PBKDF2-HMAC-SHA3-256** (RFC 8018 over FIPS 202)
 - **scrypt** (RFC 7914) — memory-hard password-based KDF (Salsa20/8 + BlockMix + ROMix)
@@ -118,6 +124,8 @@ git push gitlink master
 
 ### Asymmetric signatures (Ed25519)
 - **Ed25519** (RFC 8032, ed25519-sha-512) — deterministic sign/verify.
+- **Ed25519ctx / Ed25519ph** (RFC 8032 §7.2/§7.3) — context-bound and
+  pre-hashed variants (dom2 domain separation)
   Field arithmetic over GF(2^255-19) uses `@bigint`; the twisted-Edwards
   base point is recovered from y = 4/5. Signing is deterministic (no RNG).
 
@@ -226,7 +234,9 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `kmac_128 / kmac_256(key, data, s : Bytes, out_len : Int) -> Bytes` | KMAC fixed-length MAC (SP 800-185) |
 | `kmac_xof_128 / kmac_xof_256(key, data, s : Bytes, out_len : Int) -> Bytes` | KMACXOF variable-length variant |
 | `blake2b(data : Bytes, out_len : Int) -> Bytes` | BLAKE2b (RFC 7693), `out_len` 1..64 |
+| `blake2b_keyed(data, key : Bytes, out_len : Int) -> Bytes` | keyed BLAKE2b (MAC), key 1..64 |
 | `blake2s(data : Bytes, out_len : Int) -> Bytes` | BLAKE2s (RFC 7693), `out_len` 1..32 |
+| `blake2s_keyed(data, key : Bytes, out_len : Int) -> Bytes` | keyed BLAKE2s (MAC), key 1..32 |
 | `blake3(data : Bytes) -> Bytes` | BLAKE3, 32-byte digest |
 | `blake3_xof(data : Bytes, out_len : Int) -> Bytes` | BLAKE3 XOF (arbitrary-length) |
 | `hmac_sha256 / hmac_sha512(key, msg : Bytes) -> Bytes` | HMAC (RFC 2104) |
@@ -239,6 +249,8 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `aes_gcm_decrypt(ct, key, iv, aad, tag) -> (Bytes, Bool)` | AES-GCM decrypt, constant-time tag verify |
 | `aes_ccm_encrypt(pt, key, nonce, aad, mac_len) -> Bytes` | AES-CCM AEAD (SP 800-38C) → ct ‖ tag |
 | `aes_ccm_decrypt(input, key, nonce, aad, mac_len) -> Bytes` | AES-CCM decrypt, aborts on tag mismatch |
+| `gmac(key, iv, aad) -> Bytes` | GMAC (SP 800-38D), 16-byte tag |
+| `gmac_verify(key, iv, aad, tag) -> Bool` | GMAC constant-time tag verify |
 | `aes_ctr(data, key, iv) -> Bytes` | AES-CTR encrypt/decrypt (symmetric) |
 | `chacha20_xor(input, key, nonce, counter) -> Bytes` | ChaCha20 encrypt/decrypt (symmetric) |
 | `salsa20_keystream_block(key, nonce, counter) -> Bytes` | Salsa20 keystream block (64 bytes) |
@@ -251,10 +263,14 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `xchacha20_poly1305_decrypt(key, nonce24, aad, input) -> Bytes` | XChaCha20-Poly1305 AEAD decrypt, aborts on tag mismatch |
 | `hotp_sha256 / hotp_sha512(key, counter, digits) -> String` | HOTP (RFC 4226) with HMAC-SHA256/512 |
 | `totp_sha256 / totp_sha512(key, unix_time, step, digits) -> String` | TOTP (RFC 6238) with HMAC-SHA256/512 |
+| `ed25519ctx_sign(seed, msg, ctx) / ed25519ctx_verify(pk, msg, sig, ctx)` | Ed25519ctx (RFC 8032), ctx 1..255 bytes |
+| `ed25519ph_sign(seed, msg, ctx) / ed25519ph_verify(pk, msg, sig, ctx)` | Ed25519ph (RFC 8032), SHA-512 prehash |
+| `adler32(data : Bytes) -> Bytes` | Adler-32 (RFC 1950), 4-byte big-endian |
 | `hkdf_sha256(salt, ikm, info, len) -> Bytes` | HKDF-SHA256 (RFC 5869) |
 | `hkdf_sha512(salt, ikm, info, len) -> Bytes` | HKDF-SHA512 (RFC 5869) |
 | `pbkdf2_hmac_sha256(password, salt, iterations, len) -> Bytes` | PBKDF2-HMAC-SHA256 (RFC 8018) |
 | `pbkdf2_hmac_sha512(password, salt, iterations, len) -> Bytes` | PBKDF2-HMAC-SHA512 (RFC 8018) |
+| `pbkdf2_hmac_sha1(password, salt, iterations, len) -> Bytes` | PBKDF2-HMAC-SHA1 (RFC 8018) |
 | `hkdf_sha3_256(salt, ikm, info, len) -> Bytes` | HKDF-SHA3-256 (RFC 5869 over FIPS 202) |
 | `pbkdf2_hmac_sha3_256(password, salt, iterations, len) -> Bytes` | PBKDF2-HMAC-SHA3-256 (RFC 8018 over FIPS 202) |
 | `scrypt(password, salt, n, r, p, dklen) -> Bytes` | scrypt memory-hard KDF (RFC 7914), `n` power of two |
@@ -386,10 +402,12 @@ vectors + libsodium, differential-tested), **TOTP-SHA256/512** (RFC 6238
 Table 1, all 12 rows), **HKDF-SHA512 / PBKDF2-HMAC-SHA512** (RFC 5869
 construction anchored on TC1 + hashlib), **RIPEMD-160** (official paper
 suite incl. million-`a`, + hashlib), **AES-CCM** (RFC 3610 Packet Vector
-#1 + pycryptodome),
+#1 + pycryptodome), **Ed25519ctx / Ed25519ph** (RFC 8032 §7.2/§7.3 official
+vectors), **GMAC** (pycryptodome GCM), **keyed BLAKE2b/2s** (hashlib keyed),
+**Adler-32** (zlib), **PBKDF2-HMAC-SHA1** (RFC 6070 official suite),
 **sealed-box** round-trip + tamper, and property-based round-trip checks
 (deterministic PRNG) for every cipher + streaming-vs-one-shot consistency.
-**432 tests.**
+**471 tests.**
 
 ## Development
 
