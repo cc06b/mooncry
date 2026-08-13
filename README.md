@@ -8,11 +8,13 @@ verified against official standard vectors.
 
 - **Correct** — every algorithm is checked against FIPS / NIST / RFC test
   vectors (plus Python references for BLAKE2b/BLAKE3/Poly1305/CMAC/SipHash/scrypt).
-  360 tests, run with `moon test --deny-warn`.
-- **Broad** — MD5, **SHA-1**, the SHA-2 and SHA-3 families, **Keccak-256**,
-  SHAKE/**cSHAKE** XOFs, **KMAC128/256**, BLAKE2b, BLAKE3,
+  403 tests, run with `moon test --deny-warn`.
+- **Broad** — MD5, **SHA-1**, the SHA-2 and SHA-3 families (incl. **SHA-512/224
+  and SHA-512/256**), **Keccak-256**,
+  SHAKE/**cSHAKE** XOFs, **KMAC128/256**, BLAKE2b, **BLAKE2s**, BLAKE3,
   HMAC (incl. HMAC-SHA3), Poly1305, CMAC-AES, AES-CBC/GCM/CTR/**KW**/**SIV**, ChaCha20,
-  **Salsa20**, ChaCha20-Poly1305 AEAD, HKDF, PBKDF2, **scrypt**, **Argon2**,
+  **Salsa20**, ChaCha20-Poly1305 AEAD, **XChaCha20 / XChaCha20-Poly1305**
+  (24-byte nonce), HKDF, PBKDF2, **scrypt**, **Argon2**,
   **RSA (PKCS1-v1.5/OAEP/PSS)**, **ECDSA P-256**, **Ed25519**, **X25519**,
   **HOTP/TOTP**, SipHash-2-4, CRC32/CRC32C/**CRC-64**, a sealed-box AEAD envelope, Base64, Hex.
 - **Fast where it matters** — hex / Base64 encoding are O(n); AES MixColumns
@@ -47,9 +49,11 @@ git push gitlink master
 - **MD5** (RFC 1321) — 128-bit digest
 - **SHA-224 / SHA-256** (FIPS 180-4) — 224 / 256-bit digest
 - **SHA-384 / SHA-512** (FIPS 180-4) — 384 / 512-bit digest
+- **SHA-512/224 / SHA-512/256** (FIPS 180-4 §5.3.6) — truncated SHA-512 variants
 - **SHA-3** (FIPS 202) — SHA3-224 / 256 / 384 / 512 (Keccak-f[1600] sponge)
 - **Keccak-256** (original Keccak submission, domain 0x01) — the Ethereum hash
 - **BLAKE2b** (RFC 7693) — 1..64-byte digest
+- **BLAKE2s** (RFC 7693) — 1..32-byte digest (32-bit words, 64-byte blocks)
 - **BLAKE3** (BLAKE3 spec) — 32-byte default digest, XOF (arbitrary-length via tree-Merkle)
 
 ### Extendable-output functions (XOF)
@@ -60,6 +64,7 @@ git push gitlink master
 ### Message authentication
 - **HMAC-SHA256 / HMAC-SHA512** (RFC 2104)
 - **HMAC-SHA3-256 / HMAC-SHA3-512** (RFC 2104 over FIPS 202)
+- **HMAC-SHA3-224 / HMAC-SHA3-384** (RFC 2104 over FIPS 202)
 - **Poly1305** (RFC 8439) — one-time MAC
 - **AES-CMAC** (NIST SP 800-38B) — 128-bit tag, 128/192/256-bit keys
 - **KMAC128 / KMAC256** (NIST SP 800-185) — Keccak-based MAC with
@@ -73,6 +78,10 @@ git push gitlink master
 - **Salsa20** (eSTREAM, 20-round) — 16/32-byte key, 8-byte nonce, stream
   cipher
 - **ChaCha20-Poly1305** (RFC 8439) — AEAD (ciphertext || 16-byte tag)
+- **XChaCha20** (draft-irtf-cfrg-xchacha) — ChaCha20 with a 24-byte nonce
+  via HChaCha20 subkey derivation
+- **XChaCha20-Poly1305** (draft-irtf-cfrg-xchacha / libsodium IETF) — AEAD
+  with a 24-byte nonce (ciphertext || 16-byte tag)
 
 ### Key derivation
 - **HKDF-SHA256** (RFC 5869) — extract + expand
@@ -202,6 +211,7 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | --- | --- |
 | `md5(data : Bytes) -> Bytes` | MD5 one-shot, 16-byte digest |
 | `sha224 / sha256 / sha384 / sha512(data : Bytes) -> Bytes` | SHA-2 family (FIPS 180-4) |
+| `sha512_224 / sha512_256(data : Bytes) -> Bytes` | SHA-512/224 / SHA-512/256 (FIPS 180-4 §5.3.6) |
 | `sha3_224 / sha3_256 / sha3_384 / sha3_512(data : Bytes) -> Bytes` | SHA-3 (FIPS 202) |
 | `keccak_256(data : Bytes) -> Bytes` | Keccak-256 (legacy 0x01 padding, Ethereum), 32 bytes |
 | `shake_128 / shake_256(data : Bytes, out_len : Int) -> Bytes` | SHAKE XOF, `out_len` bytes |
@@ -209,10 +219,12 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `kmac_128 / kmac_256(key, data, s : Bytes, out_len : Int) -> Bytes` | KMAC fixed-length MAC (SP 800-185) |
 | `kmac_xof_128 / kmac_xof_256(key, data, s : Bytes, out_len : Int) -> Bytes` | KMACXOF variable-length variant |
 | `blake2b(data : Bytes, out_len : Int) -> Bytes` | BLAKE2b (RFC 7693), `out_len` 1..64 |
+| `blake2s(data : Bytes, out_len : Int) -> Bytes` | BLAKE2s (RFC 7693), `out_len` 1..32 |
 | `blake3(data : Bytes) -> Bytes` | BLAKE3, 32-byte digest |
 | `blake3_xof(data : Bytes, out_len : Int) -> Bytes` | BLAKE3 XOF (arbitrary-length) |
 | `hmac_sha256 / hmac_sha512(key, msg : Bytes) -> Bytes` | HMAC (RFC 2104) |
 | `hmac_sha3_256 / hmac_sha3_512(key, msg : Bytes) -> Bytes` | HMAC over SHA-3 (RFC 2104 + FIPS 202) |
+| `hmac_sha3_224 / hmac_sha3_384(key, msg : Bytes) -> Bytes` | HMAC over SHA3-224/384 (RFC 2104 + FIPS 202) |
 | `poly1305(key, msg : Bytes) -> Bytes` | Poly1305 MAC (RFC 8439), 16-byte tag |
 | `cmac_aes(data, key : Bytes) -> Bytes` | AES-CMAC (NIST SP 800-38B), 16-byte tag |
 | `aes_encrypt_cbc / aes_decrypt_cbc(data, key, iv) -> Bytes` | AES-CBC (IV prepended, PKCS#7) |
@@ -224,6 +236,10 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `salsa20_xor(key, nonce, counter, data) -> Bytes` | Salsa20 stream cipher encrypt/decrypt (symmetric) |
 | `chacha20_poly1305_encrypt(key, nonce, aad, pt) -> Bytes` | ChaCha20-Poly1305 AEAD → ct ‖ tag |
 | `chacha20_poly1305_decrypt(key, nonce, aad, input) -> Bytes` | AEAD decrypt, aborts on tag mismatch |
+| `hchacha20(key, in16 : Bytes) -> Bytes` | HChaCha20 subkey derivation (draft-irtf-cfrg-xchacha §2.2) |
+| `xchacha20_xor(input, key, nonce24, counter) -> Bytes` | XChaCha20 stream cipher, 24-byte nonce (symmetric) |
+| `xchacha20_poly1305_encrypt(key, nonce24, aad, pt) -> Bytes` | XChaCha20-Poly1305 AEAD → ct ‖ tag |
+| `xchacha20_poly1305_decrypt(key, nonce24, aad, input) -> Bytes` | XChaCha20-Poly1305 AEAD decrypt, aborts on tag mismatch |
 | `hkdf_sha256(salt, ikm, info, len) -> Bytes` | HKDF-SHA256 (RFC 5869) |
 | `pbkdf2_hmac_sha256(password, salt, iterations, len) -> Bytes` | PBKDF2-HMAC-SHA256 (RFC 8018) |
 | `hkdf_sha3_256(salt, ikm, info, len) -> Bytes` | HKDF-SHA3-256 (RFC 5869 over FIPS 202) |
@@ -257,7 +273,8 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 
 Streaming hashers (`<algo>_new` / `sha3_update` / `sha3_finalize` /
 `shake_finalize`) are available for MD5, SHA-224/256/384/512, SHA3-224/256/384/512,
-and SHAKE128/256. For SHA-3/SHAKE, `sha3_update` is shared and the finalize
+and SHAKE128/256, plus SHA-512/224 / SHA-512/256 (`sha512_224_new` /
+`sha512_256_new` with `sha512_update`). For SHA-3/SHAKE, `sha3_update` is shared and the finalize
 method depends on the variant (`sha3_finalize` for fixed-length, `shake_finalize(h, out_len)` for XOF).
 
 AES-CBC/GCM/CTR keys may be 128, 192, or 256 bits; the nonce for GCM and
@@ -349,10 +366,13 @@ pycryptodome), **Ed25519** (RFC 8032 + cryptography lib), **X25519** (RFC 7748 +
 **SipHash-2-4** (Python reference), **Salsa20** (eSTREAM + pycryptodome), **SHA-1** (hashlib) + **HOTP/TOTP** (RFC 4226/6238), Base64 (RFC 4648), hex round-trip,
 **Keccak-256 / cSHAKE128/256 / KMAC128/256/XOF** (NIST SP 800-185 official
 samples + pycryptodome, differential-tested), **CRC-64/XZ + CRC-64/GO-ISO**
-(CRC RevEng check values),
+(CRC RevEng check values), **SHA-512/224 / SHA-512/256** (FIPS 180-4 +
+hashlib), **BLAKE2s** (RFC 7693 + hashlib), **HMAC-SHA3-224/384** (stdlib
+hmac), **XChaCha20 / XChaCha20-Poly1305** (draft-irtf-cfrg-xchacha official
+vectors + libsodium, differential-tested),
 **sealed-box** round-trip + tamper, and property-based round-trip checks
 (deterministic PRNG) for every cipher + streaming-vs-one-shot consistency.
-**360 tests.**
+**403 tests.**
 
 ## Development
 
