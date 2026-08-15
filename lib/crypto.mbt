@@ -731,9 +731,10 @@ fn block_to_bytes(block : Array[UInt]) -> Bytes {
 }
 
 ///|
-/// Read a 16-byte block from data at offset, zero-padding if fewer bytes remain
-fn read_block_padded(data : Bytes, offset : Int) -> Array[UInt] {
-  let block = Array::make(4, 0U)
+/// Read a 16-byte block from data at offset into `out` (big-endian
+/// words), zero-padding if fewer than 16 bytes remain. Reuses the
+/// caller's scratch array instead of allocating per block.
+fn ghash_read_block_into(data : Bytes, offset : Int, out : Array[UInt]) -> Unit {
   let len = data.length()
   for j in 0..<4 {
     let mut val = 0U
@@ -743,104 +744,156 @@ fn read_block_padded(data : Bytes, offset : Int) -> Array[UInt] {
         val = val | (data[idx].to_uint() << ((3 - k) * 8))
       }
     }
-    block[j] = val
+    out[j] = val
   }
-  block
 }
 
 ///|
-/// GF(2^128) multiplication for GHASH — bit-by-bit, MSB-first convention
-fn ghash_mul(x : Array[UInt], y : Array[UInt]) -> Array[UInt] {
+/// In-place GF(2^128) doubling (right shift by 1 with conditional
+/// reduction), MSB-first GCM convention: v <- v·α
+fn ghash_double(v : Array[UInt]) -> Unit {
+  let lsb = v[3] & 1U
+  v[3] = (v[3] >> 1) | (v[2] << 31)
+  v[2] = (v[2] >> 1) | (v[1] << 31)
+  v[1] = (v[1] >> 1) | (v[0] << 31)
+  v[0] = v[0] >> 1
+  if lsb != 0U {
+    v[0] = v[0] ^ 0xE1000000U
+  }
+}
+
+///|
+/// Precompute the 4-bit GHASH table for the hash subkey H:
+/// tab[(p*16 + n)*4 .. +4] = g(n)·H·α^(4p), where p = 0 is the most
+/// significant nibble of X and g(n) = n3·α^0 + n2·α^1 + n1·α^2 + n0·α^3
+/// for nibble bits n3..n0 (n3 = MSB). One GHASH multiply then costs 32
+/// table lookups + XORs instead of 128 bit-serial iterations.
+fn ghash_make_table(h : Array[UInt]) -> Array[UInt] {
+  let tab = Array::make(32 * 16 * 4, 0U)
+  let v = Array::make(4, 0U)
   let z = Array::make(4, 0U)
-  let v = [y[0], y[1], y[2], y[3]]
-
-  for i in 0..<128 {
-    // If bit i of x is set (bit 0 = MSB of x[0]), XOR z with v
-    let word = i / 32
-    let bit = 31 - i % 32
-    if (x[word] & (1U << bit)) != 0 {
-      z[0] = z[0] ^ v[0]
-      z[1] = z[1] ^ v[1]
-      z[2] = z[2] ^ v[2]
-      z[3] = z[3] ^ v[3]
+  // p = 0: M0[n] = g(n)·H via a 4-bit serial multiply
+  for n in 1..<16 {
+    for i in 0..<4 {
+      v[i] = h[i]
     }
-
-    // Check LSB of v (rightmost bit of the 128-bit value)
-    let lsb = v[3] & 1U
-
-    // Shift v right by 1 bit
-    v[3] = (v[3] >> 1) | (v[2] << 31)
-    v[2] = (v[2] >> 1) | (v[1] << 31)
-    v[1] = (v[1] >> 1) | (v[0] << 31)
-    v[0] = v[0] >> 1
-
-    // If the shifted-out bit was 1, XOR with R = 0xE1000000...
-    if lsb != 0 {
-      v[0] = v[0] ^ 0xE1000000U
+    z[0] = 0U
+    z[1] = 0U
+    z[2] = 0U
+    z[3] = 0U
+    for k in 0..<4 {
+      if (n & (8 >> k)) != 0 {
+        z[0] = z[0] ^ v[0]
+        z[1] = z[1] ^ v[1]
+        z[2] = z[2] ^ v[2]
+        z[3] = z[3] ^ v[3]
+      }
+      ghash_double(v)
+    }
+    let base = n * 4
+    tab[base] = z[0]
+    tab[base + 1] = z[1]
+    tab[base + 2] = z[2]
+    tab[base + 3] = z[3]
+  }
+  // p = 1..31: Mp[n] = double^4(M(p-1)[n])
+  for p in 1..<32 {
+    for n in 0..<16 {
+      let prev = ((p - 1) * 16 + n) * 4
+      v[0] = tab[prev]
+      v[1] = tab[prev + 1]
+      v[2] = tab[prev + 2]
+      v[3] = tab[prev + 3]
+      ghash_double(v)
+      ghash_double(v)
+      ghash_double(v)
+      ghash_double(v)
+      let cur = (p * 16 + n) * 4
+      tab[cur] = v[0]
+      tab[cur + 1] = v[1]
+      tab[cur + 2] = v[2]
+      tab[cur + 3] = v[3]
     }
   }
-  z
+  tab
 }
 
 ///|
-/// Compute GHASH over AAD and ciphertext
+/// GF(2^128) multiplication for GHASH via the precomputed 4-bit table:
+/// out = x·H = XOR over the 32 nibble positions of X.
+fn ghash_mul_into(
+  tab : Array[UInt],
+  x : Array[UInt],
+  out : Array[UInt],
+) -> Unit {
+  out[0] = 0U
+  out[1] = 0U
+  out[2] = 0U
+  out[3] = 0U
+  for p in 0..<32 {
+    let nibble = ((x[p / 8] >> (28 - p % 8 * 4)) & 0xFU).reinterpret_as_int()
+    let base = (p * 16 + nibble) * 4
+    out[0] = out[0] ^ tab[base]
+    out[1] = out[1] ^ tab[base + 1]
+    out[2] = out[2] ^ tab[base + 2]
+    out[3] = out[3] ^ tab[base + 3]
+  }
+}
+
+///|
+/// Compute GHASH over AAD and ciphertext (table-accelerated)
 fn gcm_ghash(h : Array[UInt], aad : Bytes, ciphertext : Bytes) -> Array[UInt] {
+  let tab = ghash_make_table(h)
   let y = Array::make(4, 0U)
+  let blk = Array::make(4, 0U)
+  let prod = Array::make(4, 0U)
 
   // Process AAD blocks (zero-padded)
   let aad_len = aad.length()
-  if aad_len > 0 {
-    let num_blocks = (aad_len + 15) / 16
-    for b in 0..<num_blocks {
-      let block = read_block_padded(aad, b * 16)
-      y[0] = y[0] ^ block[0]
-      y[1] = y[1] ^ block[1]
-      y[2] = y[2] ^ block[2]
-      y[3] = y[3] ^ block[3]
-      let new_y = ghash_mul(y, h)
-      y[0] = new_y[0]
-      y[1] = new_y[1]
-      y[2] = new_y[2]
-      y[3] = new_y[3]
-    }
+  let mut off = 0
+  while off < aad_len {
+    ghash_read_block_into(aad, off, blk)
+    y[0] = y[0] ^ blk[0]
+    y[1] = y[1] ^ blk[1]
+    y[2] = y[2] ^ blk[2]
+    y[3] = y[3] ^ blk[3]
+    ghash_mul_into(tab, y, prod)
+    y[0] = prod[0]
+    y[1] = prod[1]
+    y[2] = prod[2]
+    y[3] = prod[3]
+    off = off + 16
   }
 
   // Process ciphertext blocks (zero-padded)
   let ct_len = ciphertext.length()
-  if ct_len > 0 {
-    let num_blocks = (ct_len + 15) / 16
-    for b in 0..<num_blocks {
-      let block = read_block_padded(ciphertext, b * 16)
-      y[0] = y[0] ^ block[0]
-      y[1] = y[1] ^ block[1]
-      y[2] = y[2] ^ block[2]
-      y[3] = y[3] ^ block[3]
-      let new_y = ghash_mul(y, h)
-      y[0] = new_y[0]
-      y[1] = new_y[1]
-      y[2] = new_y[2]
-      y[3] = new_y[3]
-    }
+  off = 0
+  while off < ct_len {
+    ghash_read_block_into(ciphertext, off, blk)
+    y[0] = y[0] ^ blk[0]
+    y[1] = y[1] ^ blk[1]
+    y[2] = y[2] ^ blk[2]
+    y[3] = y[3] ^ blk[3]
+    ghash_mul_into(tab, y, prod)
+    y[0] = prod[0]
+    y[1] = prod[1]
+    y[2] = prod[2]
+    y[3] = prod[3]
+    off = off + 16
   }
 
   // Process length block: [len(AAD) in bits]_64 || [len(C) in bits]_64
   let aad_bits = (aad_len * 8).to_uint64()
   let ct_bits = (ct_len * 8).to_uint64()
-  let len_block = Array::make(4, 0U)
-  len_block[0] = ((aad_bits >> 32) & 0xFFFFFFFFUL).to_uint()
-  len_block[1] = (aad_bits & 0xFFFFFFFFUL).to_uint()
-  len_block[2] = ((ct_bits >> 32) & 0xFFFFFFFFUL).to_uint()
-  len_block[3] = (ct_bits & 0xFFFFFFFFUL).to_uint()
-
-  y[0] = y[0] ^ len_block[0]
-  y[1] = y[1] ^ len_block[1]
-  y[2] = y[2] ^ len_block[2]
-  y[3] = y[3] ^ len_block[3]
-  let final_y = ghash_mul(y, h)
-  y[0] = final_y[0]
-  y[1] = final_y[1]
-  y[2] = final_y[2]
-  y[3] = final_y[3]
+  y[0] = y[0] ^ ((aad_bits >> 32) & 0xFFFFFFFFUL).to_uint()
+  y[1] = y[1] ^ (aad_bits & 0xFFFFFFFFUL).to_uint()
+  y[2] = y[2] ^ ((ct_bits >> 32) & 0xFFFFFFFFUL).to_uint()
+  y[3] = y[3] ^ (ct_bits & 0xFFFFFFFFUL).to_uint()
+  ghash_mul_into(tab, y, prod)
+  y[0] = prod[0]
+  y[1] = prod[1]
+  y[2] = prod[2]
+  y[3] = prod[3]
 
   y
 }

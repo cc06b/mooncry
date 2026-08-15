@@ -369,8 +369,10 @@ moon bench
 | AES-256-SIV encrypt 1KiB | ~950 µs (S2V + AES-CTR) |
 | AES-128-KW wrap 32B | ~146 µs |
 | ChaCha20 | ~48 µs |
+| ChaCha20-Poly1305 encrypt | ~73 µs (was ~456 µs) |
+| Poly1305 MAC | ~7 µs (was ~387 µs, BigInt) |
 | AES-256-CBC | ~315 µs (table-based GF mul) |
-| AES-256-GCM | ~420 µs (table-based) |
+| AES-256-GCM | ~487 µs (GHASH 4-bit tables) |
 | Base64 encode | ~10 µs |
 
 **v0.18.0 perf pass.** The Keccak-f[1600] state was flattened from a
@@ -378,8 +380,17 @@ nested 5×5 `Array[Array[UInt64]]` to a flat 25-lane array (removing the
 inner-array indirection from the hot permutation loop), and ChaCha20 now
 expands the key/nonce words once per call instead of per block. Measured
 on 1 KiB inputs: SHAKE128 ~123 → ~80 µs (**-35%**), SHAKE256 ~136 → ~92 µs
-(**-32%**), ChaCha20 ~54 → ~48 µs (**-11%**). Deeper work (GHASH tables for
-AES-GCM, Poly1305/ECDSA field representations) is planned for a follow-up.
+(**-32%**), ChaCha20 ~54 → ~48 µs (**-11%**).
+
+**v0.19.0 perf pass.** GHASH (the GF(2^128) multiply inside AES-GCM) was
+rewritten from a 128-iteration bit-serial loop to a precomputed 4-bit
+table (32 nibble lookups + XORs per multiply), cutting AES-256-GCM from
+~507 to ~487 µs/KiB. Poly1305 was rewritten from per-block `@bigint`
+arithmetic to 5-limb radix-2^26 arithmetic with UInt64 partial products
+("donna" style): Poly1305 drops from ~387 to ~7 µs/KiB (**-98%**), which
+takes ChaCha20-Poly1305 AEAD from ~456 to ~73 µs/KiB (**-84%**) and also
+speeds up XChaCha20-Poly1305 and the sealed-box envelope. ECDSA field
+representation (affine → projective) remains the next target.
 | Hex encode | ~6.7 µs |
 
 Hashes, ChaCha20, and hex/Base64 are throughput-bound by the algorithm; AES
