@@ -364,8 +364,8 @@ moon bench
 | sealed_box_seal | ~588 µs (HKDF + AES-256-GCM) |
 | scrypt (N=1024,r=8,p=1,dk32) | ~84 ms (memory-hard KDF) |
 | Argon2id (t=1,m=64,p=1,dk16) | ~1 ms (memory-hard KDF) |
-| ECDSA P-256 sign | ~270 ms (BigInt affine, correctness-first) |
-| ECDSA P-256 verify | ~540 ms (two scalar mults) |
+| ECDSA P-256 sign | ~13 ms (Jacobian, was ~270 ms affine) |
+| ECDSA P-256 verify | ~24 ms (Jacobian, was ~540 ms affine) |
 | AES-256-SIV encrypt 1KiB | ~950 µs (S2V + AES-CTR) |
 | AES-128-KW wrap 32B | ~146 µs |
 | ChaCha20 | ~48 µs |
@@ -374,6 +374,7 @@ moon bench
 | AES-256-CBC | ~315 µs (table-based GF mul) |
 | AES-256-GCM | ~487 µs (GHASH 4-bit tables) |
 | Base64 encode | ~10 µs |
+| Hex encode | ~6.7 µs |
 
 **v0.18.0 perf pass.** The Keccak-f[1600] state was flattened from a
 nested 5×5 `Array[Array[UInt64]]` to a flat 25-lane array (removing the
@@ -389,9 +390,17 @@ table (32 nibble lookups + XORs per multiply), cutting AES-256-GCM from
 arithmetic to 5-limb radix-2^26 arithmetic with UInt64 partial products
 ("donna" style): Poly1305 drops from ~387 to ~7 µs/KiB (**-98%**), which
 takes ChaCha20-Poly1305 AEAD from ~456 to ~73 µs/KiB (**-84%**) and also
-speeds up XChaCha20-Poly1305 and the sealed-box envelope. ECDSA field
-representation (affine → projective) remains the next target.
-| Hex encode | ~6.7 µs |
+speeds up XChaCha20-Poly1305 and the sealed-box envelope.
+
+**v0.20.0 perf pass.** ECDSA P-256 point arithmetic moved from affine to
+Jacobian projective coordinates. Affine double/add each need one
+Fermat-exponentiation modular inverse (~256 field muls), so a 256-bit
+scalar multiplication cost ~384 inverses; Jacobian double/add need none,
+inverting only once when converting back to affine. All field
+subtractions stay non-negative (the X25519 BigInt lesson). Measured on
+one host: sign ~270 → ~13 ms and verify ~540 → ~24 ms (**~21-23x**).
+Signatures are byte-identical to before (RFC 6979 deterministic k is
+unchanged), so no compatibility break.
 
 Hashes, ChaCha20, and hex/Base64 are throughput-bound by the algorithm; AES
 trades constant-time property for ~5x speed via lookup tables (see
