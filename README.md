@@ -7,8 +7,9 @@ verified against official standard vectors.
 ## Highlights
 
 - **Correct** — every algorithm is checked against FIPS / NIST / RFC test
-  vectors (plus Python references for BLAKE2b/BLAKE3/Poly1305/CMAC/SipHash/scrypt).
-  471 tests, run with `moon test --deny-warn`.
+  vectors, and cross-validated against reference implementations
+  (pycryptodome, cryptography, hashlib, libsodium, zlib) plus randomized
+  differential testing. 471 tests, run with `moon test --deny-warn`.
 - **Broad** — MD5, **SHA-1**, the SHA-2 and SHA-3 families (incl. **SHA-512/224
   and SHA-512/256**), **Keccak-256**,
   SHAKE/**cSHAKE** XOFs, **KMAC128/256**, BLAKE2b, **BLAKE2s**, BLAKE3,
@@ -318,8 +319,11 @@ cause an `abort` with a descriptive message.
 - **AES is not constant-time.** MixColumns uses precomputed GF(2^8) lookup
   tables (`mul2/3/9/11/13/14`) for ~5x throughput. This leaks key-dependent
   table indices through the CPU cache — acceptable for many use cases but
-  **not side-channel-safe** against a local attacker. (GHASH and the GCM tag /
-  CBC PKCS#7 *verification* are still bit-sliced and constant-time.)
+  **not side-channel-safe** against a local attacker. Since v0.19.0 GHASH also
+  uses precomputed 4-bit tables (keyed by the GCM hash subkey), so it is no
+  longer bit-sliced and is likewise **not side-channel-safe**; the GCM
+  *tag comparison* and CBC PKCS#7 *verification* remain constant-time
+  (no early exit on mismatch).
 - **Nonce reuse is catastrophic** for AES-GCM and ChaCha20(-Poly1305). Never
   reuse a (key, nonce) pair. The library does not track nonces — generate a
   fresh one per message (e.g. a counter or CSPRNG).
