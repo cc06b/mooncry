@@ -94,7 +94,7 @@ priv struct EcPoint {
 
 ///|
 fn ec_identity() -> EcPoint {
-  EcPoint::{ x: ec_zero, y: ec_zero, inf: true }
+  EcPoint::{ x: ec_zero, y: ec_zero, inf: true, }
 }
 
 // ==================== Jacobian projective points ====================
@@ -111,7 +111,7 @@ priv struct JacPoint {
 
 ///|
 fn jac_identity() -> JacPoint {
-  JacPoint::{ x: ec_zero, y: ec_one, z: ec_zero }
+  JacPoint::{ x: ec_zero, y: ec_one, z: ec_zero, }
 }
 
 ///|
@@ -119,7 +119,7 @@ fn ec_to_jac(p : EcPoint) -> JacPoint {
   if p.inf {
     jac_identity()
   } else {
-    JacPoint::{ x: p.x, y: p.y, z: ec_one }
+    JacPoint::{ x: p.x, y: p.y, z: ec_one, }
   }
 }
 
@@ -132,7 +132,7 @@ fn jac_to_affine(jp : JacPoint) -> EcPoint {
   let zi = ec_inv(jp.z)
   let zi2 = ec_mul(zi, zi)
   let zi3 = ec_mul(zi2, zi)
-  EcPoint::{ x: ec_mul(jp.x, zi2), y: ec_mul(jp.y, zi3), inf: false }
+  EcPoint::{ x: ec_mul(jp.x, zi2), y: ec_mul(jp.y, zi3), inf: false, }
 }
 
 ///|
@@ -171,7 +171,7 @@ fn jac_double_pt(p : JacPoint) -> JacPoint {
   let gamma_sq4 = ec_add(gamma_sq2, gamma_sq2)
   let gamma_sq8 = ec_add(gamma_sq4, gamma_sq4)
   let y3 = ec_sub(ec_mul(alpha, inner), gamma_sq8)
-  JacPoint::{ x: x3, y: y3, z: z3 }
+  JacPoint::{ x: x3, y: y3, z: z3, }
 }
 
 ///|
@@ -219,7 +219,7 @@ fn jac_add_pt(p1 : JacPoint, p2 : JacPoint) -> JacPoint {
   let z12_sq = ec_mul(z12, z12)
   let t4 = ec_sub(ec_sub(z12_sq, z1z1), z2z2)
   let z3 = ec_mul(t4, h)
-  JacPoint::{ x: x3, y: y3, z: z3 }
+  JacPoint::{ x: x3, y: y3, z: z3, }
 }
 
 ///|
@@ -246,7 +246,7 @@ fn ec_add_points(p1 : EcPoint, p2 : EcPoint) -> EcPoint {
 }
 
 ///|
-let ec_g : EcPoint = EcPoint::{ x: ec_gx, y: ec_gy, inf: false }
+let ec_g : EcPoint = EcPoint::{ x: ec_gx, y: ec_gy, inf: false, }
 
 // ==================== RFC 6979 deterministic k ====================
 
@@ -318,7 +318,7 @@ fn rfc6979_new(x : @bigint.BigInt, h1 : Bytes) -> Rfc6979 {
   )
   // Step G: V = HMAC(K2, V1)
   let v2 = ec_hmac_sha256(k2, v1)
-  Rfc6979::{ v: v2, k: k2 }
+  Rfc6979::{ v: v2, k: k2, }
 }
 
 ///|
@@ -426,7 +426,7 @@ pub fn ecdsa_p256_verify(
   }
   let qx = ec_be_to_int(ec_slice(public_key, 1, 32))
   let qy = ec_be_to_int(ec_slice(public_key, 33, 32))
-  let q = EcPoint::{ x: qx, y: qy, inf: false }
+  let q = EcPoint::{ x: qx, y: qy, inf: false, }
   // check Q is on the curve: y^2 = x^3 + a*x + b mod p
   let lhs = ec_mul(qy, qy)
   let rhs = ec_add(ec_add(ec_mul(ec_mul(qx, qx), qx), ec_mul(ec_a, qx)), ec_b)

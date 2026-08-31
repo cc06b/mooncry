@@ -42,7 +42,7 @@ fn p3_bytes(r : P3Rng, len : Int) -> Bytes {
 
 ///|
 test "property: AES-SIV round-trip (many sizes)" {
-  let r = P3Rng::{ state: 0xA5A5A5A5U }
+  let r = P3Rng::{ state: 0xA5A5A5A5U, }
   for _ in 0..<16 {
     let klen = [32, 48, 64][p3_int(r, 3)]
     let key = p3_bytes(r, klen)
@@ -88,7 +88,7 @@ test "property: AES-SIV round-trip (many sizes)" {
 
 ///|
 test "property: AES-KW round-trip (many sizes)" {
-  let r = P3Rng::{ state: 0x12345678U }
+  let r = P3Rng::{ state: 0x12345678U, }
   for _ in 0..<16 {
     let klen = [16, 24, 32][p3_int(r, 3)]
     let kek = p3_bytes(r, klen)
@@ -109,7 +109,7 @@ test "property: AES-KW round-trip (many sizes)" {
 
 ///|
 test "property: ECDSA P-256 sign/verify round-trip + determinism" {
-  let r = P3Rng::{ state: 0xDEADBEEFU }
+  let r = P3Rng::{ state: 0xDEADBEEFU, }
   // fixed private key (deterministic sign)
   let d = p3_bytes(r, 32)
   let q = ecdsa_p256_public_key(d)

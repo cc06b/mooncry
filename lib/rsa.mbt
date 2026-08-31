@@ -43,6 +43,48 @@ fn rsa_dp(
 }
 
 ///|
+/// RSA private-key operation via CRT (RFC 8017 §5.1.2): two half-width
+/// exponentiations (mod p, mod q) instead of one full-width (mod n) —
+/// ~3.5-4x faster on typical keys since BigInt mul is super-linear.
+fn rsa_dp_crt(
+  c : @bigint.BigInt,
+  p : @bigint.BigInt,
+  q : @bigint.BigInt,
+  dp : @bigint.BigInt,
+  dq : @bigint.BigInt,
+  qinv : @bigint.BigInt,
+) -> @bigint.BigInt {
+  let m1 = c.pow(dp, modulus=p)
+  let m2 = c.pow(dq, modulus=q)
+  // h = qInv * (m1 - m2) mod p ; keep non-negative (BigInt % of a negative
+  // operand returns negative in MoonBit).
+  let h = (m1 + p - m2) % p * qinv % p
+  m2 + q * h
+}
+
+///|
+/// Bit length of an OS2IP-encoded (big-endian, possibly zero-padded)
+/// integer. Replaces an old `to_string(radix=2)` trick that allocated a
+/// ~k-byte string per call.
+fn rsa_bit_len(bytes : Bytes) -> Int {
+  let len = bytes.length()
+  let mut i = 0
+  while i < len && bytes[i] == b'\x00' {
+    i = i + 1
+  }
+  if i == len {
+    return 0
+  }
+  let mut v = bytes[i].to_int()
+  let mut bits = 0
+  while v > 0 {
+    bits = bits + 1
+    v = v >> 1
+  }
+  8 * (len - i - 1) + bits
+}
+
+///|
 /// MGF1 (RFC 8017 §B.2.1) with SHA-256: produces `length` mask bytes from a
 /// seed by concatenating SHA-256(seed || counter) for counter = 0,1,2,...
 fn rsa_mgf1_sha256(seed : Bytes, length : Int) -> Bytes {
@@ -111,6 +153,30 @@ pub fn rsa_pkcs1_v15_encrypt(
 }
 
 ///|
+/// Unpad a PKCS1-v1.5 encoded message EM = 0x00 || 0x02 || PS || 0x00 || M.
+fn rsa_pkcs1_v15_unpad(em : Bytes, k : Int) -> Bytes {
+  if em[0] != b'\x00' || em[1] != b'\x02' {
+    abort("rsa_pkcs1_v15 decrypt: invalid padding")
+  }
+  // PS is nonzero; find the 0x00 separator.
+  let mut sep = 2
+  while sep < k && em[sep] != b'\x00' {
+    sep = sep + 1
+  }
+  if sep < 2 + 8 || sep >= k {
+    abort(
+      "rsa_pkcs1_v15 decrypt: invalid padding (no separator or PS too short)",
+    )
+  }
+  let msg_len = k - sep - 1
+  let out = Array::make(msg_len, b'\x00')
+  for i in 0..<msg_len {
+    out[i] = em[sep + 1 + i]
+  }
+  Bytes::from_array(out[:])
+}
+
+///|
 /// RSAES-PKCS1-v1.5 decrypt. Returns the recovered message. Aborts if the
 /// ciphertext length != modulus length or the padding is malformed.
 pub fn rsa_pkcs1_v15_decrypt(ct : Bytes, n : Bytes, d : Bytes) -> Bytes {
@@ -123,41 +189,50 @@ pub fn rsa_pkcs1_v15_decrypt(ct : Bytes, n : Bytes, d : Bytes) -> Bytes {
   let c = rsa_os2ip(ct)
   let m = rsa_dp(c, nn, dd)
   let em = rsa_i2osp(m, k)
-  if em[0] != b'\x00' || em[1] != b'\x02' {
-    abort("rsa_pkcs1_v15_decrypt: invalid padding")
-  }
-  // PS is nonzero; find the 0x00 separator.
-  let mut sep = 2
-  while sep < k && em[sep] != b'\x00' {
-    sep = sep + 1
-  }
-  if sep < 2 + 8 || sep >= k {
-    abort(
-      "rsa_pkcs1_v15_decrypt: invalid padding (no separator or PS too short)",
-    )
-  }
-  let msg_len = k - sep - 1
-  let out = Array::make(msg_len, b'\x00')
-  for i in 0..<msg_len {
-    out[i] = em[sep + 1 + i]
-  }
-  Bytes::from_array(out[:])
+  rsa_pkcs1_v15_unpad(em, k)
 }
 
 ///|
-/// RSASSA-PKCS1-v1.5 sign (SHA-256). Deterministic. `n`/`d` are the modulus
-/// and private-exponent octets. Returns the k-byte signature.
-pub fn rsa_pkcs1_v15_sign(message : Bytes, n : Bytes, d : Bytes) -> Bytes {
-  let nn = rsa_os2ip(n)
-  let dd = rsa_os2ip(d)
-  let k = n.length()
+/// RSAES-PKCS1-v1.5 decrypt with the CRT private key (p, q, dP, dQ, qInv)
+/// instead of (n, d) — ~3.5-4x faster. The modulus is n = p*q; its byte
+/// length is p.length() + q.length(). Same behavior as `rsa_pkcs1_v15_decrypt`.
+pub fn rsa_pkcs1_v15_decrypt_crt(
+  ct : Bytes,
+  p : Bytes,
+  q : Bytes,
+  dp : Bytes,
+  dq : Bytes,
+  qinv : Bytes,
+) -> Bytes {
+  let k = p.length() + q.length()
+  if ct.length() != k {
+    abort(
+      "rsa_pkcs1_v15_decrypt_crt: ciphertext length must equal modulus length",
+    )
+  }
+  let c = rsa_os2ip(ct)
+  let m = rsa_dp_crt(
+    c,
+    rsa_os2ip(p),
+    rsa_os2ip(q),
+    rsa_os2ip(dp),
+    rsa_os2ip(dq),
+    rsa_os2ip(qinv),
+  )
+  let em = rsa_i2osp(m, k)
+  rsa_pkcs1_v15_unpad(em, k)
+}
+
+///|
+/// Build the PKCS1-v1.5 encoded message for SHA-256:
+/// EM = 0x00 || 0x01 || PS(0xFF...) || 0x00 || DigestInfo || H.
+fn rsa_pkcs1_v15_sign_em(message : Bytes, k : Int) -> Bytes {
   // T = DigestInfo || H
   let h = sha256(message)
   let t_len = rsa_digestinfo_sha256.length() + h.length()
   if k < t_len + 11 {
-    abort("rsa_pkcs1_v15_sign: modulus too small for SHA-256")
+    abort("rsa_pkcs1_v15 sign: modulus too small for SHA-256")
   }
-  // EM = 0x00 || 0x01 || PS(0xFF...) || 0x00 || T
   let em = Array::make(k, b'\x00')
   em[0] = b'\x00'
   em[1] = b'\x01'
@@ -172,8 +247,45 @@ pub fn rsa_pkcs1_v15_sign(message : Bytes, n : Bytes, d : Bytes) -> Bytes {
   for i in 0..<h.length() {
     em[3 + ps_len + rsa_digestinfo_sha256.length() + i] = h[i]
   }
-  let m = rsa_os2ip(Bytes::from_array(em[:]))
+  Bytes::from_array(em[:])
+}
+
+///|
+/// RSASSA-PKCS1-v1.5 sign (SHA-256). Deterministic. `n`/`d` are the modulus
+/// and private-exponent octets. Returns the k-byte signature.
+pub fn rsa_pkcs1_v15_sign(message : Bytes, n : Bytes, d : Bytes) -> Bytes {
+  let nn = rsa_os2ip(n)
+  let dd = rsa_os2ip(d)
+  let k = n.length()
+  let em = rsa_pkcs1_v15_sign_em(message, k)
+  let m = rsa_os2ip(em)
   let s = rsa_dp(m, nn, dd)
+  rsa_i2osp(s, k)
+}
+
+///|
+/// RSASSA-PKCS1-v1.5 sign (SHA-256) with the CRT private key (p, q, dP, dQ,
+/// qInv) — ~3.5-4x faster. Deterministic and byte-identical to
+/// `rsa_pkcs1_v15_sign` for the same key.
+pub fn rsa_pkcs1_v15_sign_crt(
+  message : Bytes,
+  p : Bytes,
+  q : Bytes,
+  dp : Bytes,
+  dq : Bytes,
+  qinv : Bytes,
+) -> Bytes {
+  let k = p.length() + q.length()
+  let em = rsa_pkcs1_v15_sign_em(message, k)
+  let m = rsa_os2ip(em)
+  let s = rsa_dp_crt(
+    m,
+    rsa_os2ip(p),
+    rsa_os2ip(q),
+    rsa_os2ip(dp),
+    rsa_os2ip(dq),
+    rsa_os2ip(qinv),
+  )
   rsa_i2osp(s, k)
 }
 
@@ -280,27 +392,11 @@ pub fn rsa_oaep_encrypt(
 }
 
 ///|
-/// RSAES-OAEP decrypt (SHA-256, MGF1-SHA256). Returns the recovered message;
-/// aborts on length/padding errors (do not rely on the abort message for
-/// distinguishing failure causes in a security context).
-pub fn rsa_oaep_decrypt(
-  ct : Bytes,
-  n : Bytes,
-  d : Bytes,
-  label : Bytes,
-) -> Bytes {
-  let nn = rsa_os2ip(n)
-  let dd = rsa_os2ip(d)
-  let k = n.length()
+/// Unpad an OAEP encoded message EM = Y || maskedSeed || maskedDB
+/// (SHA-256, MGF1-SHA256).
+fn rsa_oaep_unpad(em : Bytes, k : Int, label : Bytes) -> Bytes {
   let h_len = 32
-  if ct.length() != k || k < 2 * h_len + 2 {
-    abort("rsa_oaep_decrypt: invalid ciphertext length")
-  }
-  let c = rsa_os2ip(ct)
-  let m = rsa_dp(c, nn, dd)
-  let em = rsa_i2osp(m, k)
   let l_hash = sha256(label)
-  // Y || maskedSeed || maskedDB
   let masked_seed = Array::make(h_len, b'\x00')
   for i in 0..<h_len {
     masked_seed[i] = em[1 + i]
@@ -322,7 +418,7 @@ pub fn rsa_oaep_decrypt(
   // DB = lHash' || PS || 0x01 || M
   for i in 0..<h_len {
     if masked_db[i] != l_hash[i] {
-      abort("rsa_oaep_decrypt: lHash mismatch (decryption error)")
+      abort("rsa_oaep decrypt: lHash mismatch (decryption error)")
     }
   }
   let mut idx = h_len
@@ -330,7 +426,7 @@ pub fn rsa_oaep_decrypt(
     idx = idx + 1
   }
   if idx >= db_len || masked_db[idx] != b'\x01' {
-    abort("rsa_oaep_decrypt: invalid padding")
+    abort("rsa_oaep decrypt: invalid padding")
   }
   idx = idx + 1
   let msg_len = db_len - idx
@@ -341,26 +437,74 @@ pub fn rsa_oaep_decrypt(
   Bytes::from_array(out[:])
 }
 
-// ==================== RSASSA-PSS (RFC 8017 §8.1, SHA-256) ====================
-
 ///|
-/// RSASSA-PSS sign (SHA-256, MGF1-SHA256). `salt` is the caller-supplied
-/// random salt (any length; 32 is typical). Returns the k-byte signature.
-pub fn rsa_pss_sign(
-  message : Bytes,
+/// RSAES-OAEP decrypt (SHA-256, MGF1-SHA256). Returns the recovered message;
+/// aborts on length/padding errors (do not rely on the abort message for
+/// distinguishing failure causes in a security context).
+pub fn rsa_oaep_decrypt(
+  ct : Bytes,
   n : Bytes,
   d : Bytes,
-  salt : Bytes,
+  label : Bytes,
 ) -> Bytes {
   let nn = rsa_os2ip(n)
   let dd = rsa_os2ip(d)
   let k = n.length()
+  let h_len = 32
+  if ct.length() != k || k < 2 * h_len + 2 {
+    abort("rsa_oaep_decrypt: invalid ciphertext length")
+  }
+  let c = rsa_os2ip(ct)
+  let m = rsa_dp(c, nn, dd)
+  let em = rsa_i2osp(m, k)
+  rsa_oaep_unpad(em, k, label)
+}
+
+///|
+/// RSAES-OAEP decrypt (SHA-256) with the CRT private key (p, q, dP, dQ,
+/// qInv) — ~3.5-4x faster. The modulus is n = p*q; its byte length is
+/// p.length() + q.length(). Same behavior as `rsa_oaep_decrypt`.
+pub fn rsa_oaep_decrypt_crt(
+  ct : Bytes,
+  p : Bytes,
+  q : Bytes,
+  dp : Bytes,
+  dq : Bytes,
+  qinv : Bytes,
+  label : Bytes,
+) -> Bytes {
+  let k = p.length() + q.length()
+  let h_len = 32
+  if ct.length() != k || k < 2 * h_len + 2 {
+    abort("rsa_oaep_decrypt_crt: invalid ciphertext length")
+  }
+  let c = rsa_os2ip(ct)
+  let m = rsa_dp_crt(
+    c,
+    rsa_os2ip(p),
+    rsa_os2ip(q),
+    rsa_os2ip(dp),
+    rsa_os2ip(dq),
+    rsa_os2ip(qinv),
+  )
+  let em = rsa_i2osp(m, k)
+  rsa_oaep_unpad(em, k, label)
+}
+
+// ==================== RSASSA-PSS (RFC 8017 §8.1, SHA-256) ====================
+
+///|
+/// Build the PSS encoded message (SHA-256, MGF1-SHA256, RFC 8017 §9.1.1).
+fn rsa_pss_encode_em(
+  message : Bytes,
+  salt : Bytes,
+  em_len : Int,
+  em_bits : Int,
+) -> Bytes {
   let s_len = salt.length()
   let h_len = 32
-  let em_bits = nn.to_string(radix=2).length() - 1
-  let em_len = k
   if em_len < h_len + s_len + 2 {
-    abort("rsa_pss_sign: modulus too small for salt")
+    abort("rsa_pss sign: modulus too small for salt")
   }
   let m_hash = sha256(message)
   // M' = (0x00 * 8) || mHash || salt ; H = SHA-256(M')
@@ -396,8 +540,49 @@ pub fn rsa_pss_sign(
     em[db_len + i] = h[i]
   }
   em[em_len - 1] = b'\xbc'
-  let m = rsa_os2ip(Bytes::from_array(em[:]))
+  Bytes::from_array(em[:])
+}
+
+///|
+/// RSASSA-PSS sign (SHA-256, MGF1-SHA256). `salt` is the caller-supplied
+/// random salt (any length; 32 is typical). Returns the k-byte signature.
+pub fn rsa_pss_sign(
+  message : Bytes,
+  n : Bytes,
+  d : Bytes,
+  salt : Bytes,
+) -> Bytes {
+  let nn = rsa_os2ip(n)
+  let dd = rsa_os2ip(d)
+  let k = n.length()
+  let em_bits = rsa_bit_len(n) - 1 // RFC 8017: emBits = modBits - 1
+  let em = rsa_pss_encode_em(message, salt, k, em_bits)
+  let m = rsa_os2ip(em)
   let s = rsa_dp(m, nn, dd)
+  rsa_i2osp(s, k)
+}
+
+///|
+/// RSASSA-PSS sign (SHA-256) with the CRT private key (p, q, dP, dQ, qInv)
+/// — ~3.5-4x faster. Deterministic and byte-identical to `rsa_pss_sign`
+/// for the same key and salt.
+pub fn rsa_pss_sign_crt(
+  message : Bytes,
+  p : Bytes,
+  q : Bytes,
+  dp : Bytes,
+  dq : Bytes,
+  qinv : Bytes,
+  salt : Bytes,
+) -> Bytes {
+  let k = p.length() + q.length()
+  let pp = rsa_os2ip(p)
+  let qq = rsa_os2ip(q)
+  let n_bytes = rsa_i2osp(pp * qq, k)
+  let em_bits = rsa_bit_len(n_bytes) - 1 // RFC 8017: emBits = modBits - 1
+  let em = rsa_pss_encode_em(message, salt, k, em_bits)
+  let m = rsa_os2ip(em)
+  let s = rsa_dp_crt(m, pp, qq, rsa_os2ip(dp), rsa_os2ip(dq), rsa_os2ip(qinv))
   rsa_i2osp(s, k)
 }
 
@@ -415,7 +600,7 @@ pub fn rsa_pss_verify(
   let ee = rsa_os2ip(e)
   let k = n.length()
   let h_len = 32
-  let em_bits = nn.to_string(radix=2).length() - 1
+  let em_bits = rsa_bit_len(n) - 1 // RFC 8017: emBits = modBits - 1
   let em_len = k
   if sig.length() != k || em_len < h_len + salt_len + 2 {
     return false

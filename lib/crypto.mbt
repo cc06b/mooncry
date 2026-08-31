@@ -145,7 +145,11 @@ fn maj(x : UInt, y : UInt, z : UInt) -> UInt {
 }
 
 ///|
-fn process_block(state : Array[UInt], block : Array[UInt]) -> Unit {
+/// SHA-256 compression. The caller must have filled `w[0..15]` with the
+/// block's big-endian message words; `w` doubles as the 64-entry message
+/// schedule. (Perf v0.21.0: callers reuse one scratch array instead of
+/// allocating a 16-word block array plus a 64-word schedule per block.)
+fn process_block(state : Array[UInt], w : Array[UInt]) -> Unit {
   let mut a = state[0]
   let mut b = state[1]
   let mut c = state[2]
@@ -155,10 +159,6 @@ fn process_block(state : Array[UInt], block : Array[UInt]) -> Unit {
   let mut g = state[6]
   let mut h = state[7]
 
-  let w = Array::make(64, 0U)
-  for i in 0..<=15 {
-    w[i] = block[i]
-  }
   for i in 16..<=63 {
     w[i] = sig1(w[i - 2]) + w[i - 7] + sig0(w[i - 15]) + w[i - 16]
   }
@@ -187,6 +187,14 @@ fn process_block(state : Array[UInt], block : Array[UInt]) -> Unit {
 
 ///|
 fn read_u32_be(data : Bytes, offset : Int) -> UInt {
+  (data[offset].to_uint() << 24) |
+  (data[offset + 1].to_uint() << 16) |
+  (data[offset + 2].to_uint() << 8) |
+  data[offset + 3].to_uint()
+}
+
+///|
+fn read_u32_be_arr(data : Array[Byte], offset : Int) -> UInt {
   (data[offset].to_uint() << 24) |
   (data[offset + 1].to_uint() << 16) |
   (data[offset + 2].to_uint() << 8) |

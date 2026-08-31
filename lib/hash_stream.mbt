@@ -117,10 +117,13 @@ pub fn md5_finalize(hasher : Md5Hasher) -> Bytes {
 // ==================== SHA-256 Streaming ====================
 
 ///|
-/// Incremental SHA-256 hasher
+/// Incremental SHA-256 hasher. `w` is a reusable 64-word message-schedule
+/// scratch shared by update/finalize (perf v0.21.0: zero per-block
+/// allocation).
 pub struct Sha256Hasher {
   state : Array[UInt]
   buffer : Array[Byte]
+  w : Array[UInt]
   mut buf_len : Int
   mut total_len : UInt64
 }
@@ -140,16 +143,50 @@ pub fn sha256_new() -> Sha256Hasher {
   Sha256Hasher::{
     state,
     buffer: Array::make(64, b'\x00'),
+    w: Array::make(64, 0U),
     buf_len: 0,
     total_len: 0UL,
   }
 }
 
 ///|
+/// Fill `hasher.w[0..15]` from the internal byte buffer (no intermediate
+/// Bytes allocation).
+fn sha256_words_from_buffer(hasher : Sha256Hasher) -> Unit {
+  let w = hasher.w
+  let buf = hasher.buffer
+  for j in 0..<=15 {
+    w[j] = read_u32_be_arr(buf, j * 4)
+  }
+}
+
+///|
+/// Write the big-endian 64-bit bit count at `offset` in the internal buffer.
+fn sha256_write_len(
+  hasher : Sha256Hasher,
+  offset : Int,
+  bit_len : UInt64,
+) -> Unit {
+  let hi = ((bit_len >> 32) & 0xFFFFFFFFUL).to_uint()
+  let lo = (bit_len & 0xFFFFFFFFUL).to_uint()
+  hasher.buffer[offset] = ((hi >> 24) & 0xFFU).to_byte()
+  hasher.buffer[offset + 1] = ((hi >> 16) & 0xFFU).to_byte()
+  hasher.buffer[offset + 2] = ((hi >> 8) & 0xFFU).to_byte()
+  hasher.buffer[offset + 3] = (hi & 0xFFU).to_byte()
+  hasher.buffer[offset + 4] = ((lo >> 24) & 0xFFU).to_byte()
+  hasher.buffer[offset + 5] = ((lo >> 16) & 0xFFU).to_byte()
+  hasher.buffer[offset + 6] = ((lo >> 8) & 0xFFU).to_byte()
+  hasher.buffer[offset + 7] = (lo & 0xFFU).to_byte()
+}
+
+///|
 /// Feed data into the SHA-256 hasher
 pub fn sha256_update(hasher : Sha256Hasher, data : Bytes) -> Unit {
-  hasher.total_len = hasher.total_len + data.length().to_uint64()
   let data_len = data.length()
+  if data_len == 0 {
+    return
+  }
+  hasher.total_len = hasher.total_len + data_len.to_uint64()
   let mut data_offset = 0
   if hasher.buf_len > 0 {
     let space = 64 - hasher.buf_len
@@ -160,28 +197,24 @@ pub fn sha256_update(hasher : Sha256Hasher, data : Bytes) -> Unit {
     hasher.buf_len = hasher.buf_len + to_copy
     data_offset = data_offset + to_copy
     if hasher.buf_len == 64 {
-      let block = Array::make(16, 0U)
-      let buf_bytes = Bytes::from_array(hasher.buffer[:])
-      for j in 0..<=15 {
-        block[j] = read_u32_be(buf_bytes, j * 4)
-      }
-      process_block(hasher.state, block)
+      sha256_words_from_buffer(hasher)
+      process_block(hasher.state, hasher.w)
       hasher.buf_len = 0
     }
   }
   let remaining = data_len - data_offset
   let num_full_blocks = remaining / 64
+  let w = hasher.w
   for b in 0..<num_full_blocks {
-    let block = Array::make(16, 0U)
     let offset = data_offset + b * 64
     for j in 0..<=15 {
-      block[j] = read_u32_be(data, offset + j * 4)
+      w[j] = read_u32_be(data, offset + j * 4)
     }
-    process_block(hasher.state, block)
+    process_block(hasher.state, w)
   }
-  let rem_start = data_offset + num_full_blocks * 64
   let rem_count = remaining - num_full_blocks * 64
   if rem_count > 0 {
+    let rem_start = data_offset + num_full_blocks * 64
     for i in 0..<rem_count {
       hasher.buffer[i] = data[rem_start + i]
     }
@@ -190,38 +223,52 @@ pub fn sha256_update(hasher : Sha256Hasher, data : Bytes) -> Unit {
 }
 
 ///|
-/// Finalize and return the 32-byte SHA-256 digest
+/// Feed a single byte into the SHA-256 hasher. For byte-at-a-time streams
+/// this is much cheaper than `sha256_update(hasher, Bytes::make(1, byte))`:
+/// no Bytes allocation and a minimal hot path (perf v0.21.0).
+pub fn sha256_update_byte(hasher : Sha256Hasher, byte : Byte) -> Unit {
+  hasher.total_len = hasher.total_len + 1UL
+  let buf_len = hasher.buf_len
+  hasher.buffer[buf_len] = byte
+  if buf_len == 63 {
+    hasher.buf_len = 64
+    sha256_words_from_buffer(hasher)
+    process_block(hasher.state, hasher.w)
+    hasher.buf_len = 0
+  } else {
+    hasher.buf_len = buf_len + 1
+  }
+}
+
+///|
+/// Finalize and return the 32-byte SHA-256 digest. Pads in place inside the
+/// hasher buffer (perf v0.21.0: no padded-array allocation).
 pub fn sha256_finalize(hasher : Sha256Hasher) -> Bytes {
   let bit_len = hasher.total_len * 8UL
-  let pad_len = 56 - hasher.buf_len % 64
-  let pad_len_final = if pad_len <= 0 { pad_len + 64 } else { pad_len }
-  let final_block_len = hasher.buf_len + pad_len_final + 8
-  let padded = Array::make(final_block_len, b'\x00')
-  for i in 0..<hasher.buf_len {
-    padded[i] = hasher.buffer[i]
-  }
-  padded[hasher.buf_len] = b'\x80'
-  // Big-endian 64-bit length
-  let hi = ((bit_len >> 32) & 0xFFFFFFFFUL).to_uint()
-  let lo = (bit_len & 0xFFFFFFFFUL).to_uint()
-  let len_offset = hasher.buf_len + pad_len_final
-  padded[len_offset] = ((hi >> 24) & 0xFFU).to_byte()
-  padded[len_offset + 1] = ((hi >> 16) & 0xFFU).to_byte()
-  padded[len_offset + 2] = ((hi >> 8) & 0xFFU).to_byte()
-  padded[len_offset + 3] = (hi & 0xFFU).to_byte()
-  padded[len_offset + 4] = ((lo >> 24) & 0xFFU).to_byte()
-  padded[len_offset + 5] = ((lo >> 16) & 0xFFU).to_byte()
-  padded[len_offset + 6] = ((lo >> 8) & 0xFFU).to_byte()
-  padded[len_offset + 7] = (lo & 0xFFU).to_byte()
-  let padded_bytes = Bytes::from_array(padded[:])
-  let num_blocks = final_block_len / 64
-  for i in 0..<num_blocks {
-    let block = Array::make(16, 0U)
-    let offset = i * 64
-    for j in 0..<=15 {
-      block[j] = read_u32_be(padded_bytes, offset + j * 4)
+  let buf_len = hasher.buf_len
+  if buf_len < 56 {
+    // 0x80 + zeros + length all fit in the current block.
+    hasher.buffer[buf_len] = b'\x80'
+    for i in (buf_len + 1)..<56 {
+      hasher.buffer[i] = b'\x00'
     }
-    process_block(hasher.state, block)
+    sha256_write_len(hasher, 56, bit_len)
+    sha256_words_from_buffer(hasher)
+    process_block(hasher.state, hasher.w)
+  } else {
+    // Need a second block for the length.
+    hasher.buffer[buf_len] = b'\x80'
+    for i in (buf_len + 1)..<64 {
+      hasher.buffer[i] = b'\x00'
+    }
+    sha256_words_from_buffer(hasher)
+    process_block(hasher.state, hasher.w)
+    for i in 0..<56 {
+      hasher.buffer[i] = b'\x00'
+    }
+    sha256_write_len(hasher, 56, bit_len)
+    sha256_words_from_buffer(hasher)
+    process_block(hasher.state, hasher.w)
   }
   let result_arr = Array::make(32, b'\x00')
   for i in 0..<=7 {
@@ -359,6 +406,7 @@ pub fn sha224_new() -> Sha256Hasher {
   Sha256Hasher::{
     state,
     buffer: Array::make(64, b'\x00'),
+    w: Array::make(64, 0U),
     buf_len: 0,
     total_len: 0UL,
   }
@@ -368,6 +416,12 @@ pub fn sha224_new() -> Sha256Hasher {
 /// Feed data into the SHA-224 hasher (same compression as SHA-256)
 pub fn sha224_update(hasher : Sha256Hasher, data : Bytes) -> Unit {
   sha256_update(hasher, data)
+}
+
+///|
+/// Feed a single byte into the SHA-224 hasher (see `sha256_update_byte`)
+pub fn sha224_update_byte(hasher : Sha256Hasher, byte : Byte) -> Unit {
+  sha256_update_byte(hasher, byte)
 }
 
 ///|

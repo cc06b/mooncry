@@ -52,7 +52,7 @@ fn assert_roundtrip(label : String, pt : Bytes, recovered : Bytes) -> Unit {
 
 ///|
 test "property: AES-256-GCM round-trip (many sizes)" {
-  let r = Rng::{ state: 0x01234567U }
+  let r = Rng::{ state: 0x01234567U, }
   let key_sizes = [16, 24, 32]
   for _ in 0..<32 {
     let kl = key_sizes[rng_int(r, 3)]
@@ -85,7 +85,7 @@ test "property: AES-256-GCM round-trip (many sizes)" {
 
 ///|
 test "property: AES-CBC round-trip (many sizes)" {
-  let r = Rng::{ state: 0x12345678U }
+  let r = Rng::{ state: 0x12345678U, }
   let key_sizes = [16, 24, 32]
   for _ in 0..<24 {
     let kl = key_sizes[rng_int(r, 3)]
@@ -100,7 +100,7 @@ test "property: AES-CBC round-trip (many sizes)" {
 
 ///|
 test "property: AES-CTR round-trip (many sizes)" {
-  let r = Rng::{ state: 0x76543210U }
+  let r = Rng::{ state: 0x76543210U, }
   let key_sizes = [16, 24, 32]
   for _ in 0..<24 {
     let kl = key_sizes[rng_int(r, 3)]
@@ -115,7 +115,7 @@ test "property: AES-CTR round-trip (many sizes)" {
 
 ///|
 test "property: ChaCha20-Poly1305 round-trip (many sizes)" {
-  let r = Rng::{ state: 0xABCDEF01U }
+  let r = Rng::{ state: 0xABCDEF01U, }
   for _ in 0..<24 {
     let key = rng_bytes(r, 32)
     let nonce = rng_bytes(r, 12)
@@ -129,7 +129,7 @@ test "property: ChaCha20-Poly1305 round-trip (many sizes)" {
 
 ///|
 test "property: AES-CMAC determinism" {
-  let r = Rng::{ state: 0x2468ACE0U }
+  let r = Rng::{ state: 0x2468ACE0U, }
   let key_sizes = [16, 24, 32]
   for _ in 0..<16 {
     let kl = key_sizes[rng_int(r, 3)]
@@ -144,7 +144,7 @@ test "property: AES-CMAC determinism" {
 
 ///|
 test "property: hex/base64 round-trip" {
-  let r = Rng::{ state: 0x369CF147U }
+  let r = Rng::{ state: 0x369CF147U, }
   for _ in 0..<16 {
     let data = rng_bytes(r, rng_int(r, 300))
     let h = bytes_to_hex(data)
@@ -156,7 +156,7 @@ test "property: hex/base64 round-trip" {
 
 ///|
 test "property: streaming vs one-shot hash consistency" {
-  let r = Rng::{ state: 0x4C1E0B2AU }
+  let r = Rng::{ state: 0x4C1E0B2AU, }
   for _ in 0..<8 {
     let data = rng_bytes(r, rng_int(r, 500))
     let one = sha256(data)
@@ -178,6 +178,28 @@ test "property: streaming vs one-shot hash consistency" {
       off = off + take
     }
     assert_true(bytes_equal(one, sha256_finalize(h)))
+    // byte-at-a-time + mixed path (sha256_update_byte)
+    let hb = sha256_new()
+    let mut offb = 0
+    while offb < data.length() {
+      if rng_int(r, 2) == 0 {
+        sha256_update_byte(hb, data[offb])
+        offb = offb + 1
+      } else {
+        let take = if offb + 3 > data.length() {
+          data.length() - offb
+        } else {
+          3
+        }
+        let arr = Array::make(take, b'\x00')
+        for i in 0..<take {
+          arr[i] = data[offb + i]
+        }
+        sha256_update(hb, Bytes::from_array(arr[:]))
+        offb = offb + take
+      }
+    }
+    assert_true(bytes_equal(one, sha256_finalize(hb)))
   }
 }
 

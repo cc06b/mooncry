@@ -141,6 +141,10 @@ git push gitlink master
 ### Streaming API
 MD5, SHA-224/256/384/512, SHA3-224/256/384/512, and SHAKE128/256 support
 incremental `new` / `update` / `finalize` for streaming or large inputs.
+For byte-at-a-time streams prefer `sha256_update_byte` /
+`sha224_update_byte` over `update(hasher, Bytes::make(1, b))`: no `Bytes`
+allocation and a minimal hot path (~1.3x one-shot cost vs ~3.7x for
+1-byte `update` chunks).
 
 ## Installation
 
@@ -283,6 +287,10 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `rsa_oaep_decrypt(ct, n, d, label) -> Bytes` | RSAES-OAEP decrypt |
 | `rsa_pss_sign(msg, n, d, salt) -> Bytes` | RSASSA-PSS sign (SHA-256) |
 | `rsa_pss_verify(msg, sig, n, e, salt_len) -> Bool` | RSASSA-PSS verify |
+| `rsa_pkcs1_v15_sign_crt(msg, p, q, dp, dq, qinv) -> Bytes` | PKCS1-v1.5 sign via CRT (~2.6x, byte-identical) |
+| `rsa_pkcs1_v15_decrypt_crt(ct, p, q, dp, dq, qinv) -> Bytes` | PKCS1-v1.5 decrypt via CRT |
+| `rsa_oaep_decrypt_crt(ct, p, q, dp, dq, qinv, label) -> Bytes` | OAEP decrypt via CRT |
+| `rsa_pss_sign_crt(msg, p, q, dp, dq, qinv, salt) -> Bytes` | PSS sign via CRT |
 | `ed25519_public_key(seed) -> Bytes` | Derive 32-byte Ed25519 public key |
 | `ed25519_sign(seed, message) -> Bytes` | Ed25519 sign (RFC 8032), 64-byte sig |
 | `ed25519_verify(public_key, message, sig) -> Bool` | Ed25519 verify |
@@ -405,6 +413,22 @@ subtractions stay non-negative (the X25519 BigInt lesson). Measured on
 one host: sign ~270 → ~13 ms and verify ~540 → ~24 ms (**~21-23x**).
 Signatures are byte-identical to before (RFC 6979 deterministic k is
 unchanged), so no compatibility break.
+
+**v0.21.0 perf pass.** Two fronts. (1) SHA-256 streaming: the hasher now
+reuses one 64-word message schedule instead of allocating 16- and 64-word
+arrays per block, reads buffer words without an intermediate `Bytes`, and
+finalizes with in-place padding (no padded-array allocation); one-shot
+SHA-256 1KiB drops ~26.9 → ~20.7 µs (**-23%**). New `sha256_update_byte` /
+`sha224_update_byte` give byte-at-a-time streams a zero-allocation hot
+path: ~26.3 µs/KiB, only ~1.3x one-shot (the old 1-byte `update` pattern
+is ~3.7x). (2) RSA: all four private-key operations (PKCS1-v1.5
+sign/decrypt, OAEP decrypt, PSS sign) gain `_crt` variants taking the CRT
+key `(p, q, dP, dQ, qInv)` and doing two half-width exponentiations
+instead of one full-width (RFC 8017 §5.1.2) — ~17.6-18.5 ms → ~6.8-7.0 ms
+on RSA-1024 (**~2.5-2.6x**). CRT output is byte-identical to the
+single-exponentiation path (deterministic padding), verified in-tree.
+The PSS/OAEP `emBits` computation no longer allocates a ~k-char binary
+string per call.
 
 Hashes, ChaCha20, and hex/Base64 are throughput-bound by the algorithm; AES
 trades constant-time property for ~5x speed via lookup tables (see

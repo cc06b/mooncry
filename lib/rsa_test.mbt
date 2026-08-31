@@ -123,3 +123,84 @@ test "RSA-PSS verify rejects tampered msg" {
   let sig = rsa_pss_sign(msg, rsa_test_n, rsa_test_d, salt)
   assert_true(!rsa_pss_verify(b"different", sig, rsa_test_n, rsa_test_e, 32))
 }
+
+// ==================== RSA CRT (v0.21.0) ====================
+// CRT parameters (p, q, dP, dQ, qInv) derived in Python from the test key
+// above via the standard (n, e, d) factoring method; sanity-checked that CRT
+// decryption reproduces plaintexts.
+
+///|
+let rsa_crt_p : Bytes = hex_to_bytes(
+  "d6da0a4cb4e15854071012a637c0d3333d36d6d72d826acd3c3d0637d205ab98fdc59dff06db6fa4d8bcb4c90af13627280ed518fc1a13de975ab94b8b0eb401",
+)
+
+///|
+let rsa_crt_q : Bytes = hex_to_bytes(
+  "d601df3917dd5360189b8f5e175ce86e041039f82f9cc90d71162b8d5bf1ea2508607fb0fca85fbec5065fe8083c68dbe54b08931dd292f1ad66671ddc29c003",
+)
+
+///|
+let rsa_crt_dp : Bytes = hex_to_bytes(
+  "b21a0745b4ffc48fcb57088e9f530a00c4b2cbff8deb398bae6ecbd3c4170d3b82caa98179f6b7a2c8440dfd4643d4673b2ea879d0a9f164a8c4fd2b6137ac01",
+)
+
+///|
+let rsa_crt_dq : Bytes = hex_to_bytes(
+  "23f73092a1c61a6afdf7b6c2735eb3d9396998b4731c0055f7f967dc5be56e1a472c2089980c9bfaad9602ac362620e143c9b669330bde922b381880562dd60d",
+)
+
+///|
+let rsa_crt_qinv : Bytes = hex_to_bytes(
+  "23305d86acaa19739ec14d23ec52181570c596378b87204082ef51a1d18e4a753d1394fa39216797fd5eaf75730b153053cde7e992e78d442ef97720b01d6e70",
+)
+
+///|
+test "RSA PKCS1-v1.5 CRT sign == standard sign" {
+  let msg = b"hello crt signing"
+  let sig_std = rsa_pkcs1_v15_sign(msg, rsa_test_n, rsa_test_d)
+  let sig_crt = rsa_pkcs1_v15_sign_crt(
+    msg, rsa_crt_p, rsa_crt_q, rsa_crt_dp, rsa_crt_dq, rsa_crt_qinv,
+  )
+  // Deterministic PKCS1-v1.5: CRT and single-exponentiation must agree
+  // byte-for-byte (standard sign was verified against pycryptodome).
+  assert_true(bytes_equal(sig_std, sig_crt))
+  assert_true(rsa_pkcs1_v15_verify(msg, sig_crt, rsa_test_n, rsa_test_e))
+}
+
+///|
+test "RSA PSS CRT sign == standard sign" {
+  let msg = b"hello crt pss"
+  let salt = Bytes::make(32, b'\x2a')
+  let sig_std = rsa_pss_sign(msg, rsa_test_n, rsa_test_d, salt)
+  let sig_crt = rsa_pss_sign_crt(
+    msg, rsa_crt_p, rsa_crt_q, rsa_crt_dp, rsa_crt_dq, rsa_crt_qinv, salt,
+  )
+  assert_true(bytes_equal(sig_std, sig_crt))
+  assert_true(
+    rsa_pss_verify(msg, sig_crt, rsa_test_n, rsa_test_e, salt.length()),
+  )
+}
+
+///|
+test "RSA PKCS1-v1.5 CRT decrypt round-trip" {
+  let msg = b"crt decrypt test"
+  let k = rsa_test_n.length()
+  let ps = Bytes::make(k - msg.length() - 3, b'\x07')
+  let ct = rsa_pkcs1_v15_encrypt(msg, rsa_test_n, rsa_test_e, ps)
+  let pt = rsa_pkcs1_v15_decrypt_crt(
+    ct, rsa_crt_p, rsa_crt_q, rsa_crt_dp, rsa_crt_dq, rsa_crt_qinv,
+  )
+  assert_true(bytes_equal(pt, msg))
+}
+
+///|
+test "RSA OAEP CRT decrypt round-trip" {
+  let msg = b"oaep crt"
+  let label = b""
+  let seed = Bytes::make(32, b'\x11')
+  let ct = rsa_oaep_encrypt(msg, rsa_test_n, rsa_test_e, seed, label)
+  let pt = rsa_oaep_decrypt_crt(
+    ct, rsa_crt_p, rsa_crt_q, rsa_crt_dp, rsa_crt_dq, rsa_crt_qinv, label,
+  )
+  assert_true(bytes_equal(pt, msg))
+}

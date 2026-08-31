@@ -137,7 +137,7 @@ fn ed_point_add(p1 : EdPoint, p2 : EdPoint) -> EdPoint {
 ///|
 /// The identity point (0, 1).
 fn ed_identity() -> EdPoint {
-  EdPoint::{ x: ed_zero, y: ed_one }
+  EdPoint::{ x: ed_zero, y: ed_one, }
 }
 
 ///|
@@ -173,7 +173,7 @@ let ed_base : EdPoint = {
   } else {
     ed_p - x
   }
-  EdPoint::{ x: x_even, y }
+  EdPoint::{ x: x_even, y, }
 }
 
 ///|
@@ -229,7 +229,7 @@ fn ed_decode(enc : Bytes) -> EdPoint? {
     return None
   }
   let x_chosen = if (x % ed_two == ed_one) == x_sign { x } else { ed_p - x }
-  Some(EdPoint::{ x: x_chosen, y })
+  Some(EdPoint::{ x: x_chosen, y, })
 }
 
 ///|
