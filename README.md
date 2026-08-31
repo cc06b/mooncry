@@ -9,7 +9,7 @@ verified against official standard vectors.
 - **Correct** — every algorithm is checked against FIPS / NIST / RFC test
   vectors, and cross-validated against reference implementations
   (pycryptodome, cryptography, hashlib, libsodium, zlib) plus randomized
-  differential testing. 471 tests, run with `moon test --deny-warn`.
+  differential testing. 497 tests, run with `moon test --deny-warn`.
 - **Broad** — MD5, **SHA-1**, the SHA-2 and SHA-3 families (incl. **SHA-512/224
   and SHA-512/256**), **Keccak-256**,
   SHAKE/**cSHAKE** XOFs, **KMAC128/256**, BLAKE2b, **BLAKE2s**, BLAKE3,
@@ -18,7 +18,8 @@ verified against official standard vectors.
   AES-CBC/GCM/CTR/**CCM**/**KW**/**SIV**, ChaCha20,
   **Salsa20**, ChaCha20-Poly1305 AEAD, **XChaCha20 / XChaCha20-Poly1305**
   (24-byte nonce), HKDF, PBKDF2, **scrypt**, **Argon2**,
-  **RSA (PKCS1-v1.5/OAEP/PSS)**, **ECDSA P-256**, **Ed25519** (incl.
+  **RSA (PKCS1-v1.5/OAEP/PSS**, incl. multi-hash `_with` variants**)**,
+  **ECDSA P-256 / secp256k1**, **Ed25519** (incl.
   **Ed25519ctx / Ed25519ph**), **X25519**,
   **HOTP/TOTP** (incl. **SHA-256/SHA-512** variants), SipHash-2-4, CRC32/CRC32C/**CRC-64**/**Adler-32**, a sealed-box AEAD envelope, Base64, Hex.
 - **Fast where it matters** — hex / Base64 encoding are O(n); AES MixColumns
@@ -75,7 +76,9 @@ git push gitlink master
 - **AES-CMAC** (NIST SP 800-38B) — 128-bit tag, 128/192/256-bit keys
 - **KMAC128 / KMAC256** (NIST SP 800-185) — Keccak-based MAC with
   customization string; **KMACXOF128 / KMACXOF256** variable-length variants
-- **GMAC** (NIST SP 800-38D) — AES-GCM authentication-only mode (16-byte tag)
+- **GMAC** (NIST SP 800-38D) — AES-GCM authentication-only mode (16-byte
+  tag); one-shot and incremental (`gmac_new` / `gmac_update` /
+  `gmac_finalize`)
 
 ### Symmetric ciphers / AEAD
 - **AES-CBC** (NIST SP 800-38A) — PKCS#7 padding, 128/192/256-bit keys, IV prepended
@@ -256,6 +259,9 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `aes_ccm_decrypt(input, key, nonce, aad, mac_len) -> Bytes` | AES-CCM decrypt, aborts on tag mismatch |
 | `gmac(key, iv, aad) -> Bytes` | GMAC (SP 800-38D), 16-byte tag |
 | `gmac_verify(key, iv, aad, tag) -> Bool` | GMAC constant-time tag verify |
+| `gmac_new(key, iv) -> GmacState` | Incremental GMAC (chunked AAD) |
+| `gmac_update(st, aad_chunk)` | Feed an AAD chunk |
+| `gmac_finalize(st) -> Bytes` | Incremental GMAC 16-byte tag |
 | `aes_ctr(data, key, iv) -> Bytes` | AES-CTR encrypt/decrypt (symmetric) |
 | `chacha20_xor(input, key, nonce, counter) -> Bytes` | ChaCha20 encrypt/decrypt (symmetric) |
 | `salsa20_keystream_block(key, nonce, counter) -> Bytes` | Salsa20 keystream block (64 bytes) |
@@ -291,9 +297,19 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `rsa_pkcs1_v15_decrypt_crt(ct, p, q, dp, dq, qinv) -> Bytes` | PKCS1-v1.5 decrypt via CRT |
 | `rsa_oaep_decrypt_crt(ct, p, q, dp, dq, qinv, label) -> Bytes` | OAEP decrypt via CRT |
 | `rsa_pss_sign_crt(msg, p, q, dp, dq, qinv, salt) -> Bytes` | PSS sign via CRT |
+| `rsa_pkcs1_v15_sign_with(msg, n, d, hash) -> Bytes` | PKCS1-v1.5 sign, hash = SHA-1/256/384/512 |
+| `rsa_pkcs1_v15_verify_with(msg, sig, n, e, hash) -> Bool` | PKCS1-v1.5 verify, chosen hash |
+| `rsa_pss_sign_with(msg, n, d, salt, hash) -> Bytes` | PSS sign, chosen hash + MGF1 |
+| `rsa_pss_verify_with(msg, sig, n, e, salt_len, hash) -> Bool` | PSS verify, chosen hash |
 | `ed25519_public_key(seed) -> Bytes` | Derive 32-byte Ed25519 public key |
 | `ed25519_sign(seed, message) -> Bytes` | Ed25519 sign (RFC 8032), 64-byte sig |
 | `ed25519_verify(public_key, message, sig) -> Bool` | Ed25519 verify |
+| `ecdsa_p256_public_key(sk) -> Bytes` | ECDSA P-256 public key (uncompressed) |
+| `ecdsa_p256_sign(sk, message) -> Bytes` | ECDSA P-256 sign (RFC 6979, SHA-256) |
+| `ecdsa_p256_verify(pk, message, sig) -> Bool` | ECDSA P-256 verify |
+| `ecdsa_secp256k1_public_key(sk) -> Bytes` | ECDSA secp256k1 public key (uncompressed) |
+| `ecdsa_secp256k1_sign(sk, message) -> Bytes` | ECDSA secp256k1 sign (RFC 6979, SHA-256) |
+| `ecdsa_secp256k1_verify(pk, message, sig) -> Bool` | ECDSA secp256k1 verify |
 | `x25519(scalar, u) -> Bytes` | X25519 scalar mult (RFC 7748), DH shared secret |
 | `x25519_public_key(private_key) -> Bytes` | Derive X25519 public key (base u=9) |
 | `crc32 / crc32c(data : Bytes) -> Bytes` | CRC-32 (IEEE) / CRC-32C, 4-byte big-endian |
@@ -430,6 +446,23 @@ single-exponentiation path (deterministic padding), verified in-tree.
 The PSS/OAEP `emBits` computation no longer allocates a ~k-char binary
 string per call.
 
+**v0.22.0 features.** Three additions. (1) **ECDSA secp256k1** (Bitcoin
+curve, y² = x³ + 7): sign/verify/public-key with the same RFC 6979 +
+SHA-256 deterministic construction as P-256. The point/RFC-6979 code is
+now curve-parameterized (P-256 keeps its fast a = −3 doubling; secp256k1
+uses the a = 0 specialization), and P-256 signatures stay byte-identical.
+Verified against the Python `ecdsa` library
+(`sign_digest_deterministic`) plus `cryptography` cross-verification;
+signatures are not low-S-normalized (verify accepts any s in [1, n−1]).
+(2) **Multi-hash RSA signatures**: `rsa_pkcs1_v15_sign_with` /
+`rsa_pkcs1_v15_verify_with` / `rsa_pss_sign_with` / `rsa_pss_verify_with`
+take an `RsaHash` (SHA-1/256/384/512) for the message hash, DigestInfo
+(v1.5) and MGF1 (PSS). The plain functions stay fixed to SHA-256. Verified
+byte-for-byte against pycryptodome. (3) **Incremental GMAC**
+(`gmac_new` / `gmac_update` / `gmac_finalize`): chunked AAD over the same
+table-accelerated GHASH, equal to the one-shot `gmac` tag (verified
+in-tree and against pycryptodome GCM-empty tags).
+
 Hashes, ChaCha20, and hex/Base64 are throughput-bound by the algorithm; AES
 trades constant-time property for ~5x speed via lookup tables (see
 [Security & performance boundaries](#security--performance-boundaries)).
@@ -461,11 +494,15 @@ Table 1, all 12 rows), **HKDF-SHA512 / PBKDF2-HMAC-SHA512** (RFC 5869
 construction anchored on TC1 + hashlib), **RIPEMD-160** (official paper
 suite incl. million-`a`, + hashlib), **AES-CCM** (RFC 3610 Packet Vector
 #1 + pycryptodome), **Ed25519ctx / Ed25519ph** (RFC 8032 §7.2/§7.3 official
-vectors), **GMAC** (pycryptodome GCM), **keyed BLAKE2b/2s** (hashlib keyed),
+vectors), **GMAC** (pycryptodome GCM) + incremental-vs-one-shot,
+**keyed BLAKE2b/2s** (hashlib keyed),
 **Adler-32** (zlib), **PBKDF2-HMAC-SHA1** (RFC 6070 official suite),
+**ECDSA secp256k1** (Python `ecdsa` RFC 6979 + `cryptography` cross-verify,
+sk = 1 ⇒ pubkey = G anchor), **multi-hash RSA** PKCS1-v1.5/PSS
+(pycryptodome, SHA-1/384/512 exact + random-salt interop),
 **sealed-box** round-trip + tamper, and property-based round-trip checks
 (deterministic PRNG) for every cipher + streaming-vs-one-shot consistency.
-**471 tests.**
+**497 tests.**
 
 ## Development
 

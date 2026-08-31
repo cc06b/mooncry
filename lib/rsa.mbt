@@ -15,6 +15,85 @@
 let rsa_digestinfo_sha256 : Bytes = b"\x30\x31\x30\x0d\x06\x09\x60\x86\x48\x01\x65\x03\x04\x02\x01\x05\x00\x04\x20"
 
 ///|
+/// SHA-1 DigestInfo prefix (RFC 8017 §9.2 note 1)
+let rsa_digestinfo_sha1 : Bytes = b"\x30\x21\x30\x09\x06\x05\x2b\x0e\x03\x02\x1a\x05\x00\x04\x14"
+
+///|
+/// SHA-384 DigestInfo prefix (RFC 8017 §9.2 note 1)
+let rsa_digestinfo_sha384 : Bytes = b"\x30\x41\x30\x0d\x06\x09\x60\x86\x48\x01\x65\x03\x04\x02\x02\x05\x00\x04\x30"
+
+///|
+/// SHA-512 DigestInfo prefix (RFC 8017 §9.2 note 1)
+let rsa_digestinfo_sha512 : Bytes = b"\x30\x51\x30\x0d\x06\x09\x60\x86\x48\x01\x65\x03\x04\x02\x03\x05\x00\x04\x40"
+
+///|
+/// Hash choice for the `_with` RSA signature variants (v0.22.0). The plain
+/// (non-`_with`) functions are fixed to SHA-256 for compatibility.
+pub enum RsaHash {
+  Sha1
+  Sha256
+  Sha384
+  Sha512
+}
+
+///|
+/// All supported hash variants of the `_with` RSA signature API.
+pub let rsa_hash_variants : Array[RsaHash] = [
+  RsaHash::Sha1,
+  RsaHash::Sha256,
+  RsaHash::Sha384,
+  RsaHash::Sha512,
+]
+
+///|
+/// SHA-1 selector for the `_with` RSA signature API (enum constructors are
+/// not visible to blackbox `*_test.mbt` files, so variants are exported as
+/// constants).
+pub let rsa_hash_sha1 : RsaHash = RsaHash::Sha1
+
+///|
+/// SHA-256 selector for the `_with` RSA signature API.
+pub let rsa_hash_sha256 : RsaHash = RsaHash::Sha256
+
+///|
+/// SHA-384 selector for the `_with` RSA signature API.
+pub let rsa_hash_sha384 : RsaHash = RsaHash::Sha384
+
+///|
+/// SHA-512 selector for the `_with` RSA signature API.
+pub let rsa_hash_sha512 : RsaHash = RsaHash::Sha512
+
+///|
+fn rsa_hash_len(hash : RsaHash) -> Int {
+  match hash {
+    Sha1 => 20
+    Sha256 => 32
+    Sha384 => 48
+    Sha512 => 64
+  }
+}
+
+///|
+fn rsa_hash_apply(hash : RsaHash, data : Bytes) -> Bytes {
+  match hash {
+    Sha1 => sha1(data)
+    Sha256 => sha256(data)
+    Sha384 => sha384(data)
+    Sha512 => sha512(data)
+  }
+}
+
+///|
+fn rsa_digestinfo(hash : RsaHash) -> Bytes {
+  match hash {
+    Sha1 => rsa_digestinfo_sha1
+    Sha256 => rsa_digestinfo_sha256
+    Sha384 => rsa_digestinfo_sha384
+    Sha512 => rsa_digestinfo_sha512
+  }
+}
+
+///|
 fn rsa_os2ip(bytes : Bytes) -> @bigint.BigInt {
   @bigint.BigInt::from_octets(bytes)
 }
@@ -85,9 +164,11 @@ fn rsa_bit_len(bytes : Bytes) -> Int {
 }
 
 ///|
-/// MGF1 (RFC 8017 §B.2.1) with SHA-256: produces `length` mask bytes from a
-/// seed by concatenating SHA-256(seed || counter) for counter = 0,1,2,...
-fn rsa_mgf1_sha256(seed : Bytes, length : Int) -> Bytes {
+/// MGF1 (RFC 8017 §B.2.1) with a configurable hash: produces `length` mask
+/// bytes from a seed by concatenating H(seed || counter) for counter =
+/// 0,1,2,...
+fn rsa_mgf1(hash : RsaHash, seed : Bytes, length : Int) -> Bytes {
+  let h_len = rsa_hash_len(hash)
   let out = Array::make(length, b'\x00')
   let mut off = 0
   let mut counter = 0
@@ -97,11 +178,11 @@ fn rsa_mgf1_sha256(seed : Bytes, length : Int) -> Bytes {
     ctr_bytes[1] = ((counter >> 16) & 0xFF).to_byte()
     ctr_bytes[2] = ((counter >> 8) & 0xFF).to_byte()
     ctr_bytes[3] = (counter & 0xFF).to_byte()
-    let h = sha256_new()
-    sha256_update(h, seed)
-    sha256_update(h, Bytes::from_array(ctr_bytes[:]))
-    let block = sha256_finalize(h)
-    let take = if length - off < 32 { length - off } else { 32 }
+    let block = rsa_hash_apply(
+      hash,
+      concat_bytes(seed, Bytes::from_array(ctr_bytes[:])),
+    )
+    let take = if length - off < h_len { length - off } else { h_len }
     for j in 0..<take {
       out[off + j] = block[j]
     }
@@ -109,6 +190,12 @@ fn rsa_mgf1_sha256(seed : Bytes, length : Int) -> Bytes {
     counter = counter + 1
   }
   Bytes::from_array(out[:])
+}
+
+///|
+/// MGF1 with SHA-256 (kept for the fixed-SHA-256 paths).
+fn rsa_mgf1_sha256(seed : Bytes, length : Int) -> Bytes {
+  rsa_mgf1(RsaHash::Sha256, seed, length)
 }
 
 ///|
@@ -226,12 +313,13 @@ pub fn rsa_pkcs1_v15_decrypt_crt(
 ///|
 /// Build the PKCS1-v1.5 encoded message for SHA-256:
 /// EM = 0x00 || 0x01 || PS(0xFF...) || 0x00 || DigestInfo || H.
-fn rsa_pkcs1_v15_sign_em(message : Bytes, k : Int) -> Bytes {
+fn rsa_pkcs1_v15_sign_em(message : Bytes, k : Int, hash : RsaHash) -> Bytes {
   // T = DigestInfo || H
-  let h = sha256(message)
-  let t_len = rsa_digestinfo_sha256.length() + h.length()
+  let h = rsa_hash_apply(hash, message)
+  let di = rsa_digestinfo(hash)
+  let t_len = di.length() + h.length()
   if k < t_len + 11 {
-    abort("rsa_pkcs1_v15 sign: modulus too small for SHA-256")
+    abort("rsa_pkcs1_v15 sign: modulus too small for the chosen hash")
   }
   let em = Array::make(k, b'\x00')
   em[0] = b'\x00'
@@ -241,11 +329,11 @@ fn rsa_pkcs1_v15_sign_em(message : Bytes, k : Int) -> Bytes {
     em[2 + i] = b'\xff'
   }
   em[2 + ps_len] = b'\x00'
-  for i in 0..<rsa_digestinfo_sha256.length() {
-    em[3 + ps_len + i] = rsa_digestinfo_sha256[i]
+  for i in 0..<di.length() {
+    em[3 + ps_len + i] = di[i]
   }
   for i in 0..<h.length() {
-    em[3 + ps_len + rsa_digestinfo_sha256.length() + i] = h[i]
+    em[3 + ps_len + di.length() + i] = h[i]
   }
   Bytes::from_array(em[:])
 }
@@ -257,7 +345,7 @@ pub fn rsa_pkcs1_v15_sign(message : Bytes, n : Bytes, d : Bytes) -> Bytes {
   let nn = rsa_os2ip(n)
   let dd = rsa_os2ip(d)
   let k = n.length()
-  let em = rsa_pkcs1_v15_sign_em(message, k)
+  let em = rsa_pkcs1_v15_sign_em(message, k, RsaHash::Sha256)
   let m = rsa_os2ip(em)
   let s = rsa_dp(m, nn, dd)
   rsa_i2osp(s, k)
@@ -276,7 +364,7 @@ pub fn rsa_pkcs1_v15_sign_crt(
   qinv : Bytes,
 ) -> Bytes {
   let k = p.length() + q.length()
-  let em = rsa_pkcs1_v15_sign_em(message, k)
+  let em = rsa_pkcs1_v15_sign_em(message, k, RsaHash::Sha256)
   let m = rsa_os2ip(em)
   let s = rsa_dp_crt(
     m,
@@ -309,27 +397,58 @@ pub fn rsa_pkcs1_v15_verify(
   let m = rsa_ep(s, nn, ee)
   let em = rsa_i2osp(m, k)
   // Reconstruct expected EM.
-  let h = sha256(message)
-  let t_len = rsa_digestinfo_sha256.length() + h.length()
+  let h_len = rsa_hash_len(RsaHash::Sha256)
+  let t_len = rsa_digestinfo(RsaHash::Sha256).length() + h_len
   if k < t_len + 11 {
     return false
   }
-  let expected = Array::make(k, b'\x00')
-  expected[0] = b'\x00'
-  expected[1] = b'\x01'
-  let ps_len = k - t_len - 3
-  for i in 0..<ps_len {
-    expected[2 + i] = b'\xff'
+  let expected = rsa_pkcs1_v15_sign_em(message, k, RsaHash::Sha256)
+  bytes_equal(em, expected)
+}
+
+///|
+/// RSASSA-PKCS1-v1.5 sign with a caller-chosen hash (v0.22.0; SHA-1,
+/// SHA-256, SHA-384 or SHA-512 DigestInfo per RFC 8017 §9.2).
+/// Deterministic.
+pub fn rsa_pkcs1_v15_sign_with(
+  message : Bytes,
+  n : Bytes,
+  d : Bytes,
+  hash : RsaHash,
+) -> Bytes {
+  let nn = rsa_os2ip(n)
+  let dd = rsa_os2ip(d)
+  let k = n.length()
+  let em = rsa_pkcs1_v15_sign_em(message, k, hash)
+  let m = rsa_os2ip(em)
+  let s = rsa_dp(m, nn, dd)
+  rsa_i2osp(s, k)
+}
+
+///|
+/// RSASSA-PKCS1-v1.5 verify with a caller-chosen hash (v0.22.0).
+pub fn rsa_pkcs1_v15_verify_with(
+  message : Bytes,
+  sig : Bytes,
+  n : Bytes,
+  e : Bytes,
+  hash : RsaHash,
+) -> Bool {
+  let nn = rsa_os2ip(n)
+  let ee = rsa_os2ip(e)
+  let k = n.length()
+  if sig.length() != k {
+    return false
   }
-  expected[2 + ps_len] = b'\x00'
-  for i in 0..<rsa_digestinfo_sha256.length() {
-    expected[3 + ps_len + i] = rsa_digestinfo_sha256[i]
+  let t_len = rsa_digestinfo(hash).length() + rsa_hash_len(hash)
+  if k < t_len + 11 {
+    return false
   }
-  for i in 0..<h.length() {
-    expected[3 + ps_len + rsa_digestinfo_sha256.length() + i] = h[i]
-  }
-  let ok = bytes_equal(em, Bytes::from_array(expected[:]))
-  ok
+  let s = rsa_os2ip(sig)
+  let m = rsa_ep(s, nn, ee)
+  let em = rsa_i2osp(m, k)
+  let expected = rsa_pkcs1_v15_sign_em(message, k, hash)
+  bytes_equal(em, expected)
 }
 
 // ==================== RSA-OAEP (RFC 8017 §7.1, SHA-256) ====================
@@ -500,14 +619,15 @@ fn rsa_pss_encode_em(
   salt : Bytes,
   em_len : Int,
   em_bits : Int,
+  hash : RsaHash,
 ) -> Bytes {
   let s_len = salt.length()
-  let h_len = 32
+  let h_len = rsa_hash_len(hash)
   if em_len < h_len + s_len + 2 {
     abort("rsa_pss sign: modulus too small for salt")
   }
-  let m_hash = sha256(message)
-  // M' = (0x00 * 8) || mHash || salt ; H = SHA-256(M')
+  let m_hash = rsa_hash_apply(hash, message)
+  // M' = (0x00 * 8) || mHash || salt ; H = Hash(M')
   let mp = Array::make(8 + h_len + s_len, b'\x00')
   for i in 0..<h_len {
     mp[8 + i] = m_hash[i]
@@ -515,7 +635,7 @@ fn rsa_pss_encode_em(
   for i in 0..<s_len {
     mp[8 + h_len + i] = salt[i]
   }
-  let h = sha256(Bytes::from_array(mp[:]))
+  let h = rsa_hash_apply(hash, Bytes::from_array(mp[:]))
   // DB = PS(0x00 * (em_len - s_len - h_len - 1)) || 0x01 || salt
   let db_len = em_len - h_len - 1
   let db = Array::make(db_len, b'\x00')
@@ -524,7 +644,7 @@ fn rsa_pss_encode_em(
     db[db_len - s_len + i] = salt[i]
   }
   // dbMask = MGF1(H, db_len); maskedDB = DB xor dbMask
-  let db_mask = rsa_mgf1_sha256(h, db_len)
+  let db_mask = rsa_mgf1(hash, h, db_len)
   rsa_xor_bytes(db, db_mask, 0, db_len)
   // Set the leftmost (8*em_len - em_bits) bits of maskedDB[0] to 0.
   let bits_to_clear = 8 * em_len - em_bits
@@ -556,7 +676,7 @@ pub fn rsa_pss_sign(
   let dd = rsa_os2ip(d)
   let k = n.length()
   let em_bits = rsa_bit_len(n) - 1 // RFC 8017: emBits = modBits - 1
-  let em = rsa_pss_encode_em(message, salt, k, em_bits)
+  let em = rsa_pss_encode_em(message, salt, k, em_bits, RsaHash::Sha256)
   let m = rsa_os2ip(em)
   let s = rsa_dp(m, nn, dd)
   rsa_i2osp(s, k)
@@ -580,10 +700,71 @@ pub fn rsa_pss_sign_crt(
   let qq = rsa_os2ip(q)
   let n_bytes = rsa_i2osp(pp * qq, k)
   let em_bits = rsa_bit_len(n_bytes) - 1 // RFC 8017: emBits = modBits - 1
-  let em = rsa_pss_encode_em(message, salt, k, em_bits)
+  let em = rsa_pss_encode_em(message, salt, k, em_bits, RsaHash::Sha256)
   let m = rsa_os2ip(em)
   let s = rsa_dp_crt(m, pp, qq, rsa_os2ip(dp), rsa_os2ip(dq), rsa_os2ip(qinv))
   rsa_i2osp(s, k)
+}
+
+///|
+/// Generic PSS verification over an already-decoded EM (shared by the
+/// fixed-SHA-256 and `_with` paths).
+fn rsa_pss_verify_em(
+  message : Bytes,
+  em : Bytes,
+  em_len : Int,
+  em_bits : Int,
+  salt_len : Int,
+  hash : RsaHash,
+) -> Bool {
+  let h_len = rsa_hash_len(hash)
+  if em_len < h_len + salt_len + 2 {
+    return false
+  }
+  let bits_to_clear = 8 * em_len - em_bits
+  if bits_to_clear > 0 &&
+    (em[0].to_int() & ((0xFF << (8 - bits_to_clear)) & 0xFF)) != 0 {
+    return false
+  }
+  if em[em_len - 1] != b'\xbc' {
+    return false
+  }
+  let db_len = em_len - h_len - 1
+  let masked_db = Array::make(db_len, b'\x00')
+  for i in 0..<db_len {
+    masked_db[i] = em[i]
+  }
+  let h = Array::make(h_len, b'\x00')
+  for i in 0..<h_len {
+    h[i] = em[db_len + i]
+  }
+  // dbMask = MGF1(H, db_len); DB = maskedDB xor dbMask
+  let db_mask = rsa_mgf1(hash, Bytes::from_array(h[:]), db_len)
+  rsa_xor_bytes(masked_db, db_mask, 0, db_len)
+  if bits_to_clear > 0 {
+    masked_db[0] = (masked_db[0].to_int() & (0xFF >> bits_to_clear)).to_byte()
+  }
+  // DB = PS(0x00..) || 0x01 || salt
+  let mut idx = 0
+  while idx < db_len - salt_len - 1 && masked_db[idx] == b'\x00' {
+    idx = idx + 1
+  }
+  if idx >= db_len || masked_db[idx] != b'\x01' {
+    return false
+  }
+  idx = idx + 1
+  let salt_start = idx
+  // M' = (0x00*8) || mHash || salt ; H' = Hash(M')
+  let m_hash = rsa_hash_apply(hash, message)
+  let mp = Array::make(8 + h_len + salt_len, b'\x00')
+  for i in 0..<h_len {
+    mp[8 + i] = m_hash[i]
+  }
+  for i in 0..<salt_len {
+    mp[8 + h_len + i] = masked_db[salt_start + i]
+  }
+  let h_prime = rsa_hash_apply(hash, Bytes::from_array(mp[:]))
+  bytes_equal(Bytes::from_array(h[:]), h_prime)
 }
 
 ///|
@@ -608,48 +789,54 @@ pub fn rsa_pss_verify(
   let s = rsa_os2ip(sig)
   let m = rsa_ep(s, nn, ee)
   let em = rsa_i2osp(m, em_len)
-  let bits_to_clear = 8 * em_len - em_bits
-  if bits_to_clear > 0 &&
-    (em[0].to_int() & ((0xFF << (8 - bits_to_clear)) & 0xFF)) != 0 {
+  rsa_pss_verify_em(message, em, em_len, em_bits, salt_len, RsaHash::Sha256)
+}
+
+// ==================== multi-hash signature API (v0.22.0) ====================
+
+///|
+/// RSASSA-PSS sign with a caller-chosen hash (SHA-1, SHA-256, SHA-384 or
+/// SHA-512) for both the message hash and MGF1, per RFC 8017 §8.1.
+/// `salt` is caller-supplied (any length; the hash output size is typical).
+pub fn rsa_pss_sign_with(
+  message : Bytes,
+  n : Bytes,
+  d : Bytes,
+  salt : Bytes,
+  hash : RsaHash,
+) -> Bytes {
+  let nn = rsa_os2ip(n)
+  let dd = rsa_os2ip(d)
+  let k = n.length()
+  let em_bits = rsa_bit_len(n) - 1 // RFC 8017: emBits = modBits - 1
+  let em = rsa_pss_encode_em(message, salt, k, em_bits, hash)
+  let m = rsa_os2ip(em)
+  let s = rsa_dp(m, nn, dd)
+  rsa_i2osp(s, k)
+}
+
+///|
+/// RSASSA-PSS verify with a caller-chosen hash (must match the signer's
+/// hash and MGF1 choice). `salt_len` is the expected salt length.
+pub fn rsa_pss_verify_with(
+  message : Bytes,
+  sig : Bytes,
+  n : Bytes,
+  e : Bytes,
+  salt_len : Int,
+  hash : RsaHash,
+) -> Bool {
+  let nn = rsa_os2ip(n)
+  let ee = rsa_os2ip(e)
+  let k = n.length()
+  let h_len = rsa_hash_len(hash)
+  let em_bits = rsa_bit_len(n) - 1 // RFC 8017: emBits = modBits - 1
+  let em_len = k
+  if sig.length() != k || em_len < h_len + salt_len + 2 {
     return false
   }
-  if em[em_len - 1] != b'\xbc' {
-    return false
-  }
-  let db_len = em_len - h_len - 1
-  let masked_db = Array::make(db_len, b'\x00')
-  for i in 0..<db_len {
-    masked_db[i] = em[i]
-  }
-  let h = Array::make(h_len, b'\x00')
-  for i in 0..<h_len {
-    h[i] = em[db_len + i]
-  }
-  // dbMask = MGF1(H, db_len); DB = maskedDB xor dbMask
-  let db_mask = rsa_mgf1_sha256(Bytes::from_array(h[:]), db_len)
-  rsa_xor_bytes(masked_db, db_mask, 0, db_len)
-  if bits_to_clear > 0 {
-    masked_db[0] = (masked_db[0].to_int() & (0xFF >> bits_to_clear)).to_byte()
-  }
-  // DB = PS(0x00..) || 0x01 || salt
-  let mut idx = 0
-  while idx < db_len - salt_len - 1 && masked_db[idx] == b'\x00' {
-    idx = idx + 1
-  }
-  if idx >= db_len || masked_db[idx] != b'\x01' {
-    return false
-  }
-  idx = idx + 1
-  let salt_start = idx
-  // M' = (0x00*8) || mHash || salt ; H' = SHA-256(M')
-  let m_hash = sha256(message)
-  let mp = Array::make(8 + h_len + salt_len, b'\x00')
-  for i in 0..<h_len {
-    mp[8 + i] = m_hash[i]
-  }
-  for i in 0..<salt_len {
-    mp[8 + h_len + i] = masked_db[salt_start + i]
-  }
-  let h_prime = sha256(Bytes::from_array(mp[:]))
-  bytes_equal(Bytes::from_array(h[:]), h_prime)
+  let s = rsa_os2ip(sig)
+  let m = rsa_ep(s, nn, ee)
+  let em = rsa_i2osp(m, em_len)
+  rsa_pss_verify_em(message, em, em_len, em_bits, salt_len, hash)
 }
