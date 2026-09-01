@@ -9,7 +9,7 @@ verified against official standard vectors.
 - **Correct** — every algorithm is checked against FIPS / NIST / RFC test
   vectors, and cross-validated against reference implementations
   (pycryptodome, cryptography, hashlib, libsodium, zlib) plus randomized
-  differential testing. 497 tests, run with `moon test --deny-warn`.
+  differential testing. 505 tests, run with `moon test --deny-warn`.
 - **Broad** — MD5, **SHA-1**, the SHA-2 and SHA-3 families (incl. **SHA-512/224
   and SHA-512/256**), **Keccak-256**,
   SHAKE/**cSHAKE** XOFs, **KMAC128/256**, BLAKE2b, **BLAKE2s**, BLAKE3,
@@ -291,6 +291,8 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `rsa_pkcs1_v15_verify(msg, sig, n, e) -> Bool` | RSASSA-PKCS1-v1.5 verify |
 | `rsa_oaep_encrypt(msg, n, e, seed, label) -> Bytes` | RSAES-OAEP encrypt (SHA-256) |
 | `rsa_oaep_decrypt(ct, n, d, label) -> Bytes` | RSAES-OAEP decrypt |
+| `rsa_oaep_encrypt_with(msg, n, e, seed, label, hash) -> Bytes` | OAEP encrypt, chosen hash + MGF1 |
+| `rsa_oaep_decrypt_with(ct, n, d, label, hash) -> Bytes` | OAEP decrypt, chosen hash |
 | `rsa_pss_sign(msg, n, d, salt) -> Bytes` | RSASSA-PSS sign (SHA-256) |
 | `rsa_pss_verify(msg, sig, n, e, salt_len) -> Bool` | RSASSA-PSS verify |
 | `rsa_pkcs1_v15_sign_crt(msg, p, q, dp, dq, qinv) -> Bytes` | PKCS1-v1.5 sign via CRT (~2.6x, byte-identical) |
@@ -309,6 +311,7 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `ecdsa_p256_verify(pk, message, sig) -> Bool` | ECDSA P-256 verify |
 | `ecdsa_secp256k1_public_key(sk) -> Bytes` | ECDSA secp256k1 public key (uncompressed) |
 | `ecdsa_secp256k1_sign(sk, message) -> Bytes` | ECDSA secp256k1 sign (RFC 6979, SHA-256) |
+| `ecdsa_secp256k1_sign_low_s(sk, message) -> Bytes` | secp256k1 sign, BIP-62 low-S canonical |
 | `ecdsa_secp256k1_verify(pk, message, sig) -> Bool` | ECDSA secp256k1 verify |
 | `x25519(scalar, u) -> Bytes` | X25519 scalar mult (RFC 7748), DH shared secret |
 | `x25519_public_key(private_key) -> Bytes` | Derive X25519 public key (base u=9) |
@@ -453,7 +456,8 @@ now curve-parameterized (P-256 keeps its fast a = −3 doubling; secp256k1
 uses the a = 0 specialization), and P-256 signatures stay byte-identical.
 Verified against the Python `ecdsa` library
 (`sign_digest_deterministic`) plus `cryptography` cross-verification;
-signatures are not low-S-normalized (verify accepts any s in [1, n−1]).
+signatures are not low-S-normalized (verify accepts any s in [1, n−1]);
+use `ecdsa_secp256k1_sign_low_s` for BIP-62 canonical output (v0.23.0).
 (2) **Multi-hash RSA signatures**: `rsa_pkcs1_v15_sign_with` /
 `rsa_pkcs1_v15_verify_with` / `rsa_pss_sign_with` / `rsa_pss_verify_with`
 take an `RsaHash` (SHA-1/256/384/512) for the message hash, DigestInfo
@@ -462,6 +466,17 @@ byte-for-byte against pycryptodome. (3) **Incremental GMAC**
 (`gmac_new` / `gmac_update` / `gmac_finalize`): chunked AAD over the same
 table-accelerated GHASH, equal to the one-shot `gmac` tag (verified
 in-tree and against pycryptodome GCM-empty tags).
+
+**v0.23.0 features.** Two additions. (1) **secp256k1 low-S signatures**
+(`ecdsa_secp256k1_sign_low_s`): BIP-62 canonical form — if s > n/2 it is
+replaced by n − s (r unchanged, still valid and deterministic). Verified
+against the Python `ecdsa` library's `sigencode_string_canonize` plus
+`cryptography`. (2) **Multi-hash RSA-OAEP**: `rsa_oaep_encrypt_with` /
+`rsa_oaep_decrypt_with` take an `RsaHash` for lHash and MGF1 (the plain
+functions stay fixed to SHA-256). Exact ciphertexts verified against
+pycryptodome (fixed seed via its `randfunc` hook) plus random-seed interop;
+SHA-512 vectors use a dedicated 2048-bit key since OAEP-SHA512 needs
+k ≥ 2·hLen + 2 + |M| (impossible on 1024 bits).
 
 Hashes, ChaCha20, and hex/Base64 are throughput-bound by the algorithm; AES
 trades constant-time property for ~5x speed via lookup tables (see
@@ -498,11 +513,13 @@ vectors), **GMAC** (pycryptodome GCM) + incremental-vs-one-shot,
 **keyed BLAKE2b/2s** (hashlib keyed),
 **Adler-32** (zlib), **PBKDF2-HMAC-SHA1** (RFC 6070 official suite),
 **ECDSA secp256k1** (Python `ecdsa` RFC 6979 + `cryptography` cross-verify,
-sk = 1 ⇒ pubkey = G anchor), **multi-hash RSA** PKCS1-v1.5/PSS
-(pycryptodome, SHA-1/384/512 exact + random-salt interop),
+sk = 1 ⇒ pubkey = G anchor; low-S BIP-62 via `sigencode_string_canonize`),
+**multi-hash RSA** PKCS1-v1.5/PSS/OAEP
+(pycryptodome, SHA-1/384/512 exact + random-salt/seed interop; OAEP-SHA512
+on a 2048-bit key),
 **sealed-box** round-trip + tamper, and property-based round-trip checks
 (deterministic PRNG) for every cipher + streaming-vs-one-shot consistency.
-**497 tests.**
+**505 tests.**
 
 ## Development
 

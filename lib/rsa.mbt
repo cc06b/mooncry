@@ -193,12 +193,6 @@ fn rsa_mgf1(hash : RsaHash, seed : Bytes, length : Int) -> Bytes {
 }
 
 ///|
-/// MGF1 with SHA-256 (kept for the fixed-SHA-256 paths).
-fn rsa_mgf1_sha256(seed : Bytes, length : Int) -> Bytes {
-  rsa_mgf1(RsaHash::Sha256, seed, length)
-}
-
-///|
 fn rsa_xor_bytes(a : Array[Byte], b : Bytes, a_off : Int, len : Int) -> Unit {
   for i in 0..<len {
     a[a_off + i] = (a[a_off + i].to_int() ^ b[i].to_int()).to_byte()
@@ -451,7 +445,55 @@ pub fn rsa_pkcs1_v15_verify_with(
   bytes_equal(em, expected)
 }
 
-// ==================== RSA-OAEP (RFC 8017 §7.1, SHA-256) ====================
+// ==================== RSA-OAEP (RFC 8017 §7.1) ====================
+
+///|
+/// Build the OAEP encoded message EM = 0x00 || maskedSeed || maskedDB with
+/// a caller-chosen hash (also used for MGF1).
+fn rsa_oaep_encrypt_em(
+  message : Bytes,
+  k : Int,
+  seed : Bytes,
+  label : Bytes,
+  hash : RsaHash,
+) -> Bytes {
+  let h_len = rsa_hash_len(hash)
+  if k < message.length() + 2 * h_len + 2 {
+    abort("rsa_oaep encrypt: message too long for modulus")
+  }
+  let l_hash = rsa_hash_apply(hash, label)
+  // DB = lHash || PS(0x00...) || 0x01 || M
+  let db_len = k - h_len - 1
+  let db = Array::make(db_len, b'\x00')
+  for i in 0..<h_len {
+    db[i] = l_hash[i]
+  }
+  let ps_len = db_len - h_len - 1 - message.length()
+  db[h_len + ps_len] = b'\x01'
+  for i in 0..<message.length() {
+    db[h_len + ps_len + 1 + i] = message[i]
+  }
+  // dbMask = MGF1(seed, db_len); maskedDB = DB xor dbMask
+  let db_mask = rsa_mgf1(hash, seed, db_len)
+  rsa_xor_bytes(db, db_mask, 0, db_len)
+  // seedMask = MGF1(maskedDB, h_len); maskedSeed = seed xor seedMask
+  let masked_db = Bytes::from_array(db[:])
+  let seed_mask = rsa_mgf1(hash, masked_db, h_len)
+  let masked_seed = Array::make(h_len, b'\x00')
+  for i in 0..<h_len {
+    masked_seed[i] = (seed[i].to_int() ^ seed_mask[i].to_int()).to_byte()
+  }
+  // EM = 0x00 || maskedSeed || maskedDB
+  let em = Array::make(k, b'\x00')
+  em[0] = b'\x00'
+  for i in 0..<h_len {
+    em[1 + i] = masked_seed[i]
+  }
+  for i in 0..<db_len {
+    em[1 + h_len + i] = masked_db[i]
+  }
+  Bytes::from_array(em[:])
+}
 
 ///|
 /// RSAES-OAEP encrypt (SHA-256, MGF1-SHA256). `seed` must be 32 random bytes
@@ -470,42 +512,33 @@ pub fn rsa_oaep_encrypt(
   let nn = rsa_os2ip(n)
   let ee = rsa_os2ip(e)
   let k = n.length()
-  let h_len = 32
-  if k < message.length() + 2 * h_len + 2 {
-    abort("rsa_oaep_encrypt: message too long for modulus")
+  let em = rsa_oaep_encrypt_em(message, k, seed, label, RsaHash::Sha256)
+  let m = rsa_os2ip(em)
+  let c = rsa_ep(m, nn, ee)
+  rsa_i2osp(c, k)
+}
+
+///|
+/// RSAES-OAEP encrypt with a caller-chosen hash (v0.23.0; SHA-1, SHA-256,
+/// SHA-384 or SHA-512) for both lHash and MGF1. `seed` must be exactly
+/// `rsa_hash_len(hash)` random bytes from the caller's CSPRNG. Note:
+/// SHA-512 needs a modulus of at least 2048 bits (k >= 2*hLen + 2 + |M|).
+pub fn rsa_oaep_encrypt_with(
+  message : Bytes,
+  n : Bytes,
+  e : Bytes,
+  seed : Bytes,
+  label : Bytes,
+  hash : RsaHash,
+) -> Bytes {
+  if seed.length() != rsa_hash_len(hash) {
+    abort("rsa_oaep_encrypt_with: seed length must match the hash output size")
   }
-  let l_hash = sha256(label)
-  // DB = lHash || PS(0x00...) || 0x01 || M
-  let db_len = k - h_len - 1
-  let db = Array::make(db_len, b'\x00')
-  for i in 0..<h_len {
-    db[i] = l_hash[i]
-  }
-  let ps_len = db_len - h_len - 1 - message.length()
-  db[h_len + ps_len] = b'\x01'
-  for i in 0..<message.length() {
-    db[h_len + ps_len + 1 + i] = message[i]
-  }
-  // dbMask = MGF1(seed, db_len); maskedDB = DB xor dbMask
-  let db_mask = rsa_mgf1_sha256(seed, db_len)
-  rsa_xor_bytes(db, db_mask, 0, db_len)
-  // seedMask = MGF1(maskedDB, h_len); maskedSeed = seed xor seedMask
-  let masked_db = Bytes::from_array(db[:])
-  let seed_mask = rsa_mgf1_sha256(masked_db, h_len)
-  let masked_seed = Array::make(h_len, b'\x00')
-  for i in 0..<h_len {
-    masked_seed[i] = (seed[i].to_int() ^ seed_mask[i].to_int()).to_byte()
-  }
-  // EM = 0x00 || maskedSeed || maskedDB
-  let em = Array::make(k, b'\x00')
-  em[0] = b'\x00'
-  for i in 0..<h_len {
-    em[1 + i] = masked_seed[i]
-  }
-  for i in 0..<db_len {
-    em[1 + h_len + i] = masked_db[i]
-  }
-  let m = rsa_os2ip(Bytes::from_array(em[:]))
+  let nn = rsa_os2ip(n)
+  let ee = rsa_os2ip(e)
+  let k = n.length()
+  let em = rsa_oaep_encrypt_em(message, k, seed, label, hash)
+  let m = rsa_os2ip(em)
   let c = rsa_ep(m, nn, ee)
   rsa_i2osp(c, k)
 }
@@ -513,9 +546,9 @@ pub fn rsa_oaep_encrypt(
 ///|
 /// Unpad an OAEP encoded message EM = Y || maskedSeed || maskedDB
 /// (SHA-256, MGF1-SHA256).
-fn rsa_oaep_unpad(em : Bytes, k : Int, label : Bytes) -> Bytes {
-  let h_len = 32
-  let l_hash = sha256(label)
+fn rsa_oaep_unpad(em : Bytes, k : Int, label : Bytes, hash : RsaHash) -> Bytes {
+  let h_len = rsa_hash_len(hash)
+  let l_hash = rsa_hash_apply(hash, label)
   let masked_seed = Array::make(h_len, b'\x00')
   for i in 0..<h_len {
     masked_seed[i] = em[1 + i]
@@ -526,13 +559,13 @@ fn rsa_oaep_unpad(em : Bytes, k : Int, label : Bytes) -> Bytes {
     masked_db[i] = em[1 + h_len + i]
   }
   // seedMask = MGF1(maskedDB, h_len); seed = maskedSeed xor seedMask
-  let seed_mask = rsa_mgf1_sha256(Bytes::from_array(masked_db[:]), h_len)
+  let seed_mask = rsa_mgf1(hash, Bytes::from_array(masked_db[:]), h_len)
   let seed = Array::make(h_len, b'\x00')
   for i in 0..<h_len {
     seed[i] = (masked_seed[i].to_int() ^ seed_mask[i].to_int()).to_byte()
   }
   // dbMask = MGF1(seed, db_len); DB = maskedDB xor dbMask
-  let db_mask = rsa_mgf1_sha256(Bytes::from_array(seed[:]), db_len)
+  let db_mask = rsa_mgf1(hash, Bytes::from_array(seed[:]), db_len)
   rsa_xor_bytes(masked_db, db_mask, 0, db_len)
   // DB = lHash' || PS || 0x01 || M
   for i in 0..<h_len {
@@ -576,7 +609,31 @@ pub fn rsa_oaep_decrypt(
   let c = rsa_os2ip(ct)
   let m = rsa_dp(c, nn, dd)
   let em = rsa_i2osp(m, k)
-  rsa_oaep_unpad(em, k, label)
+  rsa_oaep_unpad(em, k, label, RsaHash::Sha256)
+}
+
+///|
+/// RSAES-OAEP decrypt with a caller-chosen hash (v0.23.0); must match the
+/// encryptor's hash and MGF1 choice. Returns the recovered message; aborts
+/// on length/padding errors.
+pub fn rsa_oaep_decrypt_with(
+  ct : Bytes,
+  n : Bytes,
+  d : Bytes,
+  label : Bytes,
+  hash : RsaHash,
+) -> Bytes {
+  let nn = rsa_os2ip(n)
+  let dd = rsa_os2ip(d)
+  let k = n.length()
+  let h_len = rsa_hash_len(hash)
+  if ct.length() != k || k < 2 * h_len + 2 {
+    abort("rsa_oaep_decrypt_with: invalid ciphertext length")
+  }
+  let c = rsa_os2ip(ct)
+  let m = rsa_dp(c, nn, dd)
+  let em = rsa_i2osp(m, k)
+  rsa_oaep_unpad(em, k, label, hash)
 }
 
 ///|
@@ -607,7 +664,7 @@ pub fn rsa_oaep_decrypt_crt(
     rsa_os2ip(qinv),
   )
   let em = rsa_i2osp(m, k)
-  rsa_oaep_unpad(em, k, label)
+  rsa_oaep_unpad(em, k, label, RsaHash::Sha256)
 }
 
 // ==================== RSASSA-PSS (RFC 8017 §8.1, SHA-256) ====================

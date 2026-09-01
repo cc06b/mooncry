@@ -565,6 +565,31 @@ pub fn ecdsa_secp256k1_sign(private_key : Bytes, message : Bytes) -> Bytes {
 }
 
 ///|
+/// ECDSA secp256k1 sign with low-S normalization (BIP-62 canonical form):
+/// if s > n/2 it is replaced by n - s (r unchanged, the signature stays
+/// valid and deterministic). Use this for Bitcoin-compatible signatures;
+/// `ecdsa_secp256k1_verify` accepts both forms.
+pub fn ecdsa_secp256k1_sign_low_s(
+  private_key : Bytes,
+  message : Bytes,
+) -> Bytes {
+  let sig = ec_sign(secp256k1_curve, private_key, message)
+  let s = ec_be_to_int(ec_slice(sig, 32, 32))
+  let half = secp256k1_curve.n / ec_two
+  if s > half {
+    let sp_bytes = ec_int_to_be(secp256k1_curve.n - s, 32)
+    let out = Array::make(64, b'\x00')
+    for i in 0..<32 {
+      out[i] = sig[i]
+      out[32 + i] = sp_bytes[i]
+    }
+    Bytes::from_array(out[:])
+  } else {
+    sig
+  }
+}
+
+///|
 /// ECDSA secp256k1 verify. `public_key` is the uncompressed 65-byte form
 /// (0x04 || X || Y). Returns true iff the signature is valid. Accepts any
 /// valid s in [1, n-1] (both high- and low-S forms).
