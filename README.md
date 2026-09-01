@@ -9,7 +9,7 @@ verified against official standard vectors.
 - **Correct** — every algorithm is checked against FIPS / NIST / RFC test
   vectors, and cross-validated against reference implementations
   (pycryptodome, cryptography, hashlib, libsodium, zlib) plus randomized
-  differential testing. 505 tests, run with `moon test --deny-warn`.
+  differential testing. 516 tests, run with `moon test --deny-warn`.
 - **Broad** — MD5, **SHA-1**, the SHA-2 and SHA-3 families (incl. **SHA-512/224
   and SHA-512/256**), **Keccak-256**,
   SHAKE/**cSHAKE** XOFs, **KMAC128/256**, BLAKE2b, **BLAKE2s**, BLAKE3,
@@ -259,9 +259,12 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `aes_ccm_decrypt(input, key, nonce, aad, mac_len) -> Bytes` | AES-CCM decrypt, aborts on tag mismatch |
 | `gmac(key, iv, aad) -> Bytes` | GMAC (SP 800-38D), 16-byte tag |
 | `gmac_verify(key, iv, aad, tag) -> Bool` | GMAC constant-time tag verify |
-| `gmac_new(key, iv) -> GmacState` | Incremental GMAC (chunked AAD) |
+| `gmac_new(key, iv) -> GmacState` | Incremental GMAC (chunked AAD, 12-byte IV) |
+| `gmac_new_iv(key, iv) -> GmacState` | Incremental GMAC, any IV length (SP 800-38D) |
 | `gmac_update(st, aad_chunk)` | Feed an AAD chunk |
 | `gmac_finalize(st) -> Bytes` | Incremental GMAC 16-byte tag |
+| `gmac_iv(key, iv, aad) -> Bytes` | GMAC with any IV length (SP 800-38D) |
+| `gmac_iv_verify(key, iv, aad, tag) -> Bool` | GMAC any-IV constant-time verify |
 | `aes_ctr(data, key, iv) -> Bytes` | AES-CTR encrypt/decrypt (symmetric) |
 | `chacha20_xor(input, key, nonce, counter) -> Bytes` | ChaCha20 encrypt/decrypt (symmetric) |
 | `salsa20_keystream_block(key, nonce, counter) -> Bytes` | Salsa20 keystream block (64 bytes) |
@@ -308,6 +311,7 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `ed25519_verify(public_key, message, sig) -> Bool` | Ed25519 verify |
 | `ecdsa_p256_public_key(sk) -> Bytes` | ECDSA P-256 public key (uncompressed) |
 | `ecdsa_p256_sign(sk, message) -> Bytes` | ECDSA P-256 sign (RFC 6979, SHA-256) |
+| `ecdsa_p256_sign_low_s(sk, message) -> Bytes` | P-256 sign, low-S canonical (WebCrypto) |
 | `ecdsa_p256_verify(pk, message, sig) -> Bool` | ECDSA P-256 verify |
 | `ecdsa_secp256k1_public_key(sk) -> Bytes` | ECDSA secp256k1 public key (uncompressed) |
 | `ecdsa_secp256k1_sign(sk, message) -> Bytes` | ECDSA secp256k1 sign (RFC 6979, SHA-256) |
@@ -478,6 +482,19 @@ pycryptodome (fixed seed via its `randfunc` hook) plus random-seed interop;
 SHA-512 vectors use a dedicated 2048-bit key since OAEP-SHA512 needs
 k ≥ 2·hLen + 2 + |M| (impossible on 1024 bits).
 
+**v0.24.0 features.** Two additions. (1) **P-256 low-S signatures**
+(`ecdsa_p256_sign_low_s`): the WebCrypto / widely-mandated canonical form —
+if s > n/2 it is replaced by n − s (r unchanged, still valid and
+deterministic); `ecdsa_p256_verify` accepts both forms. Verified against
+the Python `ecdsa` library's `sigencode_string_canonize` plus
+`cryptography`, with a property test asserting s ≤ n/2 byte-wise. (2)
+**GMAC with any IV length** (`gmac_iv` / `gmac_iv_verify` one-shot and
+`gmac_new_iv` incremental): SP 800-38D §8.2.1 — 96-bit IVs keep the fast
+J0 = IV || 0³¹ || 1 path; other lengths derive J0 via GHASH over
+IV || 0^(s+64) || [len(IV)]₆₄. Verified against pycryptodome GCM-empty
+tags for IV lengths 1/8/16/20/32 plus 12-byte fast-path equality and
+streaming-vs-one-shot properties.
+
 Hashes, ChaCha20, and hex/Base64 are throughput-bound by the algorithm; AES
 trades constant-time property for ~5x speed via lookup tables (see
 [Security & performance boundaries](#security--performance-boundaries)).
@@ -519,7 +536,7 @@ sk = 1 ⇒ pubkey = G anchor; low-S BIP-62 via `sigencode_string_canonize`),
 on a 2048-bit key),
 **sealed-box** round-trip + tamper, and property-based round-trip checks
 (deterministic PRNG) for every cipher + streaming-vs-one-shot consistency.
-**505 tests.**
+**516 tests.**
 
 ## Development
 

@@ -565,19 +565,14 @@ pub fn ecdsa_secp256k1_sign(private_key : Bytes, message : Bytes) -> Bytes {
 }
 
 ///|
-/// ECDSA secp256k1 sign with low-S normalization (BIP-62 canonical form):
-/// if s > n/2 it is replaced by n - s (r unchanged, the signature stays
-/// valid and deterministic). Use this for Bitcoin-compatible signatures;
-/// `ecdsa_secp256k1_verify` accepts both forms.
-pub fn ecdsa_secp256k1_sign_low_s(
-  private_key : Bytes,
-  message : Bytes,
-) -> Bytes {
-  let sig = ec_sign(secp256k1_curve, private_key, message)
+/// Low-S normalization shared by the `_low_s` wrappers: if s > n/2 replace
+/// it with n - s (r unchanged; the signature stays valid and deterministic).
+fn ec_sign_low_s(c : EcCurve, private_key : Bytes, message : Bytes) -> Bytes {
+  let sig = ec_sign(c, private_key, message)
   let s = ec_be_to_int(ec_slice(sig, 32, 32))
-  let half = secp256k1_curve.n / ec_two
+  let half = c.n / ec_two
   if s > half {
-    let sp_bytes = ec_int_to_be(secp256k1_curve.n - s, 32)
+    let sp_bytes = ec_int_to_be(c.n - s, 32)
     let out = Array::make(64, b'\x00')
     for i in 0..<32 {
       out[i] = sig[i]
@@ -587,6 +582,27 @@ pub fn ecdsa_secp256k1_sign_low_s(
   } else {
     sig
   }
+}
+
+///|
+/// ECDSA P-256 sign with low-S normalization (the form WebCrypto / many
+/// protocols mandate): if s > n/2 it is replaced by n - s (r unchanged,
+/// the signature stays valid and deterministic). `ecdsa_p256_verify`
+/// accepts both forms.
+pub fn ecdsa_p256_sign_low_s(private_key : Bytes, message : Bytes) -> Bytes {
+  ec_sign_low_s(p256_curve, private_key, message)
+}
+
+///|
+/// ECDSA secp256k1 sign with low-S normalization (BIP-62 canonical form):
+/// if s > n/2 it is replaced by n - s (r unchanged, the signature stays
+/// valid and deterministic). Use this for Bitcoin-compatible signatures;
+/// `ecdsa_secp256k1_verify` accepts both forms.
+pub fn ecdsa_secp256k1_sign_low_s(
+  private_key : Bytes,
+  message : Bytes,
+) -> Bytes {
+  ec_sign_low_s(secp256k1_curve, private_key, message)
 }
 
 ///|

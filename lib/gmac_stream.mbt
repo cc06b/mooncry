@@ -25,15 +25,10 @@ pub struct GmacState {
 }
 
 ///|
-/// Start an incremental GMAC over `aad` chunks under `key` (16/24/32
-/// bytes) and a 12-byte `iv` (same rules as `aes_gcm_encrypt`).
-pub fn gmac_new(key : Bytes, iv : Bytes) -> GmacState {
-  if key.length() != 16 && key.length() != 24 && key.length() != 32 {
-    abort("gmac_new: key length must be 16, 24, or 32 bytes")
-  }
-  if iv.length() != 12 {
-    abort("gmac_new: iv/nonce length must be 12 bytes (96 bits)")
-  }
+/// Build the incremental GMAC state for any IV length (SP 800-38D §8.2.1):
+/// 96-bit IVs use J0 = IV || 0^31 || 1; other lengths use
+/// J0 = GHASH_H(IV || 0^(s+64) || [len(IV)]_64).
+fn gmac_state_init(key : Bytes, iv : Bytes) -> GmacState {
   let nr = if key.length() == 16 {
     10
   } else if key.length() == 24 {
@@ -48,23 +43,59 @@ pub fn gmac_new(key : Bytes, iv : Bytes) -> GmacState {
     nr,
   )
   let h = bytes_to_block(h_bytes, 0)
-  // J0 = IV || 0^31 || 1 (96-bit IV)
-  let j0 = Array::make(4, 0U)
-  j0[0] = (iv[0].to_uint() << 24) |
-    (iv[1].to_uint() << 16) |
-    (iv[2].to_uint() << 8) |
-    iv[3].to_uint()
-  j0[1] = (iv[4].to_uint() << 24) |
-    (iv[5].to_uint() << 16) |
-    (iv[6].to_uint() << 8) |
-    iv[7].to_uint()
-  j0[2] = (iv[8].to_uint() << 24) |
-    (iv[9].to_uint() << 16) |
-    (iv[10].to_uint() << 8) |
-    iv[11].to_uint()
-  j0[3] = 0x00000001U
+  let tab = ghash_make_table(h)
+  let j0 = if iv.length() == 12 {
+    // J0 = IV || 0^31 || 1 (96-bit IV)
+    let arr = Array::make(4, 0U)
+    arr[0] = (iv[0].to_uint() << 24) |
+      (iv[1].to_uint() << 16) |
+      (iv[2].to_uint() << 8) |
+      iv[3].to_uint()
+    arr[1] = (iv[4].to_uint() << 24) |
+      (iv[5].to_uint() << 16) |
+      (iv[6].to_uint() << 8) |
+      iv[7].to_uint()
+    arr[2] = (iv[8].to_uint() << 24) |
+      (iv[9].to_uint() << 16) |
+      (iv[10].to_uint() << 8) |
+      iv[11].to_uint()
+    arr[3] = 0x00000001U
+    arr
+  } else {
+    // J0 = GHASH_H(IV || 0^(s+64) || [len(IV)]_64)
+    let y = Array::make(4, 0U)
+    let blk = Array::make(4, 0U)
+    let prod = Array::make(4, 0U)
+    let iv_len = iv.length()
+    let mut off = 0
+    while off < iv_len {
+      ghash_read_block_into(iv, off, blk)
+      y[0] = y[0] ^ blk[0]
+      y[1] = y[1] ^ blk[1]
+      y[2] = y[2] ^ blk[2]
+      y[3] = y[3] ^ blk[3]
+      ghash_mul_into(tab, y, prod)
+      y[0] = prod[0]
+      y[1] = prod[1]
+      y[2] = prod[2]
+      y[3] = prod[3]
+      off = off + 16
+    }
+    // trailing block: [0]_64 || [len(IV) in bits]_64
+    let iv_bits = (iv_len * 8).to_uint64()
+    blk[0] = 0U
+    blk[1] = 0U
+    blk[2] = ((iv_bits >> 32) & 0xFFFFFFFFUL).to_uint()
+    blk[3] = (iv_bits & 0xFFFFFFFFUL).to_uint()
+    y[0] = y[0] ^ blk[0]
+    y[1] = y[1] ^ blk[1]
+    y[2] = y[2] ^ blk[2]
+    y[3] = y[3] ^ blk[3]
+    ghash_mul_into(tab, y, prod)
+    prod
+  }
   GmacState::{
-    tab: ghash_make_table(h),
+    tab,
     y: Array::make(4, 0U),
     blk: Array::make(4, 0U),
     prod: Array::make(4, 0U),
@@ -75,6 +106,31 @@ pub fn gmac_new(key : Bytes, iv : Bytes) -> GmacState {
     buf_len: 0,
     total_len: 0UL,
   }
+}
+
+///|
+/// Start an incremental GMAC over `aad` chunks under `key` (16/24/32
+/// bytes) and a 12-byte `iv` (same rules as `aes_gcm_encrypt`).
+pub fn gmac_new(key : Bytes, iv : Bytes) -> GmacState {
+  if key.length() != 16 && key.length() != 24 && key.length() != 32 {
+    abort("gmac_new: key length must be 16, 24, or 32 bytes")
+  }
+  if iv.length() != 12 {
+    abort("gmac_new: iv/nonce length must be 12 bytes (96 bits)")
+  }
+  gmac_state_init(key, iv)
+}
+
+///|
+/// Start an incremental GMAC with an IV of ANY length (SP 800-38D §8.2.1).
+/// 12-byte IVs take the fast J0 = IV || 0^31 || 1 path; other lengths
+/// derive J0 via GHASH (slightly slower setup, identical security).
+/// Avoid empty IVs (valid per spec but strongly discouraged).
+pub fn gmac_new_iv(key : Bytes, iv : Bytes) -> GmacState {
+  if key.length() != 16 && key.length() != 24 && key.length() != 32 {
+    abort("gmac_new_iv: key length must be 16, 24, or 32 bytes")
+  }
+  gmac_state_init(key, iv)
 }
 
 ///|

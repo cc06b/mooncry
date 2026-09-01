@@ -119,3 +119,84 @@ test "ECDSA P-256 rejects tampered signature" {
   bad_arr[0] = (bad_arr[0].to_int() ^ 0x01).to_byte()
   assert_true(!ecdsa_p256_verify(ec_test_q, m, Bytes::from_array(bad_arr[:])))
 }
+
+// ==================== P-256 low-S (v0.24.0) ====================
+
+///|
+test "P-256 low-S sign (WebCrypto canonical, exact)" {
+  // Vectors from Python `ecdsa` sign_digest_deterministic with
+  // sigencode_string_canonize, cross-verified with `cryptography`.
+  let sk1 = hex_to_bytes(
+    "0000000000000000000000000000000000000000000000000000000000000001",
+  )
+  let sig1 = ecdsa_p256_sign_low_s(sk1, b"hello p256 low-s")
+  assert_true(
+    bytes_equal(
+      sig1,
+      hex_to_bytes(
+        "37fd64ddcfe16b2ffb1f2114b8a7877f2e0a634aefdf0e47e25ce287708601fd608fc28e72b5ce79369e5a9caa02ed51bdba22c117a5ffb99f30082b962c2335",
+      ),
+    ),
+  )
+  let sig1e = ecdsa_p256_sign_low_s(sk1, b"")
+  assert_true(
+    bytes_equal(
+      sig1e,
+      hex_to_bytes(
+        "0e69cb117664cedd6734e80151eabd388de266533e163fbe8ea463065c0fd71a3d7b1980f450d3081f87695a3a0ddd34ebc8c4e40f56122b1c1def1593e1ad15",
+      ),
+    ),
+  )
+  let sk2 = hex_to_bytes(
+    "c9afa9d845ba75166b5c215767b1d6934e50c3db36e89b127b8a622b120f6721",
+  )
+  let sig2 = ecdsa_p256_sign_low_s(sk2, b"hello p256 low-s")
+  assert_true(
+    bytes_equal(
+      sig2,
+      hex_to_bytes(
+        "d18cb8708aa87d1dead3ffbc7362b63b646f1dfe3fca3328775c8cca6f5d5e3c67325ee13ec2c9946cd90972814fefdbbe992897d29131bb9e8691ea4c70fbc2",
+      ),
+    ),
+  )
+  let sig2e = ecdsa_p256_sign_low_s(sk2, b"")
+  assert_true(
+    bytes_equal(
+      sig2e,
+      hex_to_bytes(
+        "0338197042a13192bec427db63c8d2dece6a08dbcc3d5181a9983e62032b023067012592a7c2bf6eccfdccf72c7b755da182c29021293068eaaf6db100e7448a",
+      ),
+    ),
+  )
+}
+
+///|
+test "P-256 low-S: s <= n/2 and verify accepts" {
+  let r = Rng::{ state: 0x25A25A25U, }
+  let sk = hex_to_bytes(
+    "c9afa9d845ba75166b5c215767b1d6934e50c3db36e89b127b8a622b120f6721",
+  )
+  let pubk = ecdsa_p256_public_key(sk)
+  // n/2 for P-256 (big-endian bytes)
+  let half = hex_to_bytes(
+    "7fffffff800000007fffffffffffffffde737d56d38bcf4279dce5617e3192a8",
+  )
+  for trial in 0..<8 {
+    let msg = rng_bytes(r, 10 + trial * 7)
+    let sig = ecdsa_p256_sign_low_s(sk, msg)
+    let mut cmp = 0
+    for i in 0..<32 {
+      if cmp == 0 {
+        let a = sig[32 + i].to_int()
+        let b = half[i].to_int()
+        if a < b {
+          cmp = -1
+        } else if a > b {
+          cmp = 1
+        }
+      }
+    }
+    assert_true(cmp <= 0)
+    assert_true(ecdsa_p256_verify(pubk, msg, sig))
+  }
+}
