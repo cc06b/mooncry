@@ -334,6 +334,11 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `ml_kem_512_decaps(dk, c) -> Bytes` | ML-KEM-512 decapsulation (implicit rejection) |
 | `ml_kem_768_keygen / encaps / decaps` | ML-KEM-768 (same shapes) |
 | `ml_kem_1024_keygen / encaps / decaps` | ML-KEM-1024 (same shapes) |
+| `ml_dsa_44_keygen(seed) -> (pk, sk)` | ML-DSA-44 keygen (FIPS 204, deterministic in seed) |
+| `ml_dsa_44_sign(sk, msg, rnd, ctx) -> Bytes` | ML-DSA-44 sign (pure; rnd = 0^32 = deterministic) |
+| `ml_dsa_44_verify(pk, msg, sig, ctx) -> Bool` | ML-DSA-44 verify |
+| `ml_dsa_65_keygen / sign / verify` | ML-DSA-65 (same shapes) |
+| `ml_dsa_87_keygen / sign / verify` | ML-DSA-87 (same shapes) |
 | `crc32 / crc32c(data : Bytes) -> Bytes` | CRC-32 (IEEE) / CRC-32C, 4-byte big-endian |
 | `crc64_xz / crc64_go_iso(data : Bytes) -> Bytes` | CRC-64/XZ / CRC-64/GO-ISO, 8-byte big-endian |
 | `siphash_2_4(key, data : Bytes) -> Bytes` | SipHash-2-4 (64-bit), key 16 bytes → 8 bytes |
@@ -541,6 +546,19 @@ G = SHA3-512 and H = SHA3-256 (not SHAKE256 as in earlier drafts) — only
 J and PRF remain SHAKE256. Verified against the official NIST ACVP vectors
 (keyGen + encapsulation + decapsulation, incl. implicit-rejection cases)
 for all three parameter sets, plus round-trip and tamper properties.
+
+**v0.28.0 features.** **Post-quantum: ML-DSA (FIPS 204)** — the NIST
+module-lattice signature standard, all three parameter sets
+(ML-DSA-44/65/87). Pure-MoonBit port: NTT over q = 8380417 (Int64-widening
+multiplies — Int is 32-bit on wasm-gc), rejection sampling
+(SampleNTT/SamplePolyCBD/ExpandMask), Power2Round/Decompose/HighBits/
+LowBits/MakeHint/UseHint, hint bit-pack/unpack, and the full
+K-PKE + ML-DSA KeyGen/Sign/Verify internal algorithms (pure message
+interface, hedged or deterministic via the `rnd` input). Verified against
+the official NIST ACVP vectors: keyGen (all sets), sigGen pure
+deterministic, and the full sigVer external-pure suite including every
+rejection category. Out of scope: HashML-DSA (pre-hash) and external-mu
+interfaces.
 
 Hashes, ChaCha20, and hex/Base64 are throughput-bound by the algorithm; AES
 trades constant-time property for ~5x speed via lookup tables (see
