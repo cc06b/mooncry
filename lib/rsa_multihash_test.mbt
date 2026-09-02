@@ -239,3 +239,49 @@ test "RSA SHA-256 _with == plain fixed functions (compat)" {
     ),
   )
 }
+
+// ==================== CRT + multi-hash combinations (v0.25.0) ============
+// Deterministic padding makes the CRT path byte-identical to the
+// pycryptodome-verified `_with` path — transitive verification.
+
+///|
+test "RSA PKCS1-v1.5 sign_with_crt == sign_with (all hashes)" {
+  for i in 0..<4 {
+    let hash = rsa_hash_variants[i]
+    let sig_std = rsa_pkcs1_v15_sign_with(mh_msg, rsa_test_n, rsa_test_d, hash)
+    let sig_crt = rsa_pkcs1_v15_sign_with_crt(
+      mh_msg, rsa_crt_p, rsa_crt_q, rsa_crt_dp, rsa_crt_dq, rsa_crt_qinv, hash,
+    )
+    assert_true(bytes_equal(sig_std, sig_crt))
+    assert_true(
+      rsa_pkcs1_v15_verify_with(mh_msg, sig_crt, rsa_test_n, rsa_test_e, hash),
+    )
+  }
+}
+
+///|
+test "RSA PSS sign_with_crt == sign_with (all hashes, salt 32)" {
+  let salt = mh_salt32
+  for i in 0..<4 {
+    let hash = rsa_hash_variants[i]
+    let sig_std = rsa_pss_sign_with(mh_msg, rsa_test_n, rsa_test_d, salt, hash)
+    let sig_crt = rsa_pss_sign_with_crt(
+      mh_msg, rsa_crt_p, rsa_crt_q, rsa_crt_dp, rsa_crt_dq, rsa_crt_qinv, salt, hash,
+    )
+    assert_true(bytes_equal(sig_std, sig_crt))
+    assert_true(
+      rsa_pss_verify_with(mh_msg, sig_crt, rsa_test_n, rsa_test_e, 32, hash),
+    )
+  }
+}
+
+///|
+test "RSA PSS sign_with_crt == sign_with (salt_len 0, deterministic)" {
+  let sig_std = rsa_pss_sign_with(
+    mh_msg, rsa_test_n, rsa_test_d, b"", rsa_hash_sha512,
+  )
+  let sig_crt = rsa_pss_sign_with_crt(
+    mh_msg, rsa_crt_p, rsa_crt_q, rsa_crt_dp, rsa_crt_dq, rsa_crt_qinv, b"", rsa_hash_sha512,
+  )
+  assert_true(bytes_equal(sig_std, sig_crt))
+}

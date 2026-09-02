@@ -897,3 +897,58 @@ pub fn rsa_pss_verify_with(
   let em = rsa_i2osp(m, em_len)
   rsa_pss_verify_em(message, em, em_len, em_bits, salt_len, hash)
 }
+
+// ============ CRT + multi-hash combinations (v0.25.0) ============
+
+///|
+/// RSASSA-PKCS1-v1.5 sign with CRT private key and a caller-chosen hash
+/// (v0.25.0) — combines `_crt` speed with `_with` hash choice.
+/// Deterministic and byte-identical to `rsa_pkcs1_v15_sign_with`.
+pub fn rsa_pkcs1_v15_sign_with_crt(
+  message : Bytes,
+  p : Bytes,
+  q : Bytes,
+  dp : Bytes,
+  dq : Bytes,
+  qinv : Bytes,
+  hash : RsaHash,
+) -> Bytes {
+  let k = p.length() + q.length()
+  let em = rsa_pkcs1_v15_sign_em(message, k, hash)
+  let m = rsa_os2ip(em)
+  let s = rsa_dp_crt(
+    m,
+    rsa_os2ip(p),
+    rsa_os2ip(q),
+    rsa_os2ip(dp),
+    rsa_os2ip(dq),
+    rsa_os2ip(qinv),
+  )
+  rsa_i2osp(s, k)
+}
+
+///|
+/// RSASSA-PSS sign with CRT private key and a caller-chosen hash for both
+/// the message hash and MGF1 (v0.25.0) — combines `_crt` speed with `_with`
+/// hash choice. Deterministic and byte-identical to `rsa_pss_sign_with`
+/// for the same key, salt and hash.
+pub fn rsa_pss_sign_with_crt(
+  message : Bytes,
+  p : Bytes,
+  q : Bytes,
+  dp : Bytes,
+  dq : Bytes,
+  qinv : Bytes,
+  salt : Bytes,
+  hash : RsaHash,
+) -> Bytes {
+  let k = p.length() + q.length()
+  let pp = rsa_os2ip(p)
+  let qq = rsa_os2ip(q)
+  let n_bytes = rsa_i2osp(pp * qq, k)
+  let em_bits = rsa_bit_len(n_bytes) - 1 // RFC 8017: emBits = modBits - 1
+  let em = rsa_pss_encode_em(message, salt, k, em_bits, hash)
+  let m = rsa_os2ip(em)
+  let s = rsa_dp_crt(m, pp, qq, rsa_os2ip(dp), rsa_os2ip(dq), rsa_os2ip(qinv))
+  rsa_i2osp(s, k)
+}

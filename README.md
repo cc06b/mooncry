@@ -9,7 +9,7 @@ verified against official standard vectors.
 - **Correct** — every algorithm is checked against FIPS / NIST / RFC test
   vectors, and cross-validated against reference implementations
   (pycryptodome, cryptography, hashlib, libsodium, zlib) plus randomized
-  differential testing. 516 tests, run with `moon test --deny-warn`.
+  differential testing. 519 tests, run with `moon test --deny-warn`.
 - **Broad** — MD5, **SHA-1**, the SHA-2 and SHA-3 families (incl. **SHA-512/224
   and SHA-512/256**), **Keccak-256**,
   SHAKE/**cSHAKE** XOFs, **KMAC128/256**, BLAKE2b, **BLAKE2s**, BLAKE3,
@@ -306,6 +306,8 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `rsa_pkcs1_v15_verify_with(msg, sig, n, e, hash) -> Bool` | PKCS1-v1.5 verify, chosen hash |
 | `rsa_pss_sign_with(msg, n, d, salt, hash) -> Bytes` | PSS sign, chosen hash + MGF1 |
 | `rsa_pss_verify_with(msg, sig, n, e, salt_len, hash) -> Bool` | PSS verify, chosen hash |
+| `rsa_pkcs1_v15_sign_with_crt(msg, p, q, dp, dq, qinv, hash) -> Bytes` | v1.5 sign, CRT + chosen hash |
+| `rsa_pss_sign_with_crt(msg, p, q, dp, dq, qinv, salt, hash) -> Bytes` | PSS sign, CRT + chosen hash |
 | `ed25519_public_key(seed) -> Bytes` | Derive 32-byte Ed25519 public key |
 | `ed25519_sign(seed, message) -> Bytes` | Ed25519 sign (RFC 8032), 64-byte sig |
 | `ed25519_verify(public_key, message, sig) -> Bool` | Ed25519 verify |
@@ -495,6 +497,13 @@ IV || 0^(s+64) || [len(IV)]₆₄. Verified against pycryptodome GCM-empty
 tags for IV lengths 1/8/16/20/32 plus 12-byte fast-path equality and
 streaming-vs-one-shot properties.
 
+**v0.25.0 features.** **CRT × multi-hash combinations**: the CRT speed of
+v0.21.0 and the hash choice of v0.22.0 are now combinable —
+`rsa_pkcs1_v15_sign_with_crt` and `rsa_pss_sign_with_crt` take both the
+CRT key (p, q, dP, dQ, qInv) and an `RsaHash`. Deterministic padding makes
+them byte-identical to the pycryptodome-verified `_with` paths (transitive
+verification across all four hashes, plus a salt_len=0 deterministic case).
+
 Hashes, ChaCha20, and hex/Base64 are throughput-bound by the algorithm; AES
 trades constant-time property for ~5x speed via lookup tables (see
 [Security & performance boundaries](#security--performance-boundaries)).
@@ -536,7 +545,7 @@ sk = 1 ⇒ pubkey = G anchor; low-S BIP-62 via `sigencode_string_canonize`),
 on a 2048-bit key),
 **sealed-box** round-trip + tamper, and property-based round-trip checks
 (deterministic PRNG) for every cipher + streaming-vs-one-shot consistency.
-**516 tests.**
+**519 tests.**
 
 ## Development
 
