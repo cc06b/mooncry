@@ -9,7 +9,7 @@ verified against official standard vectors.
 - **Correct** — every algorithm is checked against FIPS / NIST / RFC test
   vectors, and cross-validated against reference implementations
   (pycryptodome, cryptography, hashlib, libsodium, zlib) plus randomized
-  differential testing. 536 tests, run with `moon test --deny-warn`.
+  differential testing. 555 tests, run with `moon test --deny-warn`.
 - **Broad** — MD5, **SHA-1**, the SHA-2 and SHA-3 families (incl. **SHA-512/224
   and SHA-512/256**), **Keccak-256**,
   SHAKE/**cSHAKE** XOFs, **KMAC128/256**, BLAKE2b, **BLAKE2s**, BLAKE3,
@@ -21,6 +21,7 @@ verified against official standard vectors.
   **RSA (PKCS1-v1.5/OAEP/PSS**, incl. multi-hash `_with` variants**)**,
   **ECDSA P-256 / secp256k1**, **Ed25519** (incl.
   **Ed25519ctx / Ed25519ph**), **Ed448** (incl. contexts), **X25519 / X448**,
+  **ML-KEM-512/768/1024** (FIPS 203 post-quantum KEM),
   **HOTP/TOTP** (incl. **SHA-256/SHA-512** variants), SipHash-2-4, CRC32/CRC32C/**CRC-64**/**Adler-32**, a sealed-box AEAD envelope, Base64, Hex.
 - **Fast where it matters** — hex / Base64 encoding are O(n); AES MixColumns
   uses precomputed GF(2^8) tables (~5x over bit-sliced math); throughput is
@@ -328,6 +329,11 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `ed448_verify_ctx(pk, message, sig, ctx) -> Bool` | Ed448 verify with context |
 | `x448(scalar, u) -> Bytes` | X448 scalar mult (RFC 7748), DH shared secret |
 | `x448_public_key(private_key) -> Bytes` | Derive X448 public key (base u=5) |
+| `ml_kem_512_keygen(d, z) -> (ek, dk)` | ML-KEM-512 keygen (FIPS 203, deterministic in d,z) |
+| `ml_kem_512_encaps(ek, m) -> (K, c)` | ML-KEM-512 encapsulation |
+| `ml_kem_512_decaps(dk, c) -> Bytes` | ML-KEM-512 decapsulation (implicit rejection) |
+| `ml_kem_768_keygen / encaps / decaps` | ML-KEM-768 (same shapes) |
+| `ml_kem_1024_keygen / encaps / decaps` | ML-KEM-1024 (same shapes) |
 | `crc32 / crc32c(data : Bytes) -> Bytes` | CRC-32 (IEEE) / CRC-32C, 4-byte big-endian |
 | `crc64_xz / crc64_go_iso(data : Bytes) -> Bytes` | CRC-64/XZ / CRC-64/GO-ISO, 8-byte big-endian |
 | `siphash_2_4(key, data : Bytes) -> Bytes` | SipHash-2-4 (64-bit), key 16 bytes → 8 bytes |
@@ -522,6 +528,20 @@ with RFC §5 clamping. Verified against the official RFC 7748 §5.2 vectors,
 the §6.1 DH triple, and the single-iteration K=u=5 vector, plus an ECDH
 commutativity property.
 
+**v0.27.0 features.** **Post-quantum: ML-KEM (FIPS 203)** — the NIST
+standard module-lattice KEM, all three parameter sets (ML-KEM-512/768/1024).
+Pure MoonBit on UInt (q = 3329), NTT-domain arithmetic with the standard
+zeta/gamma tables, rejection sampling from a true incremental SHAKE128
+stream, CBD noise sampling, Compress/ByteEncode for d = 1/4/5/10/11/12,
+and the full K-PKE + ML-KEM algorithm set (KeyGen/Encaps/Decaps_internal,
+implicit rejection included). The API is the deterministic internal form:
+callers supply CSPRNG randomness (d, z for keygen; m for encaps).
+**Lesson learned during this work**: the FIPS 203 *final* text instantiates
+G = SHA3-512 and H = SHA3-256 (not SHAKE256 as in earlier drafts) — only
+J and PRF remain SHAKE256. Verified against the official NIST ACVP vectors
+(keyGen + encapsulation + decapsulation, incl. implicit-rejection cases)
+for all three parameter sets, plus round-trip and tamper properties.
+
 Hashes, ChaCha20, and hex/Base64 are throughput-bound by the algorithm; AES
 trades constant-time property for ~5x speed via lookup tables (see
 [Security & performance boundaries](#security--performance-boundaries)).
@@ -563,7 +583,7 @@ sk = 1 ⇒ pubkey = G anchor; low-S BIP-62 via `sigencode_string_canonize`),
 on a 2048-bit key),
 **sealed-box** round-trip + tamper, and property-based round-trip checks
 (deterministic PRNG) for every cipher + streaming-vs-one-shot consistency.
-**536 tests.**
+**555 tests.**
 
 ## Development
 
