@@ -9,7 +9,7 @@ verified against official standard vectors.
 - **Correct** — every algorithm is checked against FIPS / NIST / RFC test
   vectors, and cross-validated against reference implementations
   (pycryptodome, cryptography, hashlib, libsodium, zlib) plus randomized
-  differential testing. 519 tests, run with `moon test --deny-warn`.
+  differential testing. 536 tests, run with `moon test --deny-warn`.
 - **Broad** — MD5, **SHA-1**, the SHA-2 and SHA-3 families (incl. **SHA-512/224
   and SHA-512/256**), **Keccak-256**,
   SHAKE/**cSHAKE** XOFs, **KMAC128/256**, BLAKE2b, **BLAKE2s**, BLAKE3,
@@ -20,7 +20,7 @@ verified against official standard vectors.
   (24-byte nonce), HKDF, PBKDF2, **scrypt**, **Argon2**,
   **RSA (PKCS1-v1.5/OAEP/PSS**, incl. multi-hash `_with` variants**)**,
   **ECDSA P-256 / secp256k1**, **Ed25519** (incl.
-  **Ed25519ctx / Ed25519ph**), **X25519**,
+  **Ed25519ctx / Ed25519ph**), **Ed448** (incl. contexts), **X25519 / X448**,
   **HOTP/TOTP** (incl. **SHA-256/SHA-512** variants), SipHash-2-4, CRC32/CRC32C/**CRC-64**/**Adler-32**, a sealed-box AEAD envelope, Base64, Hex.
 - **Fast where it matters** — hex / Base64 encoding are O(n); AES MixColumns
   uses precomputed GF(2^8) tables (~5x over bit-sliced math); throughput is
@@ -321,6 +321,13 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `ecdsa_secp256k1_verify(pk, message, sig) -> Bool` | ECDSA secp256k1 verify |
 | `x25519(scalar, u) -> Bytes` | X25519 scalar mult (RFC 7748), DH shared secret |
 | `x25519_public_key(private_key) -> Bytes` | Derive X25519 public key (base u=9) |
+| `ed448_public_key(seed) -> Bytes` | Derive 57-byte Ed448 public key |
+| `ed448_sign(seed, message) -> Bytes` | Ed448 sign (RFC 8032), 114-byte sig |
+| `ed448_sign_ctx(seed, message, ctx) -> Bytes` | Ed448 sign with context |
+| `ed448_verify(pk, message, sig) -> Bool` | Ed448 verify (cofactor equation) |
+| `ed448_verify_ctx(pk, message, sig, ctx) -> Bool` | Ed448 verify with context |
+| `x448(scalar, u) -> Bytes` | X448 scalar mult (RFC 7748), DH shared secret |
+| `x448_public_key(private_key) -> Bytes` | Derive X448 public key (base u=5) |
 | `crc32 / crc32c(data : Bytes) -> Bytes` | CRC-32 (IEEE) / CRC-32C, 4-byte big-endian |
 | `crc64_xz / crc64_go_iso(data : Bytes) -> Bytes` | CRC-64/XZ / CRC-64/GO-ISO, 8-byte big-endian |
 | `siphash_2_4(key, data : Bytes) -> Bytes` | SipHash-2-4 (64-bit), key 16 bytes → 8 bytes |
@@ -504,6 +511,17 @@ CRT key (p, q, dP, dQ, qInv) and an `RsaHash`. Deterministic padding makes
 them byte-identical to the pycryptodome-verified `_with` paths (transitive
 verification across all four hashes, plus a salt_len=0 deterministic case).
 
+**v0.26.0 features.** **The 448-bit suite**. (1) **Ed448** (RFC 8032 §5.2):
+pure EdDSA over edwards448 (Goldilocks field p = 2⁴⁴⁸ − 2²²⁴ − 1), SHAKE256-based hashing with dom4 domain separation,
+context support (`ed448_sign_ctx` / `ed448_verify_ctx`), cofactor
+verification equation [4][S]B = [4]R + [4][k]A. Verified against all nine
+official RFC 8032 §7.4 vectors incl. the 1023-octet message and the
+context-carrying one, plus tamper/context-mismatch/S≥L negative tests.
+(2) **X448** (RFC 7748): Montgomery-ladder Diffie-Hellman over curve448
+with RFC §5 clamping. Verified against the official RFC 7748 §5.2 vectors,
+the §6.1 DH triple, and the single-iteration K=u=5 vector, plus an ECDH
+commutativity property.
+
 Hashes, ChaCha20, and hex/Base64 are throughput-bound by the algorithm; AES
 trades constant-time property for ~5x speed via lookup tables (see
 [Security & performance boundaries](#security--performance-boundaries)).
@@ -545,7 +563,7 @@ sk = 1 ⇒ pubkey = G anchor; low-S BIP-62 via `sigencode_string_canonize`),
 on a 2048-bit key),
 **sealed-box** round-trip + tamper, and property-based round-trip checks
 (deterministic PRNG) for every cipher + streaming-vs-one-shot consistency.
-**519 tests.**
+**536 tests.**
 
 ## Development
 
