@@ -4,6 +4,7 @@
 // vector sets (keyGen, sigGen deterministic pure/preHash/internal,
 // full sigVer suite). v0.31.0.
 
+///|
 pub enum SlhKind {
   Sha2
   Shake
@@ -23,10 +24,11 @@ struct SlhParams {
   k : Int
   m : Int
   kind : SlhKind
-  cat : Int  // security category: 1, 3 or 5 (SHA2 only)
+  cat : Int // security category: 1, 3 or 5 (SHA2 only)
 }
 
-///| SLH-DSA-SHA2-128s parameter set (FIPS 205).
+///|
+/// SLH-DSA-SHA2-128s parameter set (FIPS 205).
 pub let slh_sha2_128s : SlhParams = {
   n: 16,
   h: 63,
@@ -39,7 +41,8 @@ pub let slh_sha2_128s : SlhParams = {
   cat: 1,
 }
 
-///| SLH-DSA-SHA2-128f parameter set.
+///|
+/// SLH-DSA-SHA2-128f parameter set.
 pub let slh_sha2_128f : SlhParams = {
   n: 16,
   h: 66,
@@ -52,7 +55,8 @@ pub let slh_sha2_128f : SlhParams = {
   cat: 1,
 }
 
-///| SLH-DSA-SHA2-192s parameter set.
+///|
+/// SLH-DSA-SHA2-192s parameter set.
 pub let slh_sha2_192s : SlhParams = {
   n: 24,
   h: 63,
@@ -65,7 +69,8 @@ pub let slh_sha2_192s : SlhParams = {
   cat: 3,
 }
 
-///| SLH-DSA-SHA2-192f parameter set.
+///|
+/// SLH-DSA-SHA2-192f parameter set.
 pub let slh_sha2_192f : SlhParams = {
   n: 24,
   h: 66,
@@ -78,7 +83,8 @@ pub let slh_sha2_192f : SlhParams = {
   cat: 3,
 }
 
-///| SLH-DSA-SHA2-256s parameter set.
+///|
+/// SLH-DSA-SHA2-256s parameter set.
 pub let slh_sha2_256s : SlhParams = {
   n: 32,
   h: 64,
@@ -91,7 +97,8 @@ pub let slh_sha2_256s : SlhParams = {
   cat: 5,
 }
 
-///| SLH-DSA-SHA2-256f parameter set.
+///|
+/// SLH-DSA-SHA2-256f parameter set.
 pub let slh_sha2_256f : SlhParams = {
   n: 32,
   h: 68,
@@ -104,7 +111,8 @@ pub let slh_sha2_256f : SlhParams = {
   cat: 5,
 }
 
-///| SLH-DSA-SHAKE-128s parameter set.
+///|
+/// SLH-DSA-SHAKE-128s parameter set.
 pub let slh_shake_128s : SlhParams = {
   n: 16,
   h: 63,
@@ -117,7 +125,8 @@ pub let slh_shake_128s : SlhParams = {
   cat: 1,
 }
 
-///| SLH-DSA-SHAKE-128f parameter set.
+///|
+/// SLH-DSA-SHAKE-128f parameter set.
 pub let slh_shake_128f : SlhParams = {
   n: 16,
   h: 66,
@@ -130,7 +139,8 @@ pub let slh_shake_128f : SlhParams = {
   cat: 1,
 }
 
-///| SLH-DSA-SHAKE-192s parameter set.
+///|
+/// SLH-DSA-SHAKE-192s parameter set.
 pub let slh_shake_192s : SlhParams = {
   n: 24,
   h: 63,
@@ -143,7 +153,8 @@ pub let slh_shake_192s : SlhParams = {
   cat: 3,
 }
 
-///| SLH-DSA-SHAKE-192f parameter set.
+///|
+/// SLH-DSA-SHAKE-192f parameter set.
 pub let slh_shake_192f : SlhParams = {
   n: 24,
   h: 66,
@@ -156,7 +167,8 @@ pub let slh_shake_192f : SlhParams = {
   cat: 3,
 }
 
-///| SLH-DSA-SHAKE-256s parameter set.
+///|
+/// SLH-DSA-SHAKE-256s parameter set.
 pub let slh_shake_256s : SlhParams = {
   n: 32,
   h: 64,
@@ -169,7 +181,8 @@ pub let slh_shake_256s : SlhParams = {
   cat: 5,
 }
 
-///| SLH-DSA-SHAKE-256f parameter set.
+///|
+/// SLH-DSA-SHAKE-256f parameter set.
 pub let slh_shake_256f : SlhParams = {
   n: 32,
   h: 68,
@@ -184,6 +197,7 @@ pub let slh_shake_256f : SlhParams = {
 
 // ==================== byte helpers ====================
 
+///|
 fn slh_slice(b : Bytes, start : Int, len : Int) -> Bytes {
   let out = Array::make(len, b'\x00')
   for i in 0..<len {
@@ -192,6 +206,7 @@ fn slh_slice(b : Bytes, start : Int, len : Int) -> Bytes {
   Bytes::from_array(out)
 }
 
+///|
 fn slh_int_to_bytes(v : Int64, len : Int) -> Bytes {
   let out = Array::make(len, b'\x00')
   let mut x = v
@@ -204,6 +219,7 @@ fn slh_int_to_bytes(v : Int64, len : Int) -> Bytes {
   Bytes::from_array(out)
 }
 
+///|
 fn slh_bytes_to_int(b : Bytes, start : Int, len : Int) -> UInt64 {
   let mut t = 0UL
   for i in 0..<len {
@@ -216,10 +232,12 @@ fn slh_bytes_to_int(b : Bytes, start : Int, len : Int) -> UInt64 {
 // layout: layer word @0..3 (byte 3), tree @8..15, type word @16..19 (byte
 // 19), keypair @20..23, chain/height @24..27, hash/index @28..31.
 
+///|
 fn adrs_new() -> Array[Byte] {
   Array::make(32, b'\x00')
 }
 
+///|
 fn adrs_copy(a : Array[Byte]) -> Array[Byte] {
   let c = Array::make(32, b'\x00')
   for i in 0..<32 {
@@ -228,6 +246,7 @@ fn adrs_copy(a : Array[Byte]) -> Array[Byte] {
   c
 }
 
+///|
 fn adrs_put_u32(a : Array[Byte], off : Int, v : Int) -> Unit {
   a[off] = ((v >> 24) & 0xFF).to_byte()
   a[off + 1] = ((v >> 16) & 0xFF).to_byte()
@@ -235,6 +254,7 @@ fn adrs_put_u32(a : Array[Byte], off : Int, v : Int) -> Unit {
   a[off + 3] = (v & 0xFF).to_byte()
 }
 
+///|
 fn adrs_get_u32(a : Array[Byte], off : Int) -> Int {
   (a[off].to_int() << 24) +
   (a[off + 1].to_int() << 16) +
@@ -242,16 +262,19 @@ fn adrs_get_u32(a : Array[Byte], off : Int) -> Int {
   a[off + 3].to_int()
 }
 
+///|
 fn adrs_set_layer(a : Array[Byte], x : Int) -> Unit {
   adrs_put_u32(a, 0, x)
 }
 
+///|
 fn adrs_set_tree(a : Array[Byte], x : UInt64) -> Unit {
   for i in 0..<8 {
     a[8 + i] = ((x >> ((7 - i) * 8)) & 0xFFUL).to_int().to_byte()
   }
 }
 
+///|
 fn adrs_set_type_and_clear(a : Array[Byte], t : Int) -> Unit {
   adrs_put_u32(a, 16, t)
   for i in 20..<32 {
@@ -259,32 +282,40 @@ fn adrs_set_type_and_clear(a : Array[Byte], t : Int) -> Unit {
   }
 }
 
+///|
 fn adrs_set_keypair(a : Array[Byte], x : Int) -> Unit {
   adrs_put_u32(a, 20, x)
 }
 
+///|
 fn adrs_get_keypair(a : Array[Byte]) -> Int {
   adrs_get_u32(a, 20)
 }
 
+///|
 fn adrs_set_chain(a : Array[Byte], x : Int) -> Unit {
   adrs_put_u32(a, 24, x)
 }
 
+///|
 fn adrs_set_height(a : Array[Byte], x : Int) -> Unit {
   adrs_put_u32(a, 24, x)
 }
 
+///|
 fn adrs_set_hash(a : Array[Byte], x : Int) -> Unit {
   adrs_put_u32(a, 28, x)
 }
 
+///|
 fn adrs_set_index(a : Array[Byte], x : Int) -> Unit {
   adrs_put_u32(a, 28, x)
 }
 
 // Compressed 22-byte address for the SHA2 instance:
 // ADRS[3] || ADRS[8..16] || ADRS[19..32].
+
+///|
 fn adrs_compressed(a : Array[Byte]) -> Bytes {
   let out = Array::make(22, b'\x00')
   out[0] = a[3]
@@ -298,16 +329,31 @@ fn adrs_compressed(a : Array[Byte]) -> Bytes {
 }
 
 // ADRS type constants
+
+///|
 let slh_wots_hash = 0
+
+///|
 let slh_wots_pk = 1
+
+///|
 let slh_tree = 2
+
+///|
 let slh_fors_tree = 3
+
+///|
 let slh_fors_roots = 4
+
+///|
 let slh_wots_prf = 5
+
+///|
 let slh_fors_prf = 6
 
 // ==================== hash instantiations ====================
 
+///|
 fn mgf1_sha256(seed : Bytes, len : Int) -> Bytes {
   let parts : Array[Bytes] = []
   let mut need = len
@@ -326,6 +372,7 @@ fn mgf1_sha256(seed : Bytes, len : Int) -> Bytes {
   concat_all(parts)
 }
 
+///|
 fn mgf1_sha512(seed : Bytes, len : Int) -> Bytes {
   let parts : Array[Bytes] = []
   let mut need = len
@@ -344,17 +391,23 @@ fn mgf1_sha512(seed : Bytes, len : Int) -> Bytes {
   concat_all(parts)
 }
 
-///| H_msg(R, PK.seed, PK.root, M, ctx): the message digest (m bytes).
+///|
+/// H_msg(R, PK.seed, PK.root, M, ctx): the message digest (m bytes).
 fn slh_h_msg(
   p : SlhParams,
   pk_seed : Bytes,
   pk_root : Bytes,
   r : Bytes,
   msg : Bytes,
-  ctx : Option[Bytes],
+  ctx : Bytes?,
 ) -> Bytes {
   let ctxb : Bytes = match ctx {
-    Some(c) => concat_all([Bytes::make(1, b'\x00'), Bytes::make(1, c.length().to_byte()), c])
+    Some(c) =>
+      concat_all([
+        Bytes::make(1, b'\x00'),
+        Bytes::make(1, c.length().to_byte()),
+        c,
+      ])
     None => Bytes::make(0, b'\x00')
   }
   let inner = concat_all([r, pk_seed, pk_root, ctxb, msg])
@@ -371,16 +424,22 @@ fn slh_h_msg(
   }
 }
 
-///| PRF_msg(SK.prf, opt_rand, M, ctx): the n-byte randomizer R.
+///|
+/// PRF_msg(SK.prf, opt_rand, M, ctx): the n-byte randomizer R.
 fn slh_prf_msg(
   p : SlhParams,
   sk_prf : Bytes,
   opt_rand : Bytes,
   msg : Bytes,
-  ctx : Option[Bytes],
+  ctx : Bytes?,
 ) -> Bytes {
   let ctxb : Bytes = match ctx {
-    Some(c) => concat_all([Bytes::make(1, b'\x00'), Bytes::make(1, c.length().to_byte()), c])
+    Some(c) =>
+      concat_all([
+        Bytes::make(1, b'\x00'),
+        Bytes::make(1, c.length().to_byte()),
+        c,
+      ])
     None => Bytes::make(0, b'\x00')
   }
   let inner = concat_all([opt_rand, ctxb, msg])
@@ -396,6 +455,8 @@ fn slh_prf_msg(
 }
 
 // SHA2 keyed-hash core: SHA-256/512(PK.seed || zero-pad || ADRSc || data)
+
+///|
 fn slh_sha2_core(
   p : SlhParams,
   pk_seed : Bytes,
@@ -405,7 +466,12 @@ fn slh_sha2_core(
   use512 : Bool,
 ) -> Bytes {
   let pad_len = (if use512 { 128 } else { 64 }) - p.n
-  let input = concat_all([pk_seed, Bytes::make(pad_len, b'\x00'), adrs_compressed(adrs), data])
+  let input = concat_all([
+    pk_seed,
+    Bytes::make(pad_len, b'\x00'),
+    adrs_compressed(adrs),
+    data,
+  ])
   if use512 {
     slh_slice(sha512(input), 0, out_len)
   } else {
@@ -413,23 +479,37 @@ fn slh_sha2_core(
   }
 }
 
-///| PRF(PK.seed, SK.seed, ADRS): n-byte secret value.
-fn slh_prf(p : SlhParams, pk_seed : Bytes, sk_seed : Bytes, adrs : Array[Byte]) -> Bytes {
+///|
+/// PRF(PK.seed, SK.seed, ADRS): n-byte secret value.
+fn slh_prf(
+  p : SlhParams,
+  pk_seed : Bytes,
+  sk_seed : Bytes,
+  adrs : Array[Byte],
+) -> Bytes {
   match p.kind {
-    Shake => shake_256(concat_all([pk_seed, Bytes::from_array(adrs), sk_seed]), p.n)
+    Shake =>
+      shake_256(concat_all([pk_seed, Bytes::from_array(adrs), sk_seed]), p.n)
     Sha2 => slh_sha2_core(p, pk_seed, adrs, sk_seed, p.n, false)
   }
 }
 
-///| F(PK.seed, ADRS, M1): n-byte hash of one n-byte block.
-fn slh_f(p : SlhParams, pk_seed : Bytes, adrs : Array[Byte], m1 : Bytes) -> Bytes {
+///|
+/// F(PK.seed, ADRS, M1): n-byte hash of one n-byte block.
+fn slh_f(
+  p : SlhParams,
+  pk_seed : Bytes,
+  adrs : Array[Byte],
+  m1 : Bytes,
+) -> Bytes {
   match p.kind {
     Shake => shake_256(concat_all([pk_seed, Bytes::from_array(adrs), m1]), p.n)
     Sha2 => slh_sha2_core(p, pk_seed, adrs, m1, p.n, false)
   }
 }
 
-///| H(PK.seed, ADRS, M2): n-byte hash of two n-byte blocks.
+///|
+/// H(PK.seed, ADRS, M2): n-byte hash of two n-byte blocks.
 fn slh_h(
   p : SlhParams,
   pk_seed : Bytes,
@@ -438,7 +518,8 @@ fn slh_h(
   m2 : Bytes,
 ) -> Bytes {
   match p.kind {
-    Shake => shake_256(concat_all([pk_seed, Bytes::from_array(adrs), m1, m2]), p.n)
+    Shake =>
+      shake_256(concat_all([pk_seed, Bytes::from_array(adrs), m1, m2]), p.n)
     Sha2 =>
       if p.cat == 1 {
         slh_sha2_core(p, pk_seed, adrs, concat_bytes(m1, m2), p.n, false)
@@ -448,7 +529,8 @@ fn slh_h(
   }
 }
 
-///| T_l(PK.seed, ADRS, M_l): n-byte hash of l n-byte blocks.
+///|
+/// T_l(PK.seed, ADRS, M_l): n-byte hash of l n-byte blocks.
 fn slh_t_l(
   p : SlhParams,
   pk_seed : Bytes,
@@ -468,15 +550,18 @@ fn slh_t_l(
 
 // ==================== WOTS+ ====================
 
+///|
 fn slh_len1(p : SlhParams) -> Int {
   (8 * p.n + 3) / 4
 }
 
+///|
 fn slh_wlen(p : SlhParams) -> Int {
   slh_len1(p) + 3
 }
 
-///| base_2b(X, b, out_len): big-endian bit reader.
+///|
+/// base_2b(X, b, out_len): big-endian bit reader.
 fn slh_base_2b(x : Bytes, b : Int, out_len : Int) -> Array[Int] {
   let v = Array::make(out_len, 0)
   let mask = (1 << b) - 1
@@ -495,7 +580,8 @@ fn slh_base_2b(x : Bytes, b : Int, out_len : Int) -> Array[Int] {
   v
 }
 
-///| Message digits + checksum (Algorithms 7/8 shared part).
+///|
+/// Message digits + checksum (Algorithms 7/8 shared part).
 fn slh_wots_csum(p : SlhParams, msg : Bytes) -> Array[Int] {
   let l1 = slh_len1(p)
   let l2 = 3
@@ -504,7 +590,7 @@ fn slh_wots_csum(p : SlhParams, msg : Bytes) -> Array[Int] {
   for i in 0..<l1 {
     csum = csum + (15 - vm[i])
   }
-  let shift = (8 - ((l2 * 4) % 8)) % 8
+  let shift = (8 - l2 * 4 % 8) % 8
   csum = csum << shift
   let nbytes = (l2 * 4 + 7) / 8
   let cb = slh_int_to_bytes(csum.to_int64(), nbytes)
@@ -515,7 +601,8 @@ fn slh_wots_csum(p : SlhParams, msg : Bytes) -> Array[Int] {
   vm
 }
 
-///| chain(X, i, s): iterate F from hash address i for s steps.
+///|
+/// chain(X, i, s): iterate F from hash address i for s steps.
 fn slh_chain(
   p : SlhParams,
   pk_seed : Bytes,
@@ -538,7 +625,8 @@ fn slh_chain(
   v
 }
 
-///| WOTS+ signature (Algorithm 7).
+///|
+/// WOTS+ signature (Algorithm 7).
 fn slh_wots_sign(
   p : SlhParams,
   pk_seed : Bytes,
@@ -562,7 +650,8 @@ fn slh_wots_sign(
   concat_all(parts)
 }
 
-///| WOTS+ public key from signature (Algorithm 8).
+///|
+/// WOTS+ public key from signature (Algorithm 8).
 fn slh_wots_pk_from_sig(
   p : SlhParams,
   pk_seed : Bytes,
@@ -586,7 +675,8 @@ fn slh_wots_pk_from_sig(
 
 // ==================== XMSS ====================
 
-///| xmss_node(i, z): root of the subtree of 2^z leaves starting at leaf
+///|
+/// xmss_node(i, z): root of the subtree of 2^z leaves starting at leaf
 /// i·2^z (Algorithm 9, iterative with a stack).
 fn slh_xmss_node(
   p : SlhParams,
@@ -637,7 +727,8 @@ fn slh_xmss_node(
   stack[0]
 }
 
-///| xmss_sign(M, idx) (Algorithm 10): WOTS+ signature || AUTH path.
+///|
+/// xmss_sign(M, idx) (Algorithm 10): WOTS+ signature || AUTH path.
 fn slh_xmss_sign(
   p : SlhParams,
   pk_seed : Bytes,
@@ -648,7 +739,7 @@ fn slh_xmss_sign(
 ) -> Bytes {
   let auth : Array[Bytes] = []
   for j in 0..<p.hp {
-    let k = ((idx >> j) ^ 1)
+    let k = (idx >> j) ^ 1
     let a2 = adrs_copy(adrs)
     adrs_set_type_and_clear(a2, slh_tree)
     auth.push(slh_xmss_node(p, pk_seed, sk_seed, k, j, a2))
@@ -656,10 +747,14 @@ fn slh_xmss_sign(
   let w_adrs = adrs_copy(adrs)
   adrs_set_type_and_clear(w_adrs, slh_wots_hash)
   adrs_set_keypair(w_adrs, idx)
-  concat_bytes(slh_wots_sign(p, pk_seed, sk_seed, msg, w_adrs), concat_all(auth))
+  concat_bytes(
+    slh_wots_sign(p, pk_seed, sk_seed, msg, w_adrs),
+    concat_all(auth),
+  )
 }
 
-///| xmss_pkFromSig(idx, SIG, M) (Algorithm 11).
+///|
+/// xmss_pkFromSig(idx, SIG, M) (Algorithm 11).
 fn slh_xmss_pk_from_sig(
   p : SlhParams,
   pk_seed : Bytes,
@@ -696,6 +791,7 @@ fn slh_xmss_pk_from_sig(
 
 // ==================== hypertree ====================
 
+///|
 fn slh_ht_sign(
   p : SlhParams,
   pk_seed : Bytes,
@@ -727,12 +823,16 @@ fn slh_ht_sign(
     cur_adrs = adrs_new()
     adrs_set_layer(cur_adrs, layer)
     adrs_set_tree(cur_adrs, tree)
-    sig = concat_bytes(sig, slh_xmss_sign(p, pk_seed, sk_seed, m, leaf, cur_adrs))
+    sig = concat_bytes(
+      sig,
+      slh_xmss_sign(p, pk_seed, sk_seed, m, leaf, cur_adrs),
+    )
     layer = layer + 1
   }
   sig
 }
 
+///|
 fn slh_ht_verify(
   p : SlhParams,
   pk_seed : Bytes,
@@ -777,6 +877,7 @@ fn slh_ht_verify(
 
 // ==================== FORS ====================
 
+///|
 fn slh_fors_skgen(
   p : SlhParams,
   pk_seed : Bytes,
@@ -792,7 +893,8 @@ fn slh_fors_skgen(
   slh_prf(p, pk_seed, sk_seed, sk_adrs)
 }
 
-///| fors_node(i, z): root of the FORS subtree (Algorithm 15, iterative).
+///|
+/// fors_node(i, z): root of the FORS subtree (Algorithm 15, iterative).
 fn slh_fors_node(
   p : SlhParams,
   pk_seed : Bytes,
@@ -824,7 +926,8 @@ fn slh_fors_node(
   stack[0]
 }
 
-///| fors_sign(md) (Algorithm 16).
+///|
+/// fors_sign(md) (Algorithm 16).
 fn slh_fors_sign(
   p : SlhParams,
   pk_seed : Bytes,
@@ -840,13 +943,16 @@ fn slh_fors_sign(
     for j in 0..<p.a {
       let s = (vi[i] >> j) ^ 1
       let a2 = adrs_copy(adrs)
-      parts.push(slh_fors_node(p, pk_seed, sk_seed, (i << (p.a - j)) + s, j, a2))
+      parts.push(
+        slh_fors_node(p, pk_seed, sk_seed, (i << (p.a - j)) + s, j, a2),
+      )
     }
   }
   concat_all(parts)
 }
 
-///| fors_pkFromSig(SIG, md) (Algorithm 17).
+///|
+/// fors_pkFromSig(SIG, md) (Algorithm 17).
 fn slh_fors_pk_from_sig(
   p : SlhParams,
   pk_seed : Bytes,
@@ -885,6 +991,7 @@ fn slh_fors_pk_from_sig(
 
 // ==================== top level ====================
 
+///|
 fn slh_keygen_internal(
   p : SlhParams,
   sk_seed : Bytes,
@@ -894,13 +1001,14 @@ fn slh_keygen_internal(
   let adrs = adrs_new()
   adrs_set_layer(adrs, p.d - 1)
   let pk_root = slh_xmss_node(p, pk_seed, sk_seed, 0, p.hp, adrs)
-  (concat_bytes(pk_seed, pk_root), concat_all([sk_seed, sk_prf, pk_seed, pk_root]))
+  (
+    concat_bytes(pk_seed, pk_root),
+    concat_all([sk_seed, sk_prf, pk_seed, pk_root]),
+  )
 }
 
-fn slh_split_digest(
-  p : SlhParams,
-  digest : Bytes,
-) -> (Bytes, UInt64, Int) {
+///|
+fn slh_split_digest(p : SlhParams, digest : Bytes) -> (Bytes, UInt64, Int) {
   let md_sz = (p.k * p.a + 7) / 8
   let tree_sz = (p.h - p.hp + 7) / 8
   let md = slh_slice(digest, 0, md_sz)
@@ -911,16 +1019,17 @@ fn slh_split_digest(
     i_tree_raw & ((1UL << (p.h - p.hp)) - 1UL)
   }
   let i_leaf = (slh_bytes_to_int(digest, md_sz + tree_sz, p.m - md_sz - tree_sz) &
-    ((1UL << p.hp) - 1UL)).to_int()
+  ((1UL << p.hp) - 1UL)).to_int()
   (md, i_tree, i_leaf)
 }
 
+///|
 fn slh_sign_internal(
   p : SlhParams,
   sk : Bytes,
   mpr : Bytes,
-  opt_rand : Option[Bytes],
-  ctx : Option[Bytes],
+  opt_rand : Bytes?,
+  ctx : Bytes?,
 ) -> Bytes {
   let n = p.n
   let sk_seed = slh_slice(sk, 0, n)
@@ -944,12 +1053,13 @@ fn slh_sign_internal(
   concat_all([r, sig_fors, sig_ht])
 }
 
+///|
 fn slh_verify_internal(
   p : SlhParams,
   pk : Bytes,
   mpr : Bytes,
   sig : Bytes,
-  ctx : Option[Bytes],
+  ctx : Bytes?,
 ) -> Bool {
   let n = p.n
   let sig_sz = (1 + p.k * (1 + p.a) + p.h + p.d * slh_wlen(p)) * n
@@ -975,8 +1085,11 @@ fn slh_verify_internal(
 // ==================== pre-hash (HashSLH-DSA) ====================
 
 ///| HashSLH-DSA signed-message format (FIPS 205 §10):
+
 ///| M' = 0x01 || octet(|ctx|) || ctx || OID(PH) || PH(M). Reuses the
-///| ML-DSA pre-hash selectors (`DsaPrehash`).
+
+///|
+/// ML-DSA pre-hash selectors (`DsaPrehash`).
 fn slh_format_prehash(msg : Bytes, ctx : Bytes, ph : DsaPrehash) -> Bytes {
   concat_all([
     Bytes::make(1, b'\x01'),
@@ -1076,7 +1189,13 @@ pub fn slh_sign_prehash_hedged(
   if ctx.length() > 255 {
     abort("slh_dsa sign: context too long")
   }
-  slh_sign_internal(params, sk, slh_format_prehash(msg, ctx, ph), Some(rnd), None)
+  slh_sign_internal(
+    params,
+    sk,
+    slh_format_prehash(msg, ctx, ph),
+    Some(rnd),
+    None,
+  )
 }
 
 ///|
