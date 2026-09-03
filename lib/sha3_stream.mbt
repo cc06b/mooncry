@@ -157,3 +157,26 @@ pub fn shake_finalize(h : Sha3Hasher, out_len : Int) -> Bytes {
   sha3_absorb_block(h)
   sha3_squeeze(h, out_len)
 }
+
+///|
+/// Deep-copy a SHA-3/SHAKE hasher so the copy can be finalized without
+/// disturbing the original (useful for hashing many messages that share
+/// a common prefix). v0.32.0.
+pub fn sha3_clone(h : Sha3Hasher) -> Sha3Hasher {
+  let state = Array::make(25, 0UL)
+  for i in 0..<25 {
+    state[i] = h.state[i]
+  }
+  let buffer = Array::make(h.rate, b'\x00')
+  for i in 0..<h.rate {
+    buffer[i] = h.buffer[i]
+  }
+  Sha3Hasher::{
+    state,
+    buffer,
+    buf_len: h.buf_len,
+    rate: h.rate,
+    domain: h.domain,
+    out_len: h.out_len,
+  }
+}

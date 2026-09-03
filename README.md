@@ -597,7 +597,18 @@ addresses, category-dependent hash selection) and the SHAKE instance
 keyGen (all sets), sigGen deterministic (pure, pre-hash with OID
 tagging, and internal/raw-M' semantics) and sigVer. Note: SLH-DSA is
 deliberately expensive — signing runs thousands of hash calls; the full
-849-test suite takes ~20 minutes.
+849-test suite takes ~17 minutes.
+
+**v0.32.0 features.** **SLH-DSA speed-up (~16%) + hasher cloning.**
+SLH signing now runs through a per-key hash suite: the SHA2/SHAKE
+`PK.seed` prefix is absorbed once and reused via zero-allocation
+working hashers (state reset per call, prefix bytes restored). New
+public utilities `sha256_clone` / `sha512_clone` / `sha3_clone`
+deep-copy streaming hashers for hashing many messages that share a
+prefix. Note a subtle trap now documented in the test history: when a
+buffered prefix is shorter than one block, multi-block absorptions
+overwrite the prefix region of the buffer, so a reused hasher must
+restore it.
 
 Hashes, ChaCha20, and hex/Base64 are throughput-bound by the algorithm; AES
 trades constant-time property for ~5x speed via lookup tables (see

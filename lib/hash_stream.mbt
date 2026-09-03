@@ -491,3 +491,48 @@ pub fn sha384(data : Bytes) -> Bytes {
   sha384_update(hasher, data)
   sha384_finalize(hasher)
 }
+
+///|
+/// Deep-copy a SHA-256 hasher so the copy can be finalized without
+/// disturbing the original (useful for hashing many messages that share
+/// a common prefix). v0.32.0.
+pub fn sha256_clone(hasher : Sha256Hasher) -> Sha256Hasher {
+  let state = Array::make(8, 0U)
+  for i in 0..<8 {
+    state[i] = hasher.state[i]
+  }
+  let buffer = Array::make(64, b'\x00')
+  for i in 0..<64 {
+    buffer[i] = hasher.buffer[i]
+  }
+  let w = Array::make(64, 0U)
+  for i in 0..<64 {
+    w[i] = hasher.w[i]
+  }
+  Sha256Hasher::{
+    state,
+    buffer,
+    w,
+    buf_len: hasher.buf_len,
+    total_len: hasher.total_len,
+  }
+}
+
+///|
+/// Deep-copy a SHA-512 hasher (see `sha256_clone`). v0.32.0.
+pub fn sha512_clone(hasher : Sha512Hasher) -> Sha512Hasher {
+  let state = Array::make(8, 0UL)
+  for i in 0..<8 {
+    state[i] = hasher.state[i]
+  }
+  let buffer = Array::make(128, b'\x00')
+  for i in 0..<128 {
+    buffer[i] = hasher.buffer[i]
+  }
+  Sha512Hasher::{
+    state,
+    buffer,
+    buf_len: hasher.buf_len,
+    total_len: hasher.total_len,
+  }
+}
