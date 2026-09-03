@@ -561,8 +561,7 @@ K-PKE + ML-DSA KeyGen/Sign/Verify internal algorithms (pure message
 interface, hedged or deterministic via the `rnd` input). Verified against
 the official NIST ACVP vectors: keyGen (all sets), sigGen pure
 deterministic, and the full sigVer external-pure suite including every
-rejection category. Out of scope: HashML-DSA (pre-hash) and external-mu
-interfaces.
+rejection category. HashML-DSA and external-mu followed in v0.29.0/v0.30.0.
 
 **v0.29.0 features.** **ML-DSA HashML-DSA + external-mu interfaces** —
 completes the FIPS 204 algorithm surface. HashML-DSA (Algorithms 4/5):
@@ -573,6 +572,14 @@ sign/verify with the 64-byte message digest mu supplied externally.
 Verified against the official NIST ACVP vector sets (FIPS204-tr1 sigGen
 pre-hash, deterministic, byte-exact; full sigVer pre-hash suite; all
 rejection categories).
+
+**v0.30.0 features.** **ML-DSA external-mu ACVP coverage** — the
+external-mu entry points shipped in v0.29.0 (`*_sign_mu` /
+`*_verify_mu`) are now pinned against the official NIST ACVP
+external-mu vector groups: sigGen deterministic (byte-exact, mu
+supplied) and the full sigVer external-mu suite including all rejection
+categories. ML-DSA's complete FIPS 204 surface — pure, pre-hash and
+external-mu interfaces — is now vector-verified (789 tests).
 
 Hashes, ChaCha20, and hex/Base64 are throughput-bound by the algorithm; AES
 trades constant-time property for ~5x speed via lookup tables (see
