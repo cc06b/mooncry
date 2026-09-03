@@ -343,6 +343,12 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `ml_dsa_44_verify_prehash(pk, msg, sig, ctx, ph)` | HashML-DSA-44 verify (FIPS 204 Alg 5) |
 | `ml_dsa_44_sign_mu(sk, mu, rnd) / verify_mu(pk, mu, sig)` | ML-DSA-44 external-mu interface (Alg 7/8) |
 | `dsa_prehash_variants / dsa_prehash_sha2_256 / ...` | 12 pre-hash selectors (SHA2/SHA3 family + SHAKE-128/256) |
+| `slh_keygen(slh_sha2_128s, sk_seed, sk_prf, pk_seed)` | SLH-DSA keygen (FIPS 205, deterministic in the three seeds) |
+| `slh_sign(params, sk, msg, ctx) / slh_sign_hedged(...)` | SLH-DSA pure signing (deterministic / hedged) |
+| `slh_verify(params, pk, msg, sig, ctx)` | SLH-DSA verification |
+| `slh_sign_prehash / slh_verify_prehash` | HashSLH-DSA (OID-tagged pre-hash, 12 hash functions) |
+| `slh_sign_raw / slh_verify_raw` | raw-M' internal interface |
+| `slh_sha2_128s ... slh_shake_256f` | all 12 SLH-DSA parameter sets |
 | `crc32 / crc32c(data : Bytes) -> Bytes` | CRC-32 (IEEE) / CRC-32C, 4-byte big-endian |
 | `crc64_xz / crc64_go_iso(data : Bytes) -> Bytes` | CRC-64/XZ / CRC-64/GO-ISO, 8-byte big-endian |
 | `siphash_2_4(key, data : Bytes) -> Bytes` | SipHash-2-4 (64-bit), key 16 bytes → 8 bytes |
@@ -580,6 +586,18 @@ external-mu vector groups: sigGen deterministic (byte-exact, mu
 supplied) and the full sigVer external-mu suite including all rejection
 categories. ML-DSA's complete FIPS 204 surface — pure, pre-hash and
 external-mu interfaces — is now vector-verified (789 tests).
+
+**v0.31.0 features.** **SLH-DSA (SPHINCS+, FIPS 205)** — the NIST
+stateless hash-based signature standard, all 12 approved parameter sets
+(SLH-DSA-{SHA2,SHAKE}-{128,192,256}{s,f}). Pure-MoonBit port: WOTS+
+chains, XMSS Merkle trees, the hypertree, FORS few-time signatures,
+the SHA2 instance (MGF1-SHA-256/512 based H_msg, compressed 22-byte
+addresses, category-dependent hash selection) and the SHAKE instance
+(SHAKE256 based). Verified against the official NIST ACVP vectors:
+keyGen (all sets), sigGen deterministic (pure, pre-hash with OID
+tagging, and internal/raw-M' semantics) and sigVer. Note: SLH-DSA is
+deliberately expensive — signing runs thousands of hash calls; the full
+849-test suite takes ~20 minutes.
 
 Hashes, ChaCha20, and hex/Base64 are throughput-bound by the algorithm; AES
 trades constant-time property for ~5x speed via lookup tables (see
