@@ -339,6 +339,10 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `ml_dsa_44_verify(pk, msg, sig, ctx) -> Bool` | ML-DSA-44 verify |
 | `ml_dsa_65_keygen / sign / verify` | ML-DSA-65 (same shapes) |
 | `ml_dsa_87_keygen / sign / verify` | ML-DSA-87 (same shapes) |
+| `ml_dsa_44_sign_prehash(sk, msg, rnd, ctx, ph)` | HashML-DSA-44 sign (FIPS 204 Alg 4, OID-tagged pre-hash) |
+| `ml_dsa_44_verify_prehash(pk, msg, sig, ctx, ph)` | HashML-DSA-44 verify (FIPS 204 Alg 5) |
+| `ml_dsa_44_sign_mu(sk, mu, rnd) / verify_mu(pk, mu, sig)` | ML-DSA-44 external-mu interface (Alg 7/8) |
+| `dsa_prehash_variants / dsa_prehash_sha2_256 / ...` | 12 pre-hash selectors (SHA2/SHA3 family + SHAKE-128/256) |
 | `crc32 / crc32c(data : Bytes) -> Bytes` | CRC-32 (IEEE) / CRC-32C, 4-byte big-endian |
 | `crc64_xz / crc64_go_iso(data : Bytes) -> Bytes` | CRC-64/XZ / CRC-64/GO-ISO, 8-byte big-endian |
 | `siphash_2_4(key, data : Bytes) -> Bytes` | SipHash-2-4 (64-bit), key 16 bytes → 8 bytes |
@@ -559,6 +563,16 @@ the official NIST ACVP vectors: keyGen (all sets), sigGen pure
 deterministic, and the full sigVer external-pure suite including every
 rejection category. Out of scope: HashML-DSA (pre-hash) and external-mu
 interfaces.
+
+**v0.29.0 features.** **ML-DSA HashML-DSA + external-mu interfaces** —
+completes the FIPS 204 algorithm surface. HashML-DSA (Algorithms 4/5):
+M' = 0x01 || octet(|ctx|) || ctx || OID(PH) || PH(M) with the DER OID
+tag of the pre-hash function (all 12 NIST digests/XOFs; SHAKE-128
+pre-hash output 32 B, SHAKE-256 64 B). External-mu (Algorithms 7/8):
+sign/verify with the 64-byte message digest mu supplied externally.
+Verified against the official NIST ACVP vector sets (FIPS204-tr1 sigGen
+pre-hash, deterministic, byte-exact; full sigVer pre-hash suite; all
+rejection categories).
 
 Hashes, ChaCha20, and hex/Base64 are throughput-bound by the algorithm; AES
 trades constant-time property for ~5x speed via lookup tables (see

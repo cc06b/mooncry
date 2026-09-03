@@ -973,17 +973,163 @@ fn dsa_format_msg(msg : Bytes, ctx : Bytes) -> Bytes {
 }
 
 ///|
-fn dsa_sign_internal(
+/// Pre-hash function selector for HashML-DSA (FIPS 204 §5.4). All twelve
+/// NIST-approved digests/XOFs; SHAKE-128 pre-hash output is 32 bytes and
+/// SHAKE-256 pre-hash output is 64 bytes.
+pub enum DsaPrehash {
+  Sha2_224
+  Sha2_256
+  Sha2_384
+  Sha2_512
+  Sha2_512_224
+  Sha2_512_256
+  Sha3_224
+  Sha3_256
+  Sha3_384
+  Sha3_512
+  Shake128
+  Shake256
+}
+
+///|
+/// All supported HashML-DSA pre-hash functions.
+pub let dsa_prehash_variants : Array[DsaPrehash] = [
+  DsaPrehash::Sha2_224,
+  DsaPrehash::Sha2_256,
+  DsaPrehash::Sha2_384,
+  DsaPrehash::Sha2_512,
+  DsaPrehash::Sha2_512_224,
+  DsaPrehash::Sha2_512_256,
+  DsaPrehash::Sha3_224,
+  DsaPrehash::Sha3_256,
+  DsaPrehash::Sha3_384,
+  DsaPrehash::Sha3_512,
+  DsaPrehash::Shake128,
+  DsaPrehash::Shake256,
+]
+
+///| SHA-224 selector for the HashML-DSA API (enum constructors are not
+
+///| visible to blackbox `*_test.mbt` files, so variants are exported as
+
+///|
+/// constants).
+pub let dsa_prehash_sha2_224 : DsaPrehash = DsaPrehash::Sha2_224
+
+///|
+/// SHA-256 selector for the HashML-DSA API.
+pub let dsa_prehash_sha2_256 : DsaPrehash = DsaPrehash::Sha2_256
+
+///|
+/// SHA-384 selector for the HashML-DSA API.
+pub let dsa_prehash_sha2_384 : DsaPrehash = DsaPrehash::Sha2_384
+
+///|
+/// SHA-512 selector for the HashML-DSA API.
+pub let dsa_prehash_sha2_512 : DsaPrehash = DsaPrehash::Sha2_512
+
+///|
+/// SHA-512/224 selector for the HashML-DSA API.
+pub let dsa_prehash_sha2_512_224 : DsaPrehash = DsaPrehash::Sha2_512_224
+
+///|
+/// SHA-512/256 selector for the HashML-DSA API.
+pub let dsa_prehash_sha2_512_256 : DsaPrehash = DsaPrehash::Sha2_512_256
+
+///|
+/// SHA3-224 selector for the HashML-DSA API.
+pub let dsa_prehash_sha3_224 : DsaPrehash = DsaPrehash::Sha3_224
+
+///|
+/// SHA3-256 selector for the HashML-DSA API.
+pub let dsa_prehash_sha3_256 : DsaPrehash = DsaPrehash::Sha3_256
+
+///|
+/// SHA3-384 selector for the HashML-DSA API.
+pub let dsa_prehash_sha3_384 : DsaPrehash = DsaPrehash::Sha3_384
+
+///|
+/// SHA3-512 selector for the HashML-DSA API.
+pub let dsa_prehash_sha3_512 : DsaPrehash = DsaPrehash::Sha3_512
+
+///|
+/// SHAKE-128 selector for the HashML-DSA API (32-byte pre-hash).
+pub let dsa_prehash_shake128 : DsaPrehash = DsaPrehash::Shake128
+
+///|
+/// SHAKE-256 selector for the HashML-DSA API (64-byte pre-hash).
+pub let dsa_prehash_shake256 : DsaPrehash = DsaPrehash::Shake256
+
+///|
+fn dsa_bytes_slice(b : Bytes, start : Int, len : Int) -> Bytes {
+  let out = Array::make(len, b'\x00')
+  for i in 0..<len {
+    out[i] = b[start + i]
+  }
+  Bytes::from_array(out)
+}
+
+///| DER OBJECT IDENTIFIER prefix of each pre-hash function (FIPS 204
+
+///|
+/// Algorithm 4): the pre-hash digest is OID-tagged inside M'.
+fn dsa_prehash_oid(ph : DsaPrehash) -> Bytes {
+  match ph {
+    Sha2_224 => b"\x06\x09\x60\x86\x48\x01\x65\x03\x04\x02\x04"
+    Sha2_256 => b"\x06\x09\x60\x86\x48\x01\x65\x03\x04\x02\x01"
+    Sha2_384 => b"\x06\x09\x60\x86\x48\x01\x65\x03\x04\x02\x02"
+    Sha2_512 => b"\x06\x09\x60\x86\x48\x01\x65\x03\x04\x02\x03"
+    Sha2_512_224 => b"\x06\x09\x60\x86\x48\x01\x65\x03\x04\x02\x05"
+    Sha2_512_256 => b"\x06\x09\x60\x86\x48\x01\x65\x03\x04\x02\x06"
+    Sha3_224 => b"\x06\x09\x60\x86\x48\x01\x65\x03\x04\x02\x07"
+    Sha3_256 => b"\x06\x09\x60\x86\x48\x01\x65\x03\x04\x02\x08"
+    Sha3_384 => b"\x06\x09\x60\x86\x48\x01\x65\x03\x04\x02\x09"
+    Sha3_512 => b"\x06\x09\x60\x86\x48\x01\x65\x03\x04\x02\x0A"
+    Shake128 => b"\x06\x09\x60\x86\x48\x01\x65\x03\x04\x02\x0B"
+    Shake256 => b"\x06\x09\x60\x86\x48\x01\x65\x03\x04\x02\x0C"
+  }
+}
+
+///|
+fn dsa_prehash_digest(ph : DsaPrehash, msg : Bytes) -> Bytes {
+  match ph {
+    Sha2_224 => sha224(msg)
+    Sha2_256 => sha256(msg)
+    Sha2_384 => sha384(msg)
+    Sha2_512 => sha512(msg)
+    Sha2_512_224 => sha512_224(msg)
+    Sha2_512_256 => sha512_256(msg)
+    Sha3_224 => sha3_224(msg)
+    Sha3_256 => sha3_256(msg)
+    Sha3_384 => sha3_384(msg)
+    Sha3_512 => sha3_512(msg)
+    Shake128 => shake_128(msg, 32)
+    Shake256 => shake_256(msg, 64)
+  }
+}
+
+///| HashML-DSA signed-message format (FIPS 204 Algorithm 4):
+
+///|
+/// M' = 0x01 || octet(|ctx|) || ctx || OID(PH) || PH(M).
+fn dsa_format_msg_prehash(msg : Bytes, ctx : Bytes, ph : DsaPrehash) -> Bytes {
+  concat_all([
+    Bytes::make(1, b'\x01'),
+    Bytes::make(1, ctx.length().to_byte()),
+    ctx,
+    dsa_prehash_oid(ph),
+    dsa_prehash_digest(ph, msg),
+  ])
+}
+
+///|
+fn dsa_sign_mu(
   params : DsaParams,
   sk : Bytes,
-  msg : Bytes,
-  ctx : Bytes,
+  mu : Bytes,
   rnd : Bytes,
 ) -> Bytes {
-  if ctx.length() > 255 {
-    abort("ml_dsa sign: context too long")
-  }
-  let (rho, key, tr, s1, s2, t0) = dsa_unpack_sk(params, sk)
+  let (rho, key, _, s1, s2, t0) = dsa_unpack_sk(params, sk)
   // NTT of secret vectors
   let s1_hat = Array::make(params.l, Array::make(256, 0))
   for i in 0..<params.l {
@@ -1018,7 +1164,6 @@ fn dsa_sign_internal(
       mat[i * params.l + j] = dsa_sample_uniform(rho, j + 256 * i)
     }
   }
-  let mu = shake_256(concat_bytes(tr, dsa_format_msg(msg, ctx)), 64)
   let rho_pp = shake_256(concat_all([key, rnd, mu]), 64)
   let mut kappa = 0
   let mut attempts = 0
@@ -1174,16 +1319,12 @@ fn dsa_sign_internal(
 }
 
 ///|
-fn dsa_verify_internal(
+fn dsa_verify_mu(
   params : DsaParams,
   pk : Bytes,
-  msg : Bytes,
+  mu : Bytes,
   sig : Bytes,
-  ctx : Bytes,
 ) -> Bool {
-  if ctx.length() > 255 {
-    return false
-  }
   let z_bytes = if params.gamma1 == 1 << 17 {
     576 * params.l
   } else {
@@ -1229,10 +1370,6 @@ fn dsa_verify_internal(
       }
     }
   }
-  let mu = shake_256(
-    concat_bytes(shake_256(pk, 64), dsa_format_msg(msg, ctx)),
-    64,
-  )
   let cp = dsa_sample_in_ball(params, Bytes::from_array(c_tilde[:]))
   let mat = Array::make(params.k * params.l, Array::make(256, 0))
   for i in 0..<params.k {
@@ -1299,6 +1436,31 @@ fn e4_slice_sig(b : Bytes, start : Int, len : Int) -> Bytes {
 // ---------- public API ----------
 
 ///|
+/// ML-DSA signing core over an already-constructed M' (pure or pre-hash).
+fn dsa_sign_internal(
+  params : DsaParams,
+  sk : Bytes,
+  mpr : Bytes,
+  rnd : Bytes,
+) -> Bytes {
+  let tr = dsa_bytes_slice(sk, 64, 64)
+  dsa_sign_mu(params, sk, shake_256(concat_bytes(tr, mpr), 64), rnd)
+}
+
+///|
+/// ML-DSA verification core over an already-constructed M' (pure or
+/// pre-hash).
+fn dsa_verify_internal(
+  params : DsaParams,
+  pk : Bytes,
+  mpr : Bytes,
+  sig : Bytes,
+) -> Bool {
+  let mu = shake_256(concat_bytes(shake_256(pk, 64), mpr), 64)
+  dsa_verify_mu(params, pk, mu, sig)
+}
+
+///|
 /// ML-DSA-44 key generation (FIPS 204): deterministic from a 32-byte seed.
 /// Returns (pk, sk).
 pub fn ml_dsa_44_keygen(seed : Bytes) -> (Bytes, Bytes) {
@@ -1315,7 +1477,10 @@ pub fn ml_dsa_44_sign(
   rnd : Bytes,
   ctx : Bytes,
 ) -> Bytes {
-  dsa_sign_internal(dsa_44, sk, msg, ctx, rnd)
+  if ctx.length() > 255 {
+    abort("ml_dsa sign: context too long")
+  }
+  dsa_sign_internal(dsa_44, sk, dsa_format_msg(msg, ctx), rnd)
 }
 
 ///|
@@ -1326,7 +1491,10 @@ pub fn ml_dsa_44_verify(
   sig : Bytes,
   ctx : Bytes,
 ) -> Bool {
-  dsa_verify_internal(dsa_44, pk, msg, sig, ctx)
+  if ctx.length() > 255 {
+    return false
+  }
+  dsa_verify_internal(dsa_44, pk, dsa_format_msg(msg, ctx), sig)
 }
 
 ///|
@@ -1343,7 +1511,10 @@ pub fn ml_dsa_65_sign(
   rnd : Bytes,
   ctx : Bytes,
 ) -> Bytes {
-  dsa_sign_internal(dsa_65, sk, msg, ctx, rnd)
+  if ctx.length() > 255 {
+    abort("ml_dsa sign: context too long")
+  }
+  dsa_sign_internal(dsa_65, sk, dsa_format_msg(msg, ctx), rnd)
 }
 
 ///|
@@ -1354,7 +1525,10 @@ pub fn ml_dsa_65_verify(
   sig : Bytes,
   ctx : Bytes,
 ) -> Bool {
-  dsa_verify_internal(dsa_65, pk, msg, sig, ctx)
+  if ctx.length() > 255 {
+    return false
+  }
+  dsa_verify_internal(dsa_65, pk, dsa_format_msg(msg, ctx), sig)
 }
 
 ///|
@@ -1371,7 +1545,10 @@ pub fn ml_dsa_87_sign(
   rnd : Bytes,
   ctx : Bytes,
 ) -> Bytes {
-  dsa_sign_internal(dsa_87, sk, msg, ctx, rnd)
+  if ctx.length() > 255 {
+    abort("ml_dsa sign: context too long")
+  }
+  dsa_sign_internal(dsa_87, sk, dsa_format_msg(msg, ctx), rnd)
 }
 
 ///|
@@ -1382,5 +1559,139 @@ pub fn ml_dsa_87_verify(
   sig : Bytes,
   ctx : Bytes,
 ) -> Bool {
-  dsa_verify_internal(dsa_87, pk, msg, sig, ctx)
+  if ctx.length() > 255 {
+    return false
+  }
+  dsa_verify_internal(dsa_87, pk, dsa_format_msg(msg, ctx), sig)
+}
+
+// ==================== HashML-DSA (pre-hash) + external-mu API (v0.29.0) ===
+
+///|
+/// ML-DSA-44 HashML-DSA signing (FIPS 204 Algorithm 4): the message is
+/// pre-hashed with `ph` and OID-tagged inside M' before signing.
+pub fn ml_dsa_44_sign_prehash(
+  sk : Bytes,
+  msg : Bytes,
+  rnd : Bytes,
+  ctx : Bytes,
+  ph : DsaPrehash,
+) -> Bytes {
+  if ctx.length() > 255 {
+    abort("ml_dsa sign: context too long")
+  }
+  dsa_sign_internal(dsa_44, sk, dsa_format_msg_prehash(msg, ctx, ph), rnd)
+}
+
+///|
+/// ML-DSA-44 HashML-DSA verification (FIPS 204 Algorithm 5).
+pub fn ml_dsa_44_verify_prehash(
+  pk : Bytes,
+  msg : Bytes,
+  sig : Bytes,
+  ctx : Bytes,
+  ph : DsaPrehash,
+) -> Bool {
+  if ctx.length() > 255 {
+    return false
+  }
+  dsa_verify_internal(dsa_44, pk, dsa_format_msg_prehash(msg, ctx, ph), sig)
+}
+
+///|
+/// ML-DSA-65 HashML-DSA signing. See `ml_dsa_44_sign_prehash`.
+pub fn ml_dsa_65_sign_prehash(
+  sk : Bytes,
+  msg : Bytes,
+  rnd : Bytes,
+  ctx : Bytes,
+  ph : DsaPrehash,
+) -> Bytes {
+  if ctx.length() > 255 {
+    abort("ml_dsa sign: context too long")
+  }
+  dsa_sign_internal(dsa_65, sk, dsa_format_msg_prehash(msg, ctx, ph), rnd)
+}
+
+///|
+/// ML-DSA-65 HashML-DSA verification. See `ml_dsa_44_verify_prehash`.
+pub fn ml_dsa_65_verify_prehash(
+  pk : Bytes,
+  msg : Bytes,
+  sig : Bytes,
+  ctx : Bytes,
+  ph : DsaPrehash,
+) -> Bool {
+  if ctx.length() > 255 {
+    return false
+  }
+  dsa_verify_internal(dsa_65, pk, dsa_format_msg_prehash(msg, ctx, ph), sig)
+}
+
+///|
+/// ML-DSA-87 HashML-DSA signing. See `ml_dsa_44_sign_prehash`.
+pub fn ml_dsa_87_sign_prehash(
+  sk : Bytes,
+  msg : Bytes,
+  rnd : Bytes,
+  ctx : Bytes,
+  ph : DsaPrehash,
+) -> Bytes {
+  if ctx.length() > 255 {
+    abort("ml_dsa sign: context too long")
+  }
+  dsa_sign_internal(dsa_87, sk, dsa_format_msg_prehash(msg, ctx, ph), rnd)
+}
+
+///|
+/// ML-DSA-87 HashML-DSA verification. See `ml_dsa_44_verify_prehash`.
+pub fn ml_dsa_87_verify_prehash(
+  pk : Bytes,
+  msg : Bytes,
+  sig : Bytes,
+  ctx : Bytes,
+  ph : DsaPrehash,
+) -> Bool {
+  if ctx.length() > 255 {
+    return false
+  }
+  dsa_verify_internal(dsa_87, pk, dsa_format_msg_prehash(msg, ctx, ph), sig)
+}
+
+///|
+/// ML-DSA-44 external-mu signing (FIPS 204 Algorithm 7 with the message
+/// digest `mu` supplied externally; skip tr and the M' formatting).
+pub fn ml_dsa_44_sign_mu(sk : Bytes, mu : Bytes, rnd : Bytes) -> Bytes {
+  dsa_sign_mu(dsa_44, sk, mu, rnd)
+}
+
+///|
+/// ML-DSA-44 external-mu verification (FIPS 204 Algorithm 8 with `mu`
+/// supplied externally).
+pub fn ml_dsa_44_verify_mu(pk : Bytes, mu : Bytes, sig : Bytes) -> Bool {
+  dsa_verify_mu(dsa_44, pk, mu, sig)
+}
+
+///|
+/// ML-DSA-65 external-mu signing. See `ml_dsa_44_sign_mu`.
+pub fn ml_dsa_65_sign_mu(sk : Bytes, mu : Bytes, rnd : Bytes) -> Bytes {
+  dsa_sign_mu(dsa_65, sk, mu, rnd)
+}
+
+///|
+/// ML-DSA-65 external-mu verification. See `ml_dsa_44_verify_mu`.
+pub fn ml_dsa_65_verify_mu(pk : Bytes, mu : Bytes, sig : Bytes) -> Bool {
+  dsa_verify_mu(dsa_65, pk, mu, sig)
+}
+
+///|
+/// ML-DSA-87 external-mu signing. See `ml_dsa_44_sign_mu`.
+pub fn ml_dsa_87_sign_mu(sk : Bytes, mu : Bytes, rnd : Bytes) -> Bytes {
+  dsa_sign_mu(dsa_87, sk, mu, rnd)
+}
+
+///|
+/// ML-DSA-87 external-mu verification. See `ml_dsa_44_verify_mu`.
+pub fn ml_dsa_87_verify_mu(pk : Bytes, mu : Bytes, sig : Bytes) -> Bool {
+  dsa_verify_mu(dsa_87, pk, mu, sig)
 }
