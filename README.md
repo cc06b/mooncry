@@ -628,6 +628,15 @@ RFC 4231 TC6 regression vectors added. Verification: KEM I/O from the
 official NIST ACVP vectors (FIPS 203); the composition layer is
 cross-checked against pycryptodome.
 
+**v0.34.0 features.** **SLH-DSA ~25% faster (suite 17 min → 13 min).**
+Two allocation-removal passes on the per-node hash hot path:
+`sha256_finalize_n` / `sha512_finalize_n` write truncated digests
+directly (one allocation instead of finalize + slice), and `T_l` over
+WOTS+/FORS public values now feeds the pre-split blocks into the hasher
+without concatenating. Regression-tested against truncated one-shot
+digests. (A moonc 0827 compiler ICE forced the finalize_n internals to
+be factored into a shared padding helper — noted for future toolchains.)
+
 Hashes, ChaCha20, and hex/Base64 are throughput-bound by the algorithm; AES
 trades constant-time property for ~5x speed via lookup tables (see
 [Security & performance boundaries](#security--performance-boundaries)).

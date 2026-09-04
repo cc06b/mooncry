@@ -243,7 +243,7 @@ pub fn sha256_update_byte(hasher : Sha256Hasher, byte : Byte) -> Unit {
 ///|
 /// Finalize and return the 32-byte SHA-256 digest. Pads in place inside the
 /// hasher buffer (perf v0.21.0: no padded-array allocation).
-pub fn sha256_finalize(hasher : Sha256Hasher) -> Bytes {
+fn sha256_finish_blocks(hasher : Sha256Hasher) -> Unit {
   let bit_len = hasher.total_len * 8UL
   let buf_len = hasher.buf_len
   if buf_len < 56 {
@@ -270,6 +270,11 @@ pub fn sha256_finalize(hasher : Sha256Hasher) -> Bytes {
     sha256_words_from_buffer(hasher)
     process_block(hasher.state, hasher.w)
   }
+}
+
+///|
+pub fn sha256_finalize(hasher : Sha256Hasher) -> Bytes {
+  sha256_finish_blocks(hasher)
   let result_arr = Array::make(32, b'\x00')
   for i in 0..<=7 {
     let val = hasher.state[i]
@@ -277,6 +282,20 @@ pub fn sha256_finalize(hasher : Sha256Hasher) -> Bytes {
     result_arr[i * 4 + 1] = ((val >> 16) & 0xFFU).to_byte()
     result_arr[i * 4 + 2] = ((val >> 8) & 0xFFU).to_byte()
     result_arr[i * 4 + 3] = (val & 0xFFU).to_byte()
+  }
+  Bytes::from_array(result_arr[:])
+}
+
+///|
+/// Finalize and return only the first `n` bytes of the digest (n <= 32).
+/// Cheaper than `sha256_finalize` + truncation (one allocation). v0.34.0.
+pub fn sha256_finalize_n(hasher : Sha256Hasher, n : Int) -> Bytes {
+  sha256_finish_blocks(hasher)
+  let result_arr = Array::make(n, b'\x00')
+  for idx in 0..<n {
+    let val = hasher.state[idx / 4]
+    let shift = (3 - idx % 4) * 8
+    result_arr[idx] = ((val >> shift) & 0xFFU).to_byte()
   }
   Bytes::from_array(result_arr[:])
 }
@@ -358,7 +377,7 @@ pub fn sha512_update(hasher : Sha512Hasher, data : Bytes) -> Unit {
 
 ///|
 /// Finalize and return the 64-byte SHA-512 digest
-pub fn sha512_finalize(hasher : Sha512Hasher) -> Bytes {
+fn sha512_finish_blocks(hasher : Sha512Hasher) -> Unit {
   let bit_len = hasher.total_len * 8UL
   let pad_len = 112 - hasher.buf_len % 128
   let pad_len_final = if pad_len <= 0 { pad_len + 128 } else { pad_len }
@@ -381,9 +400,28 @@ pub fn sha512_finalize(hasher : Sha512Hasher) -> Bytes {
     }
     sha512_process_block(hasher.state, block)
   }
+}
+
+///|
+pub fn sha512_finalize(hasher : Sha512Hasher) -> Bytes {
+  sha512_finish_blocks(hasher)
   let result_arr = Array::make(64, b'\x00')
   for i in 0..<=7 {
     write_u64_be(result_arr, i * 8, hasher.state[i])
+  }
+  Bytes::from_array(result_arr[:])
+}
+
+///|
+/// Finalize and return only the first `n` bytes of the digest (n <= 64).
+/// Cheaper than `sha512_finalize` + truncation (one allocation). v0.34.0.
+pub fn sha512_finalize_n(hasher : Sha512Hasher, n : Int) -> Bytes {
+  sha512_finish_blocks(hasher)
+  let result_arr = Array::make(n, b'\x00')
+  for idx in 0..<n {
+    let word = hasher.state[idx / 8]
+    let shift = (7 - idx % 8) * 8
+    result_arr[idx] = ((word >> shift) & 0xFFUL).to_byte()
   }
   Bytes::from_array(result_arr[:])
 }
