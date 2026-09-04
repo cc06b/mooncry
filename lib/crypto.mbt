@@ -223,7 +223,12 @@ pub fn hmac_sha256(key : Bytes, message : Bytes) -> Bytes {
   let block_size = 64
 
   let k_prime = if key.length() > block_size {
-    sha256(key)
+    let kh = sha256(key)
+    let padded = Array::make(block_size, b'\x00')
+    for i in 0..<kh.length() {
+      padded[i] = kh[i]
+    }
+    Bytes::from_array(padded[:])
   } else {
     let padded = Array::make(block_size, b'\x00')
     for i in 0..<key.length() {
@@ -1096,7 +1101,12 @@ pub fn aes_gcm_decrypt(
 pub fn hmac_sha512(key : Bytes, message : Bytes) -> Bytes {
   let block_size = 128
   let k_prime = if key.length() > block_size {
-    sha512(key)
+    let kh = sha512(key)
+    let padded = Array::make(block_size, b'\x00')
+    for i in 0..<kh.length() {
+      padded[i] = kh[i]
+    }
+    Bytes::from_array(padded[:])
   } else {
     let padded = Array::make(block_size, b'\x00')
     for i in 0..<key.length() {

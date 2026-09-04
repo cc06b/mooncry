@@ -334,6 +334,10 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `ml_kem_512_decaps(dk, c) -> Bytes` | ML-KEM-512 decapsulation (implicit rejection) |
 | `ml_kem_768_keygen / encaps / decaps` | ML-KEM-768 (same shapes) |
 | `ml_kem_1024_keygen / encaps / decaps` | ML-KEM-1024 (same shapes) |
+| `ml_kem_768_hybrid_seal(ek, m, aad, msg)` | ML-KEM-768 hybrid encryption (HKDF + ChaCha20-Poly1305) |
+| `ml_kem_768_hybrid_open(dk, blob, aad) -> Option[Bytes]` | hybrid decryption; `None` on any failure |
+| `ml_kem_768_hybrid_seal_init + ml_kem_hybrid_stream_update/final` | streaming hybrid seal |
+| `poly1305_new / poly1305_update / poly1305_finalize` | incremental Poly1305 |
 | `ml_dsa_44_keygen(seed) -> (pk, sk)` | ML-DSA-44 keygen (FIPS 204, deterministic in seed) |
 | `ml_dsa_44_sign(sk, msg, rnd, ctx) -> Bytes` | ML-DSA-44 sign (pure; rnd = 0^32 = deterministic) |
 | `ml_dsa_44_verify(pk, msg, sig, ctx) -> Bool` | ML-DSA-44 verify |
@@ -609,6 +613,20 @@ prefix. Note a subtle trap now documented in the test history: when a
 buffered prefix is shorter than one block, multi-block absorptions
 overwrite the prefix region of the buffer, so a reused hasher must
 restore it.
+
+**v0.33.0 features.** **ML-KEM hybrid encryption (KEM + DEM)** —
+`ml_kem_{512,768,1024}_hybrid_seal / hybrid_open` plus streaming
+`hybrid_seal_init` + `ml_kem_hybrid_stream_update / stream_final`.
+Composition: (K, c) = Encaps(ek, m); (key, nonce) = HKDF-SHA256(salt =
+c, ikm = K, info = "mooncry/ml-kem-hybrid/v1", 44); blob = c ||
+ChaCha20-Poly1305(key, nonce, aad, msg). `open` returns `None` on any
+failure (KEM implicit rejection surfaces as a tag mismatch). New
+incremental Poly1305 (`poly1305_new / update / finalize`; the one-shot
+is now built on it). **Also fixes a latent HMAC bug**: keys longer than
+one block were not zero-padded after hashing (ipad/opad truncated);
+RFC 4231 TC6 regression vectors added. Verification: KEM I/O from the
+official NIST ACVP vectors (FIPS 203); the composition layer is
+cross-checked against pycryptodome.
 
 Hashes, ChaCha20, and hex/Base64 are throughput-bound by the algorithm; AES
 trades constant-time property for ~5x speed via lookup tables (see

@@ -439,3 +439,29 @@ test "SHA-512: FIPS 180-4 §B.3 — one million 'a' characters" {
   )
   assert_true(bytes_equal(expected, sha512(msg)))
 }
+
+///|
+/// RFC 4231 Test Case 6: key larger than one block (131 bytes) — the
+/// key must be hashed first AND zero-padded to the block size before
+/// ipad/opad. Regression for the long-key truncation bug found by the
+/// ML-KEM hybrid construction (v0.33.0).
+test "HMAC RFC 4231 TC6 (131-byte key)" {
+  let key = Bytes::make(131, b'\xaa')
+  let msg = b"Test Using Larger Than Block-Size Key - Hash Key First"
+  assert_true(
+    bytes_equal(
+      hmac_sha256(key, msg),
+      hex_to_bytes(
+        "60e431591ee0b67f0d8a26aacbf5b77f8e0bc6213728c5140546040f0ee37f54",
+      ),
+    ),
+  )
+  assert_true(
+    bytes_equal(
+      hmac_sha512(key, msg),
+      hex_to_bytes(
+        "80b24263c7c1a3ebb71493c1dd7be8b49b46d1f41b4aeec1121b013783f8f3526b56d037e05f2598bd0fd2215d6a1e5295e64f73f63f0aec8b915a985d786598",
+      ),
+    ),
+  )
+}
