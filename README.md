@@ -338,6 +338,9 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `ml_kem_768_hybrid_open(dk, blob, aad) -> Option[Bytes]` | hybrid decryption; `None` on any failure |
 | `ml_kem_768_hybrid_seal_init + ml_kem_hybrid_stream_update/final` | streaming hybrid seal |
 | `poly1305_new / poly1305_update / poly1305_finalize` | incremental Poly1305 |
+| `xwing_keygen(seed) -> (pk, sk)` | X-Wing hybrid KEM keygen (ML-KEM-768 + X25519) |
+| `xwing_encaps(pk, eseed) -> (ss, ct)` | X-Wing encapsulation (derandomized) |
+| `xwing_decaps(ct, sk) -> Bytes` | X-Wing decapsulation |
 | `ml_dsa_44_keygen(seed) -> (pk, sk)` | ML-DSA-44 keygen (FIPS 204, deterministic in seed) |
 | `ml_dsa_44_sign(sk, msg, rnd, ctx) -> Bytes` | ML-DSA-44 sign (pure; rnd = 0^32 = deterministic) |
 | `ml_dsa_44_verify(pk, msg, sig, ctx) -> Bool` | ML-DSA-44 verify |
@@ -636,6 +639,14 @@ WOTS+/FORS public values now feeds the pre-split blocks into the hasher
 without concatenating. Regression-tested against truncated one-shot
 digests. (A moonc 0827 compiler ICE forced the finalize_n internals to
 be factored into a shared padding helper — noted for future toolchains.)
+
+**v0.35.0 features.** **X-Wing hybrid KEM**
+(draft-connolly-cfrg-xwing-kem) — the ML-KEM-768 + X25519 composite
+KEM: `xwing_keygen` (32-byte seed → 1216-byte pk), `xwing_encaps`
+(derandomized in a 64-byte eseed) and `xwing_decaps` (implicit
+rejection inherited from ML-KEM). Verified against the official draft
+test vectors (keygen, encapsulation and decapsulation for all three
+published vectors).
 
 Hashes, ChaCha20, and hex/Base64 are throughput-bound by the algorithm; AES
 trades constant-time property for ~5x speed via lookup tables (see
