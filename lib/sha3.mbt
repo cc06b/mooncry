@@ -55,10 +55,17 @@ fn new_state() -> Array[UInt64] {
 ///|
 /// Keccak-f[1600] permutation on a flat 25-lane state in place
 fn keccak_f(st : Array[UInt64]) -> Unit {
+  keccak_f_from(st, 0)
+}
+
+///|
+/// Keccak-p[1600]: rounds `start`..23 of Keccak-f. TurboSHAKE (RFC 9861)
+/// uses start = 12 (the last 12 rounds). v0.36.0.
+fn keccak_f_from(st : Array[UInt64], start : Int) -> Unit {
   let c = Array::make(5, 0UL)
   let d = Array::make(5, 0UL)
   let b = Array::make(25, 0UL)
-  for round in 0..<24 {
+  for round in start..<24 {
     // Theta
     for x in 0..<5 {
       c[x] = st[x] ^ st[x + 5] ^ st[x + 10] ^ st[x + 15] ^ st[x + 20]
