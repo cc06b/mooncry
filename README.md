@@ -344,6 +344,10 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `turbo_shake_128(data, d, out_len)` | TurboSHAKE128 (RFC 9861, Keccak-p[1600,12]) |
 | `kangaroo_twelve_128(m, c, out_len)` | KangarooTwelve KT128 (tree hash + customization) |
 | `turbo_shake_256 / kangaroo_twelve_256` | 256-bit capacity variants |
+| `hpke_setup_s(suite, mode, pk_r, ikm_e, info, psk, psk_id, sk_s)` | HPKE sender setup (RFC 9180, all 4 modes) |
+| `hpke_seal(ctx, aad, pt) / hpke_open(ctx, aad, ct)` | HPKE authenticated encryption (auto sequence numbers) |
+| `hpke_export(ctx, exporter_context, len)` | HPKE exporter |
+| `hpke_x25519_hkdf_sha256_* / hpke_x448_hkdf_sha512_*` | HPKE cipher-suite selectors |
 | `ml_dsa_44_keygen(seed) -> (pk, sk)` | ML-DSA-44 keygen (FIPS 204, deterministic in seed) |
 | `ml_dsa_44_sign(sk, msg, rnd, ctx) -> Bytes` | ML-DSA-44 sign (pure; rnd = 0^32 = deterministic) |
 | `ml_dsa_44_verify(pk, msg, sig, ctx) -> Bool` | ML-DSA-44 verify |
@@ -658,6 +662,17 @@ domain byte; 12-round permutation factored out of the SHA-3 core) and
 8192-byte chunks with a customization string). Verified against every
 applicable RFC 9861 test vector, including the 8191/8192-byte tree
 boundary and customization-string cases.
+
+**v0.37.0 features.** **HPKE — Hybrid Public Key Encryption (RFC
+9180).** DHKEM(X25519, HKDF-SHA256) and DHKEM(X448, HKDF-SHA512);
+KDFs HKDF-SHA256/SHA512; AEADs AES-128-GCM, AES-256-GCM and
+ChaCha20Poly1305; all four modes (base / psk / auth / auth+psk).
+`hpke_setup_s / hpke_setup_r` (derandomized via explicit ephemeral
+IKM), `hpke_seal / hpke_open` with automatic sequence numbers
+(`None` on authentication failure), and `hpke_export`. Verified
+against the official RFC 9180 Appendix A vectors (every mode of the
+X25519 suites, including the sequence-number carry at 255/256);
+X448 covered by round-trip tests.
 
 Hashes, ChaCha20, and hex/Base64 are throughput-bound by the algorithm; AES
 trades constant-time property for ~5x speed via lookup tables (see
