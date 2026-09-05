@@ -91,3 +91,39 @@ pub fn pbkdf2_hmac_sha512(
   }
   Bytes::from_array(result[:])
 }
+
+///|
+/// HKDF-Extract (SHA-384): PRK = HMAC-SHA384(salt, IKM). Empty salt
+/// defaults to 48 zero bytes. v0.41.0.
+pub fn hkdf_sha384_extract(salt : Bytes, ikm : Bytes) -> Bytes {
+  let s = if salt.length() == 0 {
+    let z = Array::make(48, b'\x00')
+    Bytes::from_array(z[:])
+  } else {
+    salt
+  }
+  hmac_sha384(s, ikm)
+}
+
+///|
+/// HKDF-SHA384 (RFC 5869): expand IKM into `length` bytes. v0.41.0.
+pub fn hkdf_sha384(
+  salt : Bytes,
+  ikm : Bytes,
+  info : Bytes,
+  length : Int,
+) -> Bytes {
+  let prk = hkdf_sha384_extract(salt, ikm)
+  let mut okm = b""
+  let mut t = b""
+  let mut i = 1
+  while okm.length() < length && i <= 255 {
+    t = hmac_sha384(
+      prk,
+      concat_bytes(concat_bytes(t, info), Bytes::make(1, i.to_byte())),
+    )
+    okm = concat_bytes(okm, t)
+    i = i + 1
+  }
+  Bytes::from_array(okm.to_array()[0:length])
+}

@@ -350,6 +350,8 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `hpke_seal(ctx, aad, pt) / hpke_open(ctx, aad, ct)` | HPKE authenticated encryption (auto sequence numbers) |
 | `hpke_export(ctx, exporter_context, len)` | HPKE exporter |
 | `hpke_x25519_* / hpke_p256_* / hpke_p521_* / hpke_x448_*` | HPKE cipher-suite selectors (all RFC-vectored suites) |
+| `hpke_p384_hkdf_sha384_aes256gcm` | DHKEM(P-384) suite (differential vectors) |
+| `hmac_sha384 / hkdf_sha384 / hkdf_sha384_extract` | SHA-384 MAC/KDF family |
 | `ml_dsa_44_keygen(seed) -> (pk, sk)` | ML-DSA-44 keygen (FIPS 204, deterministic in seed) |
 | `ml_dsa_44_sign(sk, msg, rnd, ctx) -> Bytes` | ML-DSA-44 sign (pure; rnd = 0^32 = deterministic) |
 | `ml_dsa_44_verify(pk, msg, sig, ctx) -> Bool` | ML-DSA-44 verify |
@@ -699,6 +701,14 @@ rejection sampling with the 0x01 bitmask over 66-byte candidates,
 multiplication (P-521 also uses a = -3). The official RFC 9180
 Appendix A.6 vectors (all four modes) now pass — every HPKE ciphersuite
 the RFC publishes vectors for is vector-verified.
+
+**v0.41.0 features.** **HPKE DHKEM(P-384, HKDF-SHA384) + HMAC/HKDF-SHA384**
+— the HPKE KEM table is now complete (P-256/P-384/P-521/X25519/X448).
+New public `hmac_sha384` (with the long-key zero-padding handled) and
+`hkdf_sha384` / `hkdf_sha384_extract`, regression-tested against
+pycryptodome (RFC 4231 TC6-style long key). P-384 HPKE is verified by
+differential vectors from an independent Python oracle (the HPKE
+composition machinery itself is RFC-vector-verified via P-256/P-521).
 
 Hashes, ChaCha20, and hex/Base64 are throughput-bound by the algorithm; AES
 trades constant-time property for ~5x speed via lookup tables (see

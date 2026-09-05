@@ -1120,6 +1120,22 @@ pub fn hmac_sha512(key : Bytes, message : Bytes) -> Bytes {
   sha512(concat_bytes(opad, inner))
 }
 
+///|
+/// HMAC-SHA384 (FIPS 198-1). v0.41.0.
+pub fn hmac_sha384(key : Bytes, message : Bytes) -> Bytes {
+  let block_size = 128
+  let src = if key.length() > block_size { sha384(key) } else { key }
+  let padded = Array::make(block_size, b'\x00')
+  for i in 0..<src.length() {
+    padded[i] = src[i]
+  }
+  let k_prime = Bytes::from_array(padded[:])
+  let ipad = xor_bytes(k_prime, repeat_byte(b'\x36', block_size))
+  let opad = xor_bytes(k_prime, repeat_byte(b'\x5c', block_size))
+  let inner = sha384(concat_bytes(ipad, message))
+  sha384(concat_bytes(opad, inner))
+}
+
 // ==================== AES-CTR (NIST SP 800-38A) ====================
 
 ///|

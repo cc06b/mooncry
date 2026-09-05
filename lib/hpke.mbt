@@ -71,6 +71,16 @@ pub let hpke_p256_hkdf_sha256_chacha20poly1305 : HpkeSuite = HpkeSuite::{
 ///|
 
 ///|
+
+///|
+/// DHKEM(P-384, HKDF-SHA384) + HKDF-SHA384 + AES-256-GCM.
+pub let hpke_p384_hkdf_sha384_aes256gcm : HpkeSuite = HpkeSuite::{
+  kem_id: 0x11,
+  kdf_id: 2,
+  aead_id: 2,
+}
+
+///|
 /// DHKEM(P-521, HKDF-SHA512) + HKDF-SHA512 + AES-256-GCM.
 pub let hpke_p521_hkdf_sha512_aes256gcm : HpkeSuite = HpkeSuite::{
   kem_id: 0x12,
@@ -109,6 +119,7 @@ fn hpke_kem_params(s : HpkeSuite) -> (Int, Int) {
   // (Nsecret=Npk=Nsk, ) per KEM
   match s.kem_id {
     0x10 => (32, 32) // Nsecret, Nsk for P-256
+    0x11 => (48, 48) // Nsecret, Nsk for P-384
     0x12 => (64, 66) // Nsecret, Nsk for P-521
     0x20 => (32, 32) // Nsecret, Nsk for X25519
     0x21 => (64, 56) // Nsecret, Nsk for X448
@@ -120,6 +131,7 @@ fn hpke_kem_params(s : HpkeSuite) -> (Int, Int) {
 fn hpke_kdf_nh(s : HpkeSuite) -> Int {
   match s.kdf_id {
     1 => 32
+    2 => 48
     3 => 64
     _ => abort("hpke: unsupported kdf_id")
   }
@@ -145,6 +157,7 @@ fn hpke_aead_params(s : HpkeSuite) -> (Int, Int) {
 fn hpke_kem_kdf_id(s : HpkeSuite) -> Int {
   match s.kem_id {
     0x10 => 1
+    0x11 => 2
     0x12 => 3
     0x20 => 1
     0x21 => 3
@@ -156,6 +169,7 @@ fn hpke_kem_kdf_id(s : HpkeSuite) -> Int {
 fn hpke_hkdf_extract(kdf_id : Int, salt : Bytes, ikm : Bytes) -> Bytes {
   match kdf_id {
     1 => hkdf_extract(salt, ikm)
+    2 => hkdf_sha384_extract(salt, ikm)
     3 => hkdf_sha512_extract(salt, ikm)
     _ => abort("hpke: unsupported kdf_id")
   }
@@ -170,6 +184,7 @@ fn hpke_hkdf_expand(
 ) -> Bytes {
   let h = match kdf_id {
     1 => hmac_sha256
+    2 => hmac_sha384
     3 => hmac_sha512
     _ => abort("hpke: unsupported kdf_id")
   }
@@ -261,6 +276,47 @@ fn hpke_labeled_expand(
 
 ///|
 /// HPKE DeriveKeyPair (RFC 9180 §5.1): deterministic from `ikm`
+let hpke_p384_curve : EcCurve = {
+  p: @bigint.BigInt::from_string(
+    "fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffeffffffff0000000000000000ffffffff",
+    radix=16,
+  ),
+  n: @bigint.BigInt::from_string(
+    "ffffffffffffffffffffffffffffffffffffffffffffffffc7634d81f4372ddf581a0db248b0a77aecec196accc52973",
+    radix=16,
+  ),
+  b: @bigint.BigInt::from_string(
+    "b3312fa7e23ee7e4988e056be3f82d19181d9c6efe8141120314088f5013875ac656398d8a2ed19d2a85c8edd3ec2aef",
+    radix=16,
+  ),
+  a_minus3: true,
+  gx: @bigint.BigInt::from_string(
+    "aa87ca22be8b05378eb1c71ef320ad746e1d3b628ba79b9859f741e082542a385502f25dbf55296c3a545e3872760ab7",
+    radix=16,
+  ),
+  gy: @bigint.BigInt::from_string(
+    "3617de4a96262c6f5d9e98bf9292dc29f8f41dbd289a147ce9da3113b5f0b8c00a60b1ce1d7e819d7a431d7c90ea0e5f",
+    radix=16,
+  ),
+}
+
+///|
+fn hpke_p384_point_serialize(
+  pt_x : @bigint.BigInt,
+  pt_y : @bigint.BigInt,
+) -> Bytes {
+  concat_all([b"\x04", rsa_i2osp(pt_x, 48), rsa_i2osp(pt_y, 48)])
+}
+
+///|
+fn hpke_p384_point_deserialize(pk : Bytes) -> (BigInt, BigInt) {
+  if pk.length() != 97 || pk[0] != b'\x04' {
+    abort("hpke: invalid P-384 public key encoding")
+  }
+  (rsa_os2ip(bytes_sub(pk, 1, 48)), rsa_os2ip(bytes_sub(pk, 49, 48)))
+}
+
+///|
 let hpke_p521_curve : EcCurve = {
   p: @bigint.BigInt::from_string(
     "01ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
@@ -290,12 +346,12 @@ fn hpke_p521_point_serialize(
   pt_x : @bigint.BigInt,
   pt_y : @bigint.BigInt,
 ) -> Bytes {
-  concat_all([b"", rsa_i2osp(pt_x, 66), rsa_i2osp(pt_y, 66)])
+  concat_all([b"\x04", rsa_i2osp(pt_x, 66), rsa_i2osp(pt_y, 66)])
 }
 
 ///|
 fn hpke_p521_point_deserialize(pk : Bytes) -> (BigInt, BigInt) {
-  if pk.length() != 133 || pk[0] != b'' {
+  if pk.length() != 133 || pk[0] != b'\x04' {
     abort("hpke: invalid P-521 public key encoding")
   }
   (rsa_os2ip(bytes_sub(pk, 1, 66)), rsa_os2ip(bytes_sub(pk, 67, 66)))
@@ -322,7 +378,38 @@ fn hpke_p256_point_deserialize(pk : Bytes) -> (BigInt, BigInt) {
 pub fn hpke_derive_key_pair(s : HpkeSuite, ikm : Bytes) -> (Bytes, Bytes) {
   let (_, nsk) = hpke_kem_params(s)
   let dkp_prk = hpke_labeled_extract(s, true, b"", b"dkp_prk", ikm)
-  if s.kem_id == 0x12 {
+  if s.kem_id == 0x11 {
+    // rejection sampling over the P-384 group order (bitmask 0xFF)
+    let order = hpke_p384_curve.n
+    let mut counter = 0
+    let mut sk_int = @bigint.BigInt::from_int(0)
+    while true {
+      if counter > 255 {
+        abort("hpke: DeriveKeyPair rejection sampling failed")
+      }
+      let cand = hpke_labeled_expand(
+        s,
+        true,
+        dkp_prk,
+        b"candidate",
+        hpke_i2osp(counter, 1),
+        48,
+      )
+      let cand_int = rsa_os2ip(cand)
+      if cand_int > 0 && cand_int < order {
+        sk_int = cand_int
+        break
+      }
+      counter = counter + 1
+    }
+    let sk = rsa_i2osp(sk_int, 48)
+    let pt = ec_scalar_mult(
+      hpke_p384_curve,
+      sk_int,
+      ec_g_point(hpke_p384_curve),
+    )
+    (hpke_p384_point_serialize(pt.x, pt.y), sk)
+  } else if s.kem_id == 0x12 {
     // rejection sampling over the P-521 group order (bitmask 0x01)
     let order = hpke_p521_curve.n
     let mut counter = 0
@@ -396,6 +483,15 @@ pub fn hpke_derive_key_pair(s : HpkeSuite, ikm : Bytes) -> (Bytes, Bytes) {
 ///|
 fn hpke_dh(s : HpkeSuite, scalar : Bytes, point : Bytes) -> Bytes {
   match s.kem_id {
+    0x11 => {
+      let (px, py) = hpke_p384_point_deserialize(point)
+      let pt = ec_scalar_mult(hpke_p384_curve, rsa_os2ip(scalar), EcPoint::{
+        x: px,
+        y: py,
+        inf: false,
+      })
+      rsa_i2osp(pt.x, 48)
+    }
     0x12 => {
       let (px, py) = hpke_p521_point_deserialize(point)
       let pt = ec_scalar_mult(hpke_p521_curve, rsa_os2ip(scalar), EcPoint::{
@@ -465,6 +561,14 @@ pub fn hpke_auth_encap(
   let dh = hpke_dh(s, sk_e, pk_r)
   let dh2 = hpke_dh(s, sk_s, pk_r)
   let pk_s = match s.kem_id {
+    0x11 => {
+      let pt = ec_scalar_mult(
+        hpke_p384_curve,
+        rsa_os2ip(sk_s),
+        ec_g_point(hpke_p384_curve),
+      )
+      hpke_p384_point_serialize(pt.x, pt.y)
+    }
     0x12 => {
       let pt = ec_scalar_mult(
         hpke_p521_curve,

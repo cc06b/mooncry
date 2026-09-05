@@ -105,3 +105,27 @@ test "PBKDF2-HMAC-SHA512: dklen across block boundary (100 > 64)" {
     ),
   )
 }
+
+///|
+/// HMAC-SHA384 / HKDF-SHA384 regression vectors (pycryptodome oracle,
+/// RFC 4231 TC6 style long key). v0.41.0.
+test "HMAC-SHA384 RFC4231 TC6 + HKDF-SHA384" {
+  let key = Bytes::make(131, b'\xaa')
+  let msg = b"Test Using Larger Than Block-Size Key - Hash Key First"
+  assert_true(
+    bytes_equal(
+      hmac_sha384(key, msg),
+      hex_to_bytes(
+        "4ece084485813e9088d2c63a041bc5b44f9ef1012a2b588f3cd11f05033ac4c60c2ef6ab4030fe8296248df163f44952",
+      ),
+    ),
+  )
+  assert_true(
+    bytes_equal(
+      hkdf_sha384(b"salt-value", b"ikm-material", b"info-x", 48),
+      hex_to_bytes(
+        "835154f13d355160da59a2fa018bbb7c14a73fcb2accb53ecb7dc6c2b9860c983af980c90de215081d2044e5733ac230",
+      ),
+    ),
+  )
+}
