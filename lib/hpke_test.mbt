@@ -1,7 +1,7 @@
-// HPKE official vectors (RFC 9180 Appendix A.1/A.2). v0.37.0.
+// HPKE official vectors (RFC 9180 Appendix A.1/A.2, X25519). v0.37.0.
 
 ///|
-test "HPKE RFC9180 X25519+AES128GCM Base mode" {
+test "HPKE RFC9180 x25519_hkdf_sha256_aes128gcm Base mode" {
   let suite = hpke_x25519_hkdf_sha256_aes128gcm
   let info = hex_to_bytes("4f6465206f6e2061204772656369616e2055726e")
   let ikm_e = hex_to_bytes(
@@ -29,7 +29,6 @@ test "HPKE RFC9180 X25519+AES128GCM Base mode" {
     ),
   )
   let ctx_r = hpke_setup_r(suite, 0, sk_r, pk_r, enc, info, psk, psk_id, pk_s)
-  // sequence 0
   {
     let ct = hpke_seal(
       ctx_s,
@@ -66,7 +65,6 @@ test "HPKE RFC9180 X25519+AES128GCM Base mode" {
       )
     None => assert_true(false)
   }
-  // sequence 1
   {
     let ct = hpke_seal(
       ctx_s,
@@ -103,7 +101,6 @@ test "HPKE RFC9180 X25519+AES128GCM Base mode" {
       )
     None => assert_true(false)
   }
-  // sequence 2
   {
     let ct = hpke_seal(
       ctx_s,
@@ -167,7 +164,7 @@ test "HPKE RFC9180 X25519+AES128GCM Base mode" {
 }
 
 ///|
-test "HPKE RFC9180 X25519+AES128GCM PSK mode" {
+test "HPKE RFC9180 x25519_hkdf_sha256_aes128gcm PSK mode" {
   let suite = hpke_x25519_hkdf_sha256_aes128gcm
   let info = hex_to_bytes("4f6465206f6e2061204772656369616e2055726e")
   let ikm_e = hex_to_bytes(
@@ -197,7 +194,6 @@ test "HPKE RFC9180 X25519+AES128GCM PSK mode" {
     ),
   )
   let ctx_r = hpke_setup_r(suite, 1, sk_r, pk_r, enc, info, psk, psk_id, pk_s)
-  // sequence 0
   {
     let ct = hpke_seal(
       ctx_s,
@@ -234,7 +230,6 @@ test "HPKE RFC9180 X25519+AES128GCM PSK mode" {
       )
     None => assert_true(false)
   }
-  // sequence 1
   {
     let ct = hpke_seal(
       ctx_s,
@@ -271,7 +266,6 @@ test "HPKE RFC9180 X25519+AES128GCM PSK mode" {
       )
     None => assert_true(false)
   }
-  // sequence 2
   {
     let ct = hpke_seal(
       ctx_s,
@@ -335,7 +329,7 @@ test "HPKE RFC9180 X25519+AES128GCM PSK mode" {
 }
 
 ///|
-test "HPKE RFC9180 X25519+AES128GCM Auth mode" {
+test "HPKE RFC9180 x25519_hkdf_sha256_aes128gcm Auth mode" {
   let suite = hpke_x25519_hkdf_sha256_aes128gcm
   let info = hex_to_bytes("4f6465206f6e2061204772656369616e2055726e")
   let ikm_e = hex_to_bytes(
@@ -367,7 +361,6 @@ test "HPKE RFC9180 X25519+AES128GCM Auth mode" {
     ),
   )
   let ctx_r = hpke_setup_r(suite, 2, sk_r, pk_r, enc, info, psk, psk_id, pk_s)
-  // sequence 0
   {
     let ct = hpke_seal(
       ctx_s,
@@ -404,7 +397,6 @@ test "HPKE RFC9180 X25519+AES128GCM Auth mode" {
       )
     None => assert_true(false)
   }
-  // sequence 1
   {
     let ct = hpke_seal(
       ctx_s,
@@ -441,7 +433,6 @@ test "HPKE RFC9180 X25519+AES128GCM Auth mode" {
       )
     None => assert_true(false)
   }
-  // sequence 2
   {
     let ct = hpke_seal(
       ctx_s,
@@ -505,7 +496,7 @@ test "HPKE RFC9180 X25519+AES128GCM Auth mode" {
 }
 
 ///|
-test "HPKE RFC9180 X25519+AES128GCM AuthPSK mode" {
+test "HPKE RFC9180 x25519_hkdf_sha256_aes128gcm AuthPSK mode" {
   let suite = hpke_x25519_hkdf_sha256_aes128gcm
   let info = hex_to_bytes("4f6465206f6e2061204772656369616e2055726e")
   let ikm_e = hex_to_bytes(
@@ -539,7 +530,6 @@ test "HPKE RFC9180 X25519+AES128GCM AuthPSK mode" {
     ),
   )
   let ctx_r = hpke_setup_r(suite, 3, sk_r, pk_r, enc, info, psk, psk_id, pk_s)
-  // sequence 0
   {
     let ct = hpke_seal(
       ctx_s,
@@ -576,7 +566,6 @@ test "HPKE RFC9180 X25519+AES128GCM AuthPSK mode" {
       )
     None => assert_true(false)
   }
-  // sequence 1
   {
     let ct = hpke_seal(
       ctx_s,
@@ -613,7 +602,6 @@ test "HPKE RFC9180 X25519+AES128GCM AuthPSK mode" {
       )
     None => assert_true(false)
   }
-  // sequence 2
   {
     let ct = hpke_seal(
       ctx_s,
@@ -677,7 +665,7 @@ test "HPKE RFC9180 X25519+AES128GCM AuthPSK mode" {
 }
 
 ///|
-test "HPKE RFC9180 X25519+ChaCha20Poly1305 Base mode" {
+test "HPKE RFC9180 x25519_hkdf_sha256_chacha20poly1305 Base mode" {
   let suite = hpke_x25519_hkdf_sha256_chacha20poly1305
   let info = hex_to_bytes("4f6465206f6e2061204772656369616e2055726e")
   let ikm_e = hex_to_bytes(
@@ -705,7 +693,6 @@ test "HPKE RFC9180 X25519+ChaCha20Poly1305 Base mode" {
     ),
   )
   let ctx_r = hpke_setup_r(suite, 0, sk_r, pk_r, enc, info, psk, psk_id, pk_s)
-  // sequence 0
   {
     let ct = hpke_seal(
       ctx_s,
@@ -742,7 +729,6 @@ test "HPKE RFC9180 X25519+ChaCha20Poly1305 Base mode" {
       )
     None => assert_true(false)
   }
-  // sequence 1
   {
     let ct = hpke_seal(
       ctx_s,
@@ -779,7 +765,6 @@ test "HPKE RFC9180 X25519+ChaCha20Poly1305 Base mode" {
       )
     None => assert_true(false)
   }
-  // sequence 2
   {
     let ct = hpke_seal(
       ctx_s,
@@ -843,7 +828,7 @@ test "HPKE RFC9180 X25519+ChaCha20Poly1305 Base mode" {
 }
 
 ///|
-test "HPKE RFC9180 X25519+ChaCha20Poly1305 PSK mode" {
+test "HPKE RFC9180 x25519_hkdf_sha256_chacha20poly1305 PSK mode" {
   let suite = hpke_x25519_hkdf_sha256_chacha20poly1305
   let info = hex_to_bytes("4f6465206f6e2061204772656369616e2055726e")
   let ikm_e = hex_to_bytes(
@@ -873,7 +858,6 @@ test "HPKE RFC9180 X25519+ChaCha20Poly1305 PSK mode" {
     ),
   )
   let ctx_r = hpke_setup_r(suite, 1, sk_r, pk_r, enc, info, psk, psk_id, pk_s)
-  // sequence 0
   {
     let ct = hpke_seal(
       ctx_s,
@@ -910,7 +894,6 @@ test "HPKE RFC9180 X25519+ChaCha20Poly1305 PSK mode" {
       )
     None => assert_true(false)
   }
-  // sequence 1
   {
     let ct = hpke_seal(
       ctx_s,
@@ -947,7 +930,6 @@ test "HPKE RFC9180 X25519+ChaCha20Poly1305 PSK mode" {
       )
     None => assert_true(false)
   }
-  // sequence 2
   {
     let ct = hpke_seal(
       ctx_s,
@@ -1011,7 +993,7 @@ test "HPKE RFC9180 X25519+ChaCha20Poly1305 PSK mode" {
 }
 
 ///|
-test "HPKE RFC9180 X25519+ChaCha20Poly1305 Auth mode" {
+test "HPKE RFC9180 x25519_hkdf_sha256_chacha20poly1305 Auth mode" {
   let suite = hpke_x25519_hkdf_sha256_chacha20poly1305
   let info = hex_to_bytes("4f6465206f6e2061204772656369616e2055726e")
   let ikm_e = hex_to_bytes(
@@ -1043,7 +1025,6 @@ test "HPKE RFC9180 X25519+ChaCha20Poly1305 Auth mode" {
     ),
   )
   let ctx_r = hpke_setup_r(suite, 2, sk_r, pk_r, enc, info, psk, psk_id, pk_s)
-  // sequence 0
   {
     let ct = hpke_seal(
       ctx_s,
@@ -1080,7 +1061,6 @@ test "HPKE RFC9180 X25519+ChaCha20Poly1305 Auth mode" {
       )
     None => assert_true(false)
   }
-  // sequence 1
   {
     let ct = hpke_seal(
       ctx_s,
@@ -1117,7 +1097,6 @@ test "HPKE RFC9180 X25519+ChaCha20Poly1305 Auth mode" {
       )
     None => assert_true(false)
   }
-  // sequence 2
   {
     let ct = hpke_seal(
       ctx_s,
@@ -1181,7 +1160,7 @@ test "HPKE RFC9180 X25519+ChaCha20Poly1305 Auth mode" {
 }
 
 ///|
-test "HPKE RFC9180 X25519+ChaCha20Poly1305 AuthPSK mode" {
+test "HPKE RFC9180 x25519_hkdf_sha256_chacha20poly1305 AuthPSK mode" {
   let suite = hpke_x25519_hkdf_sha256_chacha20poly1305
   let info = hex_to_bytes("4f6465206f6e2061204772656369616e2055726e")
   let ikm_e = hex_to_bytes(
@@ -1215,7 +1194,6 @@ test "HPKE RFC9180 X25519+ChaCha20Poly1305 AuthPSK mode" {
     ),
   )
   let ctx_r = hpke_setup_r(suite, 3, sk_r, pk_r, enc, info, psk, psk_id, pk_s)
-  // sequence 0
   {
     let ct = hpke_seal(
       ctx_s,
@@ -1252,7 +1230,6 @@ test "HPKE RFC9180 X25519+ChaCha20Poly1305 AuthPSK mode" {
       )
     None => assert_true(false)
   }
-  // sequence 1
   {
     let ct = hpke_seal(
       ctx_s,
@@ -1289,7 +1266,6 @@ test "HPKE RFC9180 X25519+ChaCha20Poly1305 AuthPSK mode" {
       )
     None => assert_true(false)
   }
-  // sequence 2
   {
     let ct = hpke_seal(
       ctx_s,

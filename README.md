@@ -347,7 +347,7 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `hpke_setup_s(suite, mode, pk_r, ikm_e, info, psk, psk_id, sk_s)` | HPKE sender setup (RFC 9180, all 4 modes) |
 | `hpke_seal(ctx, aad, pt) / hpke_open(ctx, aad, ct)` | HPKE authenticated encryption (auto sequence numbers) |
 | `hpke_export(ctx, exporter_context, len)` | HPKE exporter |
-| `hpke_x25519_hkdf_sha256_* / hpke_x448_hkdf_sha512_*` | HPKE cipher-suite selectors |
+| `hpke_x25519_* / hpke_p256_* / hpke_x448_*` | HPKE cipher-suite selectors (all RFC-vectored suites) |
 | `ml_dsa_44_keygen(seed) -> (pk, sk)` | ML-DSA-44 keygen (FIPS 204, deterministic in seed) |
 | `ml_dsa_44_sign(sk, msg, rnd, ctx) -> Bytes` | ML-DSA-44 sign (pure; rnd = 0^32 = deterministic) |
 | `ml_dsa_44_verify(pk, msg, sig, ctx) -> Bool` | ML-DSA-44 verify |
@@ -673,6 +673,14 @@ IKM), `hpke_seal / hpke_open` with automatic sequence numbers
 against the official RFC 9180 Appendix A vectors (every mode of the
 X25519 suites, including the sequence-number carry at 255/256);
 X448 covered by round-trip tests.
+
+**v0.38.0 features.** **HPKE completes: DHKEM(P-256, HKDF-SHA256)**
+with rejection-sampling key derivation and uncompressed-point
+encoding, covering the remaining official RFC 9180 Appendix A suites
+(A.3-A.5, all four modes each), including the mixed
+DHKEM(P-256)+HKDF-SHA512 ciphersuite where the KEM-internal KDF
+differs from the suite KDF. All three DHKEMs the RFC defines vectors
+for are now vector-verified.
 
 Hashes, ChaCha20, and hex/Base64 are throughput-bound by the algorithm; AES
 trades constant-time property for ~5x speed via lookup tables (see
