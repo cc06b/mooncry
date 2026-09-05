@@ -338,6 +338,8 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `ml_kem_768_hybrid_open(dk, blob, aad) -> Option[Bytes]` | hybrid decryption; `None` on any failure |
 | `ml_kem_768_hybrid_seal_init + ml_kem_hybrid_stream_update/final` | streaming hybrid seal |
 | `poly1305_new / poly1305_update / poly1305_finalize` | incremental Poly1305 |
+| `aes_gcm_siv_encrypt(key, nonce, aad, pt)` | AES-GCM-SIV (RFC 8452, nonce-misuse-resistant) |
+| `aes_gcm_siv_decrypt(key, nonce, aad, ct) -> Option[Bytes]` | AES-GCM-SIV decryption |
 | `xwing_keygen(seed) -> (pk, sk)` | X-Wing hybrid KEM keygen (ML-KEM-768 + X25519) |
 | `xwing_encaps(pk, eseed) -> (ss, ct)` | X-Wing encapsulation (derandomized) |
 | `xwing_decaps(ct, sk) -> Bytes` | X-Wing decapsulation |
@@ -681,6 +683,15 @@ encoding, covering the remaining official RFC 9180 Appendix A suites
 DHKEM(P-256)+HKDF-SHA512 ciphersuite where the KEM-internal KDF
 differs from the suite KDF. All three DHKEMs the RFC defines vectors
 for are now vector-verified.
+
+**v0.39.0 features.** **AES-GCM-SIV (RFC 8452)** — the
+nonce-misuse-resistant AEAD: `aes_gcm_siv_encrypt /
+aes_gcm_siv_decrypt` for AEAD_AES_128_GCM_SIV and
+AEAD_AES_256_GCM_SIV. POLYVAL is implemented via the RFC Appendix A
+equivalence with GHASH (ByteReverse + mulX), reusing the library's
+table-accelerated GF(2^128) multiplier. Verified against all 48
+official RFC 8452 Appendix C vectors (encrypt byte-exact + decrypt
+round-trip).
 
 Hashes, ChaCha20, and hex/Base64 are throughput-bound by the algorithm; AES
 trades constant-time property for ~5x speed via lookup tables (see
