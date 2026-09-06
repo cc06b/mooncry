@@ -710,6 +710,17 @@ pycryptodome (RFC 4231 TC6-style long key). P-384 HPKE is verified by
 differential vectors from an independent Python oracle (the HPKE
 composition machinery itself is RFC-vector-verified via P-256/P-521).
 
+**v0.42.0 features.** **Performance polish (benchmarked, wasm-gc).**
+Ed25519 rewritten on extended twisted Edwards coordinates (X:Y:Z:T,
+Hisil et al. formulas) with 4-bit fixed-window scalar multiplication
+and Shamir double-scalar verification: **sign 855 ms → 10.3 ms (83x),
+verify 870 ms → 9.9 ms (88x)**. ECDSA P-256 (and secp256k1, and the
+HPKE NIST-curve DH) switched from string double-and-add to 4-bit
+windows + Shamir verify: **P-256 sign 12.4 → 10.2 ms, verify 22.7 →
+12.3 ms**. BLAKE3 chunk compression made zero-allocation (ping-pong
+message schedule): **64 → 20 µs/KiB (3.2x), now faster than BLAKE2b**.
+New benchmarks for Ed25519/X25519.
+
 Hashes, ChaCha20, and hex/Base64 are throughput-bound by the algorithm; AES
 trades constant-time property for ~5x speed via lookup tables (see
 [Security & performance boundaries](#security--performance-boundaries)).

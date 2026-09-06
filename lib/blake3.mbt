@@ -97,6 +97,64 @@ fn blake3_compress(
 }
 
 ///|
+fn blake3_permute_into(src : Array[UInt64], dst : Array[UInt64]) -> Unit {
+  for i in 0..<16 {
+    dst[i] = src[blake3_msg_perm[i]]
+  }
+}
+
+///|
+fn blake3_words_from_le_into(block : Array[Byte], w : Array[UInt64]) -> Unit {
+  for i in 0..<16 {
+    w[i] = block[i * 4].to_uint64() |
+      (block[i * 4 + 1].to_uint64() << 8) |
+      (block[i * 4 + 2].to_uint64() << 16) |
+      (block[i * 4 + 3].to_uint64() << 24)
+  }
+}
+
+///|
+/// Zero-allocation compress: ping-pong message schedule between b1/b2,
+/// result written into v (16 words; chaining value = v[0..8]).
+fn blake3_compress_into(
+  cv : Array[UInt64],
+  block_words : Array[UInt64],
+  counter : UInt64,
+  block_len : UInt64,
+  flags : UInt64,
+  v : Array[UInt64],
+  b1 : Array[UInt64],
+  b2 : Array[UInt64],
+) -> Unit {
+  for i in 0..<8 {
+    v[i] = cv[i]
+  }
+  v[8] = blake3_iv[0]
+  v[9] = blake3_iv[1]
+  v[10] = blake3_iv[2]
+  v[11] = blake3_iv[3]
+  v[12] = counter
+  v[13] = 0UL
+  v[14] = block_len
+  v[15] = flags
+  for i in 0..<16 {
+    b1[i] = block_words[i]
+  }
+  for _ in 0..<3 {
+    blake3_round(v, b1)
+    blake3_permute_into(b1, b2)
+    blake3_round(v, b2)
+    blake3_permute_into(b2, b1)
+  }
+  blake3_round(v, b1)
+  for i in 0..<8 {
+    let t = v[i] ^ v[i + 8]
+    v[i + 8] = v[i + 8] ^ cv[i]
+    v[i] = t
+  }
+}
+
+///|
 fn blake3_words_from_le(block : Array[Byte]) -> Array[UInt64] {
   let w = Array::make(16, 0UL)
   for i in 0..<16 {
@@ -126,12 +184,17 @@ fn b3_first8(st : Array[UInt64]) -> Array[UInt64] {
 
 ///|
 priv struct B3ChunkState {
-  mut cv : Array[UInt64]
+  cv : Array[UInt64]
   chunk_counter : UInt64
   block : Array[Byte]
   mut block_len : Int
   mut blocks_compressed : Int
   flags : UInt64
+  // reusable scratch buffers (v0.42.0 perf: avoid per-block allocations)
+  words16 : Array[UInt64]
+  vtmp : Array[UInt64]
+  b1 : Array[UInt64]
+  b2 : Array[UInt64]
 }
 
 ///|
@@ -147,6 +210,10 @@ fn b3_chunk_new(
     block_len: 0,
     blocks_compressed: 0,
     flags,
+    words16: Array::make(16, 0UL),
+    vtmp: Array::make(16, 0UL),
+    b1: Array::make(16, 0UL),
+    b2: Array::make(16, 0UL),
   }
 }
 
@@ -170,15 +237,20 @@ fn b3_chunk_update(cs : B3ChunkState, input : Bytes) -> Unit {
   let len = input.length()
   while off < len {
     if cs.block_len == 64 {
-      let words = blake3_words_from_le(cs.block)
-      let st = blake3_compress(
+      blake3_words_from_le_into(cs.block, cs.words16)
+      blake3_compress_into(
         cs.cv,
-        words,
+        cs.words16,
         cs.chunk_counter,
         64UL,
         cs.flags | b3_start_flag(cs),
+        cs.vtmp,
+        cs.b1,
+        cs.b2,
       )
-      cs.cv = b3_first8(st)
+      for i in 0..<8 {
+        cs.cv[i] = cs.vtmp[i]
+      }
       cs.blocks_compressed = cs.blocks_compressed + 1
       cs.block_len = 0
     }

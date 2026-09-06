@@ -58,9 +58,9 @@ fn ed25519_verify_dom(
   }
   let k = ed_le_to_int(sha512(concat_all([dom, r_enc, public_key, message]))) %
     ed_l
-  let lhs = ed_scalar_mult(s, ed_base)
-  let rhs = ed_point_add(r, ed_scalar_mult(k, a))
-  bytes_equal(ed_encode(lhs), ed_encode(rhs))
+  // S * B == R + k * A  <=>  S*B + (L - k)*A == R (one Shamir mult)
+  let lhs = ed_double_scalar_mult(s, ed_base, ed_sub(ed_l, k), a)
+  bytes_equal(ed_encode(lhs), ed_encode(r))
 }
 
 ///|

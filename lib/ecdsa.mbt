@@ -276,24 +276,97 @@ fn jac_add_pt(c : EcCurve, p1 : JacPoint, p2 : JacPoint) -> JacPoint {
 ///|
 /// Scalar multiplication: double-and-add over Jacobian points, converting
 /// back to affine with one modular inverse at the end.
-fn ec_scalar_mult(c : EcCurve, k : @bigint.BigInt, p : EcPoint) -> EcPoint {
-  let jp = ec_to_jac(p)
-  let bits = k.to_string(radix=2)
-  let mut r = jac_identity()
-  for ch in bits {
-    r = jac_double_pt(c, r)
-    if ch == '1' {
-      r = jac_add_pt(c, r, jp)
-    }
+fn ec_hex_nibble(code : Int) -> Int {
+  if code >= 48 && code <= 57 {
+    code - 48
+  } else if code >= 97 && code <= 102 {
+    code - 87
+  } else if code >= 65 && code <= 70 {
+    code - 55
+  } else {
+    0
   }
-  jac_to_affine(c, r)
 }
 
 ///|
-/// Add two affine points via Jacobian coordinates (single inverse at the
-/// end instead of one per affine operation)
-fn ec_add_points(c : EcCurve, p1 : EcPoint, p2 : EcPoint) -> EcPoint {
-  jac_to_affine(c, jac_add_pt(c, ec_to_jac(p1), ec_to_jac(p2)))
+/// Fixed-window (4-bit) scalar multiplication in Jacobian coordinates:
+/// one precomputed table of 16 multiples, then four doublings + one
+/// conditional add per hex digit. Replaces the string double-and-add
+/// (v0.42.0 perf).
+fn ec_scalar_mult_jac(
+  c : EcCurve,
+  k : @bigint.BigInt,
+  jp : JacPoint,
+) -> JacPoint {
+  let tab = Array::make(16, jac_identity())
+  tab[1] = jp
+  for i in 2..<16 {
+    tab[i] = jac_add_pt(c, tab[i - 1], jp)
+  }
+  let hex = k.to_string(radix=16)
+  let mut r = jac_identity()
+  for ch in hex {
+    r = jac_double_pt(c, r)
+    r = jac_double_pt(c, r)
+    r = jac_double_pt(c, r)
+    r = jac_double_pt(c, r)
+    let d = ec_hex_nibble(ch.to_int())
+    if d > 0 {
+      r = jac_add_pt(c, r, tab[d])
+    }
+  }
+  r
+}
+
+///|
+fn ec_scalar_mult(c : EcCurve, k : @bigint.BigInt, p : EcPoint) -> EcPoint {
+  jac_to_affine(c, ec_scalar_mult_jac(c, k, ec_to_jac(p)))
+}
+
+///|
+/// Shamir's trick: k1*P1 + k2*P2 with a shared doubling chain (4-bit
+/// windows over both scalars). Halves the doublings of two separate
+/// scalar multiplications; used by ECDSA verification (v0.42.0 perf).
+fn ec_double_scalar_mult_jac(
+  c : EcCurve,
+  k1 : @bigint.BigInt,
+  p1 : EcPoint,
+  k2 : @bigint.BigInt,
+  p2 : EcPoint,
+) -> JacPoint {
+  let j1 = ec_to_jac(p1)
+  let j2 = ec_to_jac(p2)
+  let t1 = Array::make(16, jac_identity())
+  t1[1] = j1
+  for i in 2..<16 {
+    t1[i] = jac_add_pt(c, t1[i - 1], j1)
+  }
+  let t2 = Array::make(16, jac_identity())
+  t2[1] = j2
+  for i in 2..<16 {
+    t2[i] = jac_add_pt(c, t2[i - 1], j2)
+  }
+  let h1 = k1.to_string(radix=16)
+  let h2 = k2.to_string(radix=16)
+  let n = if h1.length() > h2.length() { h1.length() } else { h2.length() }
+  let mut r = jac_identity()
+  for i in 0..<n {
+    r = jac_double_pt(c, r)
+    r = jac_double_pt(c, r)
+    r = jac_double_pt(c, r)
+    r = jac_double_pt(c, r)
+    let o1 = n - h1.length()
+    let d1 = if i < o1 { 0 } else { ec_hex_nibble(h1[i - o1].to_int()) }
+    let o2 = n - h2.length()
+    let d2 = if i < o2 { 0 } else { ec_hex_nibble(h2[i - o2].to_int()) }
+    if d1 > 0 {
+      r = jac_add_pt(c, r, t1[d1])
+    }
+    if d2 > 0 {
+      r = jac_add_pt(c, r, t2[d2])
+    }
+  }
+  r
 }
 
 ///|
@@ -499,10 +572,9 @@ fn ec_verify(
   let w = ec_inv_n(c.n, s_sig)
   let u1 = ec_mul(c.n, e, w) % c.n
   let u2 = ec_mul(c.n, r_sig, w) % c.n
-  let pt = ec_add_points(
+  let pt = jac_to_affine(
     c,
-    ec_scalar_mult(c, u1, ec_g_point(c)),
-    ec_scalar_mult(c, u2, q),
+    ec_double_scalar_mult_jac(c, u1, ec_g_point(c), u2, q),
   )
   if pt.inf {
     return false
