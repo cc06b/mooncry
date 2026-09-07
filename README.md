@@ -710,6 +710,22 @@ pycryptodome (RFC 4231 TC6-style long key). P-384 HPKE is verified by
 differential vectors from an independent Python oracle (the HPKE
 composition machinery itself is RFC-vector-verified via P-256/P-521).
 
+**v0.49.0 features.** **Performance: native Curve448-Goldilocks field
+arithmetic (radix 2^28, sixteen signed Int64 limbs).** p448 = 2^448 -
+2^224 - 1 folds via 2^448 = 2^224 + 1; the fold coefficients are
+derived per (i,j,k) by pure arithmetic in the multiply inner loop
+(verified term-by-term against the recursive definition — no tables,
+no hand-copied constants), the subtraction bias is the limb
+decomposition of p448 computed at init. X448 runs a native Montgomery
+ladder (a24 = 39081, RFC 7748 clamp); Ed448 point arithmetic (RFC
+8032 A.4 projective formulas), encode/decode and the decoding square
+root all move onto the new limbs, with 4-bit window scalar
+multiplication. **Ed448 sign 27.2 → 13.2 ms (2.1x), verify 29.8 →
+15.2 ms; X448 10.4 → 6.1 ms (1.7x).** Validated by a Python prototype
+against the official RFC 7748 §6.2 X448 vectors (Alice/Bob/shared
+secret) and the §7.1 iteration value before porting; all RFC 8032
+§7.4 Ed448 vectors green.
+
 **v0.48.0 features.** **Performance: division-free Ed448/X448 field
 arithmetic** — the Barrett playbook from v0.46 applied to the 448-bit
 Goldilocks prime: conditional add/sub, Barrett modular multiply, and
