@@ -710,6 +710,22 @@ pycryptodome (RFC 4231 TC6-style long key). P-384 HPKE is verified by
 differential vectors from an independent Python oracle (the HPKE
 composition machinery itself is RFC-vector-verified via P-256/P-521).
 
+**v0.45.0 features.** **Performance: native Curve25519 field
+arithmetic (radix 2^25.5, ten signed Int64 limbs — donna/ref10 style).**
+New `fe25519` core with multiplication coefficients DERIVED at init
+from the shift table (never hand-copied), precomputed fixed-exponent
+bit patterns (p-2 inversion, (p+3)/8 square root), and one raw
+ladder pass. X25519 moves off the generic BigInt ladder:
+**4.34 → 1.80 ms (2.4x)**. Ed25519 group arithmetic (extended
+coordinates), point decoding (native sqrt instead of two BigInt
+modular exponentiations) and encoding all run on the new limbs:
+**sign 10.3 → 4.3 ms (2.4x), verify 9.9 → 3.7 ms (2.7x)**; Ed25519ctx/ph
+ride the same path. Keccak gained flat lane-index tables (rho/pi/chi
+without nested lookups or per-round mod-5) and copy-free SHA3 absorb.
+New tests: RFC 7748 §6.1 vectors + iteration-1, ECDH commutativity
+property, and public-key consistency (the BigInt ladder is retained
+in the test tree as a differential reference).
+
 **v0.44.0 features.** **Performance: T-table AES core + LMS fast
 chains (benchmarked, wasm-gc).** The AES block core is rewritten in
 the classic OpenSSL T-table style (four 256-entry UInt tables fusing

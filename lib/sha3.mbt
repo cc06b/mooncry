@@ -34,6 +34,66 @@ fn rotl64(x : UInt64, n : Int) -> UInt64 {
 }
 
 ///|
+/// Flat lane-index tables (idx = x + 5*y): precomputed rotation
+/// amounts, pi destinations and chi neighbour indices — removes the
+/// nested-array dereference and per-round mod-5 arithmetic from
+/// keccak_f (v0.45.0 perf).
+let keccak_rho_flat : Array[Int] = {
+  let t = Array::make(25, 0)
+  for x in 0..<5 {
+    for y in 0..<5 {
+      t[x + 5 * y] = keccak_rho[x][y]
+    }
+  }
+  t
+}
+
+///|
+let keccak_pi_dst : Array[Int] = {
+  let t = Array::make(25, 0)
+  for x in 0..<5 {
+    for y in 0..<5 {
+      t[x + 5 * y] = y + 5 * ((2 * x + 3 * y) % 5)
+    }
+  }
+  t
+}
+
+///|
+let keccak_chi_l : Array[Int] = {
+  let t = Array::make(25, 0)
+  for x in 0..<5 {
+    for y in 0..<5 {
+      t[x + 5 * y] = (x + 1) % 5 + 5 * y
+    }
+  }
+  t
+}
+
+///|
+let keccak_chi_r : Array[Int] = {
+  let t = Array::make(25, 0)
+  for x in 0..<5 {
+    for y in 0..<5 {
+      t[x + 5 * y] = (x + 2) % 5 + 5 * y
+    }
+  }
+  t
+}
+
+///|
+fn read_lane_le_bytes(buf : Bytes, off : Int) -> UInt64 {
+  buf[off].to_uint64() |
+  (buf[off + 1].to_uint64() << 8) |
+  (buf[off + 2].to_uint64() << 16) |
+  (buf[off + 3].to_uint64() << 24) |
+  (buf[off + 4].to_uint64() << 32) |
+  (buf[off + 5].to_uint64() << 40) |
+  (buf[off + 6].to_uint64() << 48) |
+  (buf[off + 7].to_uint64() << 56)
+}
+
+///|
 /// Read 8 bytes from an array at offset as a little-endian UInt64
 fn read_lane_le(buf : Array[Byte], off : Int) -> UInt64 {
   buf[off].to_uint64() |
@@ -78,24 +138,14 @@ fn keccak_f_from(st : Array[UInt64], start : Int) -> Unit {
         st[x + 5 * y] = st[x + 5 * y] ^ d[x]
       }
     }
-    // Rho and Pi: b[y + 5*((2x+3y) mod 5)] = rot(st[x + 5y], r[x][y])
-    for x in 0..<5 {
-      for y in 0..<5 {
-        b[y + 5 * ((2 * x + 3 * y) % 5)] = rotl64(
-          st[x + 5 * y],
-          keccak_rho[x][y],
-        )
-      }
+    // Rho and Pi (flat tables, v0.45.0)
+    for idx in 0..<25 {
+      b[keccak_pi_dst[idx]] = rotl64(st[idx], keccak_rho_flat[idx])
     }
-    // Chi: st[x+5y] = b[x+5y] ^ ((~b[(x+1)%5 + 5y]) & b[(x+2)%5 + 5y])
-    for x in 0..<5 {
-      for y in 0..<5 {
-        st[x + 5 * y] = b[x + 5 * y] ^
-          (
-            (0xFFFFFFFFFFFFFFFFUL ^ b[(x + 1) % 5 + 5 * y]) &
-            b[(x + 2) % 5 + 5 * y]
-          )
-      }
+    // Chi (flat tables, v0.45.0)
+    for idx in 0..<25 {
+      st[idx] = b[idx] ^
+        ((0xFFFFFFFFFFFFFFFFUL ^ b[keccak_chi_l[idx]]) & b[keccak_chi_r[idx]])
     }
     // Iota
     st[0] = st[0] ^ keccak_rndc[round]
@@ -107,25 +157,28 @@ fn keccak_f_from(st : Array[UInt64], start : Int) -> Unit {
 fn sha3_sponge(rate_bytes : Int, data : Bytes, out_len : Int) -> Bytes {
   let st = new_state()
   let data_len = data.length()
-  // pad: data || 0x06 ... 0x80, block-aligned to rate_bytes
-  let num_blocks = data_len / rate_bytes + 1
-  let buf_len = num_blocks * rate_bytes
-  let buf = Array::make(buf_len, b'\x00')
-  for i in 0..<data_len {
-    buf[i] = data[i]
-  }
-  buf[data_len] = (buf[data_len].to_int() ^ 0x06).to_byte()
-  buf[buf_len - 1] = (buf[buf_len - 1].to_int() ^ 0x80).to_byte()
-  // absorb: XOR each rate block into st (lane i = x + 5*y)
   let lanes_per_block = rate_bytes / 8
-  let mut off = 0
-  while off < buf_len {
+  // absorb full blocks directly from the input (no full copy, v0.45.0)
+  let full_blocks = data_len / rate_bytes
+  for blk in 0..<full_blocks {
+    let off = blk * rate_bytes
     for i in 0..<lanes_per_block {
-      st[i] = st[i] ^ read_lane_le(buf, off + i * 8)
+      st[i] = st[i] ^ read_lane_le_bytes(data, off + i * 8)
     }
     keccak_f(st)
-    off = off + rate_bytes
   }
+  // final block: remaining bytes + pad10*1 (0x06 domain, 0x80 terminator)
+  let rem = data_len - full_blocks * rate_bytes
+  let tail = Array::make(rate_bytes, b'\x00')
+  for i in 0..<rem {
+    tail[i] = data[full_blocks * rate_bytes + i]
+  }
+  tail[rem] = (tail[rem].to_int() ^ 0x06).to_byte()
+  tail[rate_bytes - 1] = (tail[rate_bytes - 1].to_int() ^ 0x80).to_byte()
+  for i in 0..<lanes_per_block {
+    st[i] = st[i] ^ read_lane_le(tail, i * 8)
+  }
+  keccak_f(st)
   // squeeze: output lanes 0,1,2,... little-endian, re-permuting after
   // every rate/8 lanes (only rate bytes may be read per round)
   let out = Array::make(out_len, b'\x00')
