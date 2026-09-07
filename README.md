@@ -710,6 +710,18 @@ pycryptodome (RFC 4231 TC6-style long key). P-384 HPKE is verified by
 differential vectors from an independent Python oracle (the HPKE
 composition machinery itself is RFC-vector-verified via P-256/P-521).
 
+**v0.44.0 features.** **Performance: T-table AES core + LMS fast
+chains (benchmarked, wasm-gc).** The AES block core is rewritten in
+the classic OpenSSL T-table style (four 256-entry UInt tables fusing
+SubBytes+ShiftRows+MixColumns into one lookup per output word; the
+decryption key schedule applies InvMixColumns to rounds 1..nr-1 per
+the equivalent inverse cipher). Every AES mode benefits:
+**AES-256-GCM 439 → 104 µs/KiB (4.2x)**, CTR 63.5, CBC 79.4, SIV 188,
+CMAC 68.8 µs/KiB; GCM-SIV, CCM and KW ride the same core. LMS/HSS
+chain hashing moved to a shared pre-padded SHA-256 block template
+(one raw compression per Winternitz step, zero per-hash allocations):
+LMS test workload ~1.9x, key generation several times faster.
+
 **v0.43.0 features.** **LMS / HSS hash-based signatures (RFC 8554)**
 — the Leighton-Micali Signature scheme and its Hierarchical variant,
 SHA256 parameter sets (LMOTS_SHA256_N32_W1/W2/W4/W8 x

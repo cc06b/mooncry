@@ -318,40 +318,6 @@ fn gmul(a : Int, b : Int) -> Int {
 }
 
 ///|
-/// Precomputed GF(2^8) product tables for the fixed AES coefficients.
-/// mix_columns uses mul2/mul3; inv_mix_columns uses mul9/mul11/mul13/mul14.
-/// Replacing the per-byte gmul loop with a single lookup is a large speedup,
-/// but like any table indexed by state bytes it is NOT constant-time (cache
-/// side channel on the AES state). Constant-time verification is retained
-/// for tag comparison (bytes_equal) and PKCS#7 padding. This is the standard
-/// software-AES tradeoff when AES-NI is unavailable.
-fn build_mul_table(m : Int) -> Array[Int] {
-  let t = Array::make(256, 0)
-  for i in 0..<256 {
-    t[i] = gmul(m, i)
-  }
-  t
-}
-
-///|
-let mul2 : Array[Int] = build_mul_table(0x02)
-
-///|
-let mul3 : Array[Int] = build_mul_table(0x03)
-
-///|
-let mul9 : Array[Int] = build_mul_table(0x09)
-
-///|
-let mul11 : Array[Int] = build_mul_table(0x0b)
-
-///|
-let mul13 : Array[Int] = build_mul_table(0x0d)
-
-///|
-let mul14 : Array[Int] = build_mul_table(0x0e)
-
-///|
 fn rot_word(word : Array[Int]) -> Array[Int] {
   [word[1], word[2], word[3], word[0]]
 }
@@ -401,131 +367,291 @@ fn aes_key_expansion(key : Bytes) -> Array[Array[Int]] {
 }
 
 ///|
-fn bytes_to_state(data : Bytes) -> Array[Array[Int]] {
-  let state = [
-    Array::make(4, 0),
-    Array::make(4, 0),
-    Array::make(4, 0),
-    Array::make(4, 0),
-  ]
-  for i in 0..<16 {
-    state[i % 4][i / 4] = data[i].to_int()
-  }
-  state
+// ==================== T-table AES core (v0.44.0 perf) ====================
+// Classic OpenSSL-style 4x256 UInt tables fusing SubBytes+ShiftRows+
+// MixColumns into one lookup per output word. The nested-array
+// multi-pass core was ~2.5x slower on wasm-gc.
+
+///|
+fn aes_be32(block : Bytes, off : Int) -> UInt {
+  ((block[off].to_int() << 24) |
+  (block[off + 1].to_int() << 16) |
+  (block[off + 2].to_int() << 8) |
+  block[off + 3].to_int()).reinterpret_as_uint()
 }
 
 ///|
-fn state_to_bytes(state : Array[Array[Int]]) -> Bytes {
-  let result = Array::make(16, b'\x00')
-  for i in 0..<16 {
-    result[i] = (state[i % 4][i / 4] & 0xFF).to_byte()
+let aes_te0 : Array[UInt] = {
+  let t = Array::make(256, 0U)
+  for x in 0..<256 {
+    let sx = sbox[x]
+    t[x] = ((gmul(2, sx) << 24) | (sx << 16) | (sx << 8) | gmul(3, sx)).reinterpret_as_uint()
   }
-  Bytes::from_array(result[:])
+  t
 }
 
 ///|
-fn sub_bytes(state : Array[Array[Int]]) -> Unit {
-  for i in 0..<4 {
+let aes_te1 : Array[UInt] = {
+  let t = Array::make(256, 0U)
+  for x in 0..<256 {
+    let v = aes_te0[x]
+    t[x] = (v >> 8) | (v << 24)
+  }
+  t
+}
+
+///|
+let aes_te2 : Array[UInt] = {
+  let t = Array::make(256, 0U)
+  for x in 0..<256 {
+    let v = aes_te0[x]
+    t[x] = (v >> 16) | (v << 16)
+  }
+  t
+}
+
+///|
+let aes_te3 : Array[UInt] = {
+  let t = Array::make(256, 0U)
+  for x in 0..<256 {
+    let v = aes_te0[x]
+    t[x] = (v >> 24) | (v << 8)
+  }
+  t
+}
+
+///|
+let aes_te4 : Array[UInt] = {
+  let t = Array::make(256, 0U)
+  for x in 0..<256 {
+    let sx = sbox[x]
+    t[x] = ((sx << 24) | (sx << 16) | (sx << 8) | sx).reinterpret_as_uint()
+  }
+  t
+}
+
+///|
+let aes_td0 : Array[UInt] = {
+  let t = Array::make(256, 0U)
+  for x in 0..<256 {
+    let sx = inv_sbox[x]
+    t[x] = ((gmul(14, sx) << 24) |
+    (gmul(9, sx) << 16) |
+    (gmul(13, sx) << 8) |
+    gmul(11, sx)).reinterpret_as_uint()
+  }
+  t
+}
+
+///|
+let aes_td1 : Array[UInt] = {
+  let t = Array::make(256, 0U)
+  for x in 0..<256 {
+    let v = aes_td0[x]
+    t[x] = (v >> 8) | (v << 24)
+  }
+  t
+}
+
+///|
+let aes_td2 : Array[UInt] = {
+  let t = Array::make(256, 0U)
+  for x in 0..<256 {
+    let v = aes_td0[x]
+    t[x] = (v >> 16) | (v << 16)
+  }
+  t
+}
+
+///|
+let aes_td3 : Array[UInt] = {
+  let t = Array::make(256, 0U)
+  for x in 0..<256 {
+    let v = aes_td0[x]
+    t[x] = (v >> 24) | (v << 8)
+  }
+  t
+}
+
+///|
+let aes_td4 : Array[UInt] = {
+  let t = Array::make(256, 0U)
+  for x in 0..<256 {
+    let sx = inv_sbox[x]
+    t[x] = ((sx << 24) | (sx << 16) | (sx << 8) | sx).reinterpret_as_uint()
+  }
+  t
+}
+
+///|
+/// Pack the nested round-key arrays into 4-UInt-per-round words.
+fn aes_pack_rk(round_keys : Array[Array[Int]], nr : Int) -> Array[UInt] {
+  let pk = Array::make(4 * (nr + 1), 0U)
+  for r in 0..<=nr {
     for j in 0..<4 {
-      state[i][j] = sbox[state[i][j]]
+      let c = round_keys[r * 4 + j]
+      pk[r * 4 + j] = ((c[0] << 24) | (c[1] << 16) | (c[2] << 8) | c[3]).reinterpret_as_uint()
     }
   }
+  pk
 }
 
 ///|
-fn inv_sub_bytes(state : Array[Array[Int]]) -> Unit {
-  for i in 0..<4 {
+/// InvMixColumns of a packed column word via the Td tables
+/// (equivalent inverse cipher key schedule, FIPS-197 A.3).
+fn aes_imc_word(v : UInt) -> UInt {
+  let b0 = ((v >> 24) & 0xFFU).reinterpret_as_int()
+  let b1 = ((v >> 16) & 0xFFU).reinterpret_as_int()
+  let b2 = ((v >> 8) & 0xFFU).reinterpret_as_int()
+  let b3 = (v & 0xFFU).reinterpret_as_int()
+  let o0 = gmul(14, b0) ^ gmul(11, b1) ^ gmul(13, b2) ^ gmul(9, b3)
+  let o1 = gmul(9, b0) ^ gmul(14, b1) ^ gmul(11, b2) ^ gmul(13, b3)
+  let o2 = gmul(13, b0) ^ gmul(9, b1) ^ gmul(14, b2) ^ gmul(11, b3)
+  let o3 = gmul(11, b0) ^ gmul(13, b1) ^ gmul(9, b2) ^ gmul(14, b3)
+  ((o0 << 24) | (o1 << 16) | (o2 << 8) | o3).reinterpret_as_uint()
+}
+
+///|
+/// Decryption round keys: pack, then InvMixColumns rounds 1..nr-1.
+fn aes_pack_rk_dec(round_keys : Array[Array[Int]], nr : Int) -> Array[UInt] {
+  let pk = aes_pack_rk(round_keys, nr)
+  for r in 1..<nr {
     for j in 0..<4 {
-      state[i][j] = inv_sbox[state[i][j]]
+      pk[4 * r + j] = aes_imc_word(pk[4 * r + j])
     }
   }
+  pk
 }
 
 ///|
-fn shift_rows(state : Array[Array[Int]]) -> Unit {
-  let mut t = 0
-  t = state[1][0]
-  state[1][0] = state[1][1]
-  state[1][1] = state[1][2]
-  state[1][2] = state[1][3]
-  state[1][3] = t
-
-  t = state[2][0]
-  state[2][0] = state[2][2]
-  state[2][2] = t
-  t = state[2][1]
-  state[2][1] = state[2][3]
-  state[2][3] = t
-
-  t = state[3][0]
-  state[3][0] = state[3][3]
-  state[3][3] = state[3][2]
-  state[3][2] = state[3][1]
-  state[3][1] = t
-}
-
-///|
-fn inv_shift_rows(state : Array[Array[Int]]) -> Unit {
-  let mut t = 0
-  t = state[1][3]
-  state[1][3] = state[1][2]
-  state[1][2] = state[1][1]
-  state[1][1] = state[1][0]
-  state[1][0] = t
-
-  t = state[2][0]
-  state[2][0] = state[2][2]
-  state[2][2] = t
-  t = state[2][1]
-  state[2][1] = state[2][3]
-  state[2][3] = t
-
-  t = state[3][3]
-  state[3][3] = state[3][0]
-  state[3][0] = state[3][1]
-  state[3][1] = state[3][2]
-  state[3][2] = t
-}
-
-///|
-fn mix_columns(state : Array[Array[Int]]) -> Unit {
+fn aes_words_to_bytes(t0 : UInt, t1 : UInt, t2 : UInt, t3 : UInt) -> Bytes {
+  let out = Array::make(16, b'\x00')
+  let ts = [t0, t1, t2, t3]
   for j in 0..<4 {
-    let s0 = state[0][j]
-    let s1 = state[1][j]
-    let s2 = state[2][j]
-    let s3 = state[3][j]
-    state[0][j] = mul2[s0] ^ mul3[s1] ^ s2 ^ s3
-    state[1][j] = s0 ^ mul2[s1] ^ mul3[s2] ^ s3
-    state[2][j] = s0 ^ s1 ^ mul2[s2] ^ mul3[s3]
-    state[3][j] = mul3[s0] ^ s1 ^ s2 ^ mul2[s3]
+    let v = ts[j]
+    out[4 * j] = ((v >> 24) & 0xFFU).to_byte()
+    out[4 * j + 1] = ((v >> 16) & 0xFFU).to_byte()
+    out[4 * j + 2] = ((v >> 8) & 0xFFU).to_byte()
+    out[4 * j + 3] = (v & 0xFFU).to_byte()
   }
+  Bytes::from_array(out)
 }
 
 ///|
-fn inv_mix_columns(state : Array[Array[Int]]) -> Unit {
-  for j in 0..<4 {
-    let s0 = state[0][j]
-    let s1 = state[1][j]
-    let s2 = state[2][j]
-    let s3 = state[3][j]
-    state[0][j] = mul14[s0] ^ mul11[s1] ^ mul13[s2] ^ mul9[s3]
-    state[1][j] = mul9[s0] ^ mul14[s1] ^ mul11[s2] ^ mul13[s3]
-    state[2][j] = mul13[s0] ^ mul9[s1] ^ mul14[s2] ^ mul11[s3]
-    state[3][j] = mul11[s0] ^ mul13[s1] ^ mul9[s2] ^ mul14[s3]
+/// T-table block encryption; pk = aes_pack_rk output (pack once,
+/// encrypt many blocks).
+fn encrypt_block_pk(block : Bytes, pk : Array[UInt], nr : Int) -> Bytes {
+  let mut s0 = aes_be32(block, 0) ^ pk[0]
+  let mut s1 = aes_be32(block, 4) ^ pk[1]
+  let mut s2 = aes_be32(block, 8) ^ pk[2]
+  let mut s3 = aes_be32(block, 12) ^ pk[3]
+  for r in 1..<nr {
+    let o = 4 * r
+    let t0 = aes_te0[((s0 >> 24) & 0xFFU).reinterpret_as_int()] ^
+      aes_te1[((s1 >> 16) & 0xFFU).reinterpret_as_int()] ^
+      aes_te2[((s2 >> 8) & 0xFFU).reinterpret_as_int()] ^
+      aes_te3[(s3 & 0xFFU).reinterpret_as_int()] ^
+      pk[o]
+    let t1 = aes_te0[((s1 >> 24) & 0xFFU).reinterpret_as_int()] ^
+      aes_te1[((s2 >> 16) & 0xFFU).reinterpret_as_int()] ^
+      aes_te2[((s3 >> 8) & 0xFFU).reinterpret_as_int()] ^
+      aes_te3[(s0 & 0xFFU).reinterpret_as_int()] ^
+      pk[o + 1]
+    let t2 = aes_te0[((s2 >> 24) & 0xFFU).reinterpret_as_int()] ^
+      aes_te1[((s3 >> 16) & 0xFFU).reinterpret_as_int()] ^
+      aes_te2[((s0 >> 8) & 0xFFU).reinterpret_as_int()] ^
+      aes_te3[(s1 & 0xFFU).reinterpret_as_int()] ^
+      pk[o + 2]
+    let t3 = aes_te0[((s3 >> 24) & 0xFFU).reinterpret_as_int()] ^
+      aes_te1[((s0 >> 16) & 0xFFU).reinterpret_as_int()] ^
+      aes_te2[((s1 >> 8) & 0xFFU).reinterpret_as_int()] ^
+      aes_te3[(s2 & 0xFFU).reinterpret_as_int()] ^
+      pk[o + 3]
+    s0 = t0
+    s1 = t1
+    s2 = t2
+    s3 = t3
   }
+  let o = 4 * nr
+  let t0 = (aes_te4[((s0 >> 24) & 0xFFU).reinterpret_as_int()] & 0xFF000000U) ^
+    (aes_te4[((s1 >> 16) & 0xFFU).reinterpret_as_int()] & 0x00FF0000U) ^
+    (aes_te4[((s2 >> 8) & 0xFFU).reinterpret_as_int()] & 0x0000FF00U) ^
+    (aes_te4[(s3 & 0xFFU).reinterpret_as_int()] & 0x000000FFU) ^
+    pk[o]
+  let t1 = (aes_te4[((s1 >> 24) & 0xFFU).reinterpret_as_int()] & 0xFF000000U) ^
+    (aes_te4[((s2 >> 16) & 0xFFU).reinterpret_as_int()] & 0x00FF0000U) ^
+    (aes_te4[((s3 >> 8) & 0xFFU).reinterpret_as_int()] & 0x0000FF00U) ^
+    (aes_te4[(s0 & 0xFFU).reinterpret_as_int()] & 0x000000FFU) ^
+    pk[o + 1]
+  let t2 = (aes_te4[((s2 >> 24) & 0xFFU).reinterpret_as_int()] & 0xFF000000U) ^
+    (aes_te4[((s3 >> 16) & 0xFFU).reinterpret_as_int()] & 0x00FF0000U) ^
+    (aes_te4[((s0 >> 8) & 0xFFU).reinterpret_as_int()] & 0x0000FF00U) ^
+    (aes_te4[(s1 & 0xFFU).reinterpret_as_int()] & 0x000000FFU) ^
+    pk[o + 2]
+  let t3 = (aes_te4[((s3 >> 24) & 0xFFU).reinterpret_as_int()] & 0xFF000000U) ^
+    (aes_te4[((s0 >> 16) & 0xFFU).reinterpret_as_int()] & 0x00FF0000U) ^
+    (aes_te4[((s1 >> 8) & 0xFFU).reinterpret_as_int()] & 0x0000FF00U) ^
+    (aes_te4[(s2 & 0xFFU).reinterpret_as_int()] & 0x000000FFU) ^
+    pk[o + 3]
+  aes_words_to_bytes(t0, t1, t2, t3)
 }
 
 ///|
-fn add_round_key(
-  state : Array[Array[Int]],
-  round_keys : Array[Array[Int]],
-  round : Int,
-) -> Unit {
-  for j in 0..<4 {
-    for i in 0..<4 {
-      state[i][j] = state[i][j] ^ round_keys[round * 4 + j][i]
-    }
+/// T-table block decryption; pk = aes_pack_rk output.
+fn decrypt_block_pk(block : Bytes, pk : Array[UInt], nr : Int) -> Bytes {
+  let o0 = 4 * nr
+  let mut s0 = aes_be32(block, 0) ^ pk[o0]
+  let mut s1 = aes_be32(block, 4) ^ pk[o0 + 1]
+  let mut s2 = aes_be32(block, 8) ^ pk[o0 + 2]
+  let mut s3 = aes_be32(block, 12) ^ pk[o0 + 3]
+  for r = nr - 1; r >= 1; r = r - 1 {
+    let o = 4 * r
+    let t0 = aes_td0[((s0 >> 24) & 0xFFU).reinterpret_as_int()] ^
+      aes_td1[((s3 >> 16) & 0xFFU).reinterpret_as_int()] ^
+      aes_td2[((s2 >> 8) & 0xFFU).reinterpret_as_int()] ^
+      aes_td3[(s1 & 0xFFU).reinterpret_as_int()] ^
+      pk[o]
+    let t1 = aes_td0[((s1 >> 24) & 0xFFU).reinterpret_as_int()] ^
+      aes_td1[((s0 >> 16) & 0xFFU).reinterpret_as_int()] ^
+      aes_td2[((s3 >> 8) & 0xFFU).reinterpret_as_int()] ^
+      aes_td3[(s2 & 0xFFU).reinterpret_as_int()] ^
+      pk[o + 1]
+    let t2 = aes_td0[((s2 >> 24) & 0xFFU).reinterpret_as_int()] ^
+      aes_td1[((s1 >> 16) & 0xFFU).reinterpret_as_int()] ^
+      aes_td2[((s0 >> 8) & 0xFFU).reinterpret_as_int()] ^
+      aes_td3[(s3 & 0xFFU).reinterpret_as_int()] ^
+      pk[o + 2]
+    let t3 = aes_td0[((s3 >> 24) & 0xFFU).reinterpret_as_int()] ^
+      aes_td1[((s2 >> 16) & 0xFFU).reinterpret_as_int()] ^
+      aes_td2[((s1 >> 8) & 0xFFU).reinterpret_as_int()] ^
+      aes_td3[(s0 & 0xFFU).reinterpret_as_int()] ^
+      pk[o + 3]
+    s0 = t0
+    s1 = t1
+    s2 = t2
+    s3 = t3
   }
+  let t0 = (aes_td4[((s0 >> 24) & 0xFFU).reinterpret_as_int()] & 0xFF000000U) ^
+    (aes_td4[((s3 >> 16) & 0xFFU).reinterpret_as_int()] & 0x00FF0000U) ^
+    (aes_td4[((s2 >> 8) & 0xFFU).reinterpret_as_int()] & 0x0000FF00U) ^
+    (aes_td4[(s1 & 0xFFU).reinterpret_as_int()] & 0x000000FFU) ^
+    pk[0]
+  let t1 = (aes_td4[((s1 >> 24) & 0xFFU).reinterpret_as_int()] & 0xFF000000U) ^
+    (aes_td4[((s0 >> 16) & 0xFFU).reinterpret_as_int()] & 0x00FF0000U) ^
+    (aes_td4[((s3 >> 8) & 0xFFU).reinterpret_as_int()] & 0x0000FF00U) ^
+    (aes_td4[(s2 & 0xFFU).reinterpret_as_int()] & 0x000000FFU) ^
+    pk[1]
+  let t2 = (aes_td4[((s2 >> 24) & 0xFFU).reinterpret_as_int()] & 0xFF000000U) ^
+    (aes_td4[((s1 >> 16) & 0xFFU).reinterpret_as_int()] & 0x00FF0000U) ^
+    (aes_td4[((s0 >> 8) & 0xFFU).reinterpret_as_int()] & 0x0000FF00U) ^
+    (aes_td4[(s3 & 0xFFU).reinterpret_as_int()] & 0x000000FFU) ^
+    pk[2]
+  let t3 = (aes_td4[((s3 >> 24) & 0xFFU).reinterpret_as_int()] & 0xFF000000U) ^
+    (aes_td4[((s2 >> 16) & 0xFFU).reinterpret_as_int()] & 0x00FF0000U) ^
+    (aes_td4[((s1 >> 8) & 0xFFU).reinterpret_as_int()] & 0x0000FF00U) ^
+    (aes_td4[(s0 & 0xFFU).reinterpret_as_int()] & 0x000000FFU) ^
+    pk[3]
+  aes_words_to_bytes(t0, t1, t2, t3)
 }
 
 ///|
@@ -534,18 +660,7 @@ fn encrypt_block(
   round_keys : Array[Array[Int]],
   nr : Int,
 ) -> Bytes {
-  let state = bytes_to_state(block)
-  add_round_key(state, round_keys, 0)
-  for round in 1..<nr {
-    sub_bytes(state)
-    shift_rows(state)
-    mix_columns(state)
-    add_round_key(state, round_keys, round)
-  }
-  sub_bytes(state)
-  shift_rows(state)
-  add_round_key(state, round_keys, nr)
-  state_to_bytes(state)
+  encrypt_block_pk(block, aes_pack_rk(round_keys, nr), nr)
 }
 
 ///|
@@ -554,20 +669,7 @@ fn decrypt_block(
   round_keys : Array[Array[Int]],
   nr : Int,
 ) -> Bytes {
-  let state = bytes_to_state(block)
-  add_round_key(state, round_keys, nr)
-  let mut round = nr - 1
-  for _ in 1..<nr {
-    inv_shift_rows(state)
-    inv_sub_bytes(state)
-    add_round_key(state, round_keys, round)
-    inv_mix_columns(state)
-    round = round - 1
-  }
-  inv_shift_rows(state)
-  inv_sub_bytes(state)
-  add_round_key(state, round_keys, 0)
-  state_to_bytes(state)
+  decrypt_block_pk(block, aes_pack_rk_dec(round_keys, nr), nr)
 }
 
 // ==================== PKCS7 Padding (RFC 5652) ====================
