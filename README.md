@@ -710,6 +710,14 @@ pycryptodome (RFC 4231 TC6-style long key). P-384 HPKE is verified by
 differential vectors from an independent Python oracle (the HPKE
 composition machinery itself is RFC-vector-verified via P-256/P-521).
 
+**v0.48.0 features.** **Performance: division-free Ed448/X448 field
+arithmetic** — the Barrett playbook from v0.46 applied to the 448-bit
+Goldilocks prime: conditional add/sub, Barrett modular multiply, and
+precomputed MSB-first bit chains for inversion (p-2) and the decoding
+square root (exponent (p+1)/4). **Ed448 sign
+27.2 → 21.3 ms, verify 29.8 → 23.5 ms; X448 10.4 → 7.9 ms.** New
+benchmarks for Ed448/X448.
+
 **v0.47.0 features.** **XMSS / XMSS^MT eXtended Merkle Signatures
 (RFC 8391)** — the second major stateful hash-based family (with
 LMS/HSS), ported 1:1 from the official reference implementation

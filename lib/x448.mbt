@@ -27,23 +27,72 @@ let x448_one : @bigint.BigInt = @bigint.BigInt::from_uint64(1UL)
 let x448_two : @bigint.BigInt = @bigint.BigInt::from_uint64(2UL)
 
 ///|
+// Barrett reduction constants (v0.48.0, same playbook as ed448.mbt).
+let x448_mu : @bigint.BigInt = (@bigint.BigInt::from_int(1) << 896) / x448_p
+
+///|
+fn x448_red(x : @bigint.BigInt) -> @bigint.BigInt {
+  let q = ((x >> 447) * x448_mu) >> 449
+  let mut r = x - q * x448_p
+  while r >= x448_p {
+    r = r - x448_p
+  }
+  while r < x448_zero {
+    r = r + x448_p
+  }
+  r
+}
+
+///|
+fn x448_pow_bits(z : @bigint.BigInt, bits : Array[Bool]) -> @bigint.BigInt {
+  let mut r = x448_one
+  for b in bits {
+    r = x448_red(r * r)
+    if b {
+      r = x448_red(r * z)
+    }
+  }
+  r
+}
+
+///|
+let x448_pm2_bits : Array[Bool] = {
+  let str = (x448_p - x448_two).to_string(radix=2)
+  let t = Array::make(str.length(), false)
+  for i in 0..<str.length() {
+    t[i] = str[i] == '1'
+  }
+  t
+}
+
+///|
 fn x448_add(a : @bigint.BigInt, b : @bigint.BigInt) -> @bigint.BigInt {
-  (a + b) % x448_p
+  let s = a + b
+  if s >= x448_p {
+    s - x448_p
+  } else {
+    s
+  }
 }
 
 ///|
 fn x448_sub(a : @bigint.BigInt, b : @bigint.BigInt) -> @bigint.BigInt {
-  (a + x448_p - b) % x448_p
+  let d = a - b
+  if d < x448_zero {
+    d + x448_p
+  } else {
+    d
+  }
 }
 
 ///|
 fn x448_mul(a : @bigint.BigInt, b : @bigint.BigInt) -> @bigint.BigInt {
-  a * b % x448_p
+  x448_red(a * b)
 }
 
 ///|
 fn x448_sqr(a : @bigint.BigInt) -> @bigint.BigInt {
-  a * a % x448_p
+  x448_red(a * a)
 }
 
 ///|
@@ -127,7 +176,7 @@ fn x448_ladder(k_le : Array[Byte], u : @bigint.BigInt) -> @bigint.BigInt {
     z2 = z3
     z3 = tz
   }
-  x448_mul(x2, z2.pow(x448_p - x448_two, modulus=x448_p))
+  x448_mul(x2, x448_pow_bits(z2, x448_pm2_bits))
 }
 
 ///|

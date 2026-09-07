@@ -46,34 +46,90 @@ let ed448_one : @bigint.BigInt = @bigint.BigInt::from_uint64(1UL)
 // ---------- field helpers (always non-negative intermediates) ----------
 
 ///|
+// Barrett reduction constants (v0.48.0: division-free field, same
+// playbook as the NIST curves in ecdsa.mbt).
+let e4_mu : @bigint.BigInt = (@bigint.BigInt::from_int(1) << 896) / ed448_p
+
+///|
+fn e4_bits_of(e : @bigint.BigInt) -> Array[Bool] {
+  let str = e.to_string(radix=2)
+  let t = Array::make(str.length(), false)
+  for i in 0..<str.length() {
+    t[i] = str[i] == '1'
+  }
+  t
+}
+
+///|
+let e4_pm2_bits : Array[Bool] = e4_bits_of(ed448_p - ed448_one - ed448_one)
+
+///|
+fn e4_red(x : @bigint.BigInt) -> @bigint.BigInt {
+  let q = ((x >> 447) * e4_mu) >> 449
+  let mut r = x - q * ed448_p
+  while r >= ed448_p {
+    r = r - ed448_p
+  }
+  while r < ed448_zero {
+    r = r + ed448_p
+  }
+  r
+}
+
+///|
+fn e4_pow_bits(z : @bigint.BigInt, bits : Array[Bool]) -> @bigint.BigInt {
+  let mut r = ed448_one
+  for b in bits {
+    r = e4_red(r * r)
+    if b {
+      r = e4_red(r * z)
+    }
+  }
+  r
+}
+
+///|
 fn e4_add(a : @bigint.BigInt, b : @bigint.BigInt) -> @bigint.BigInt {
-  (a + b) % ed448_p
+  let s = a + b
+  if s >= ed448_p {
+    s - ed448_p
+  } else {
+    s
+  }
 }
 
 ///|
 fn e4_sub(a : @bigint.BigInt, b : @bigint.BigInt) -> @bigint.BigInt {
-  (a + ed448_p - b) % ed448_p
+  let d = a - b
+  if d < ed448_zero {
+    d + ed448_p
+  } else {
+    d
+  }
 }
 
 ///|
 fn e4_mul(a : @bigint.BigInt, b : @bigint.BigInt) -> @bigint.BigInt {
-  a * b % ed448_p
+  e4_red(a * b)
 }
 
 ///|
 fn e4_sqr(a : @bigint.BigInt) -> @bigint.BigInt {
-  a * a % ed448_p
+  e4_red(a * a)
 }
 
 ///|
 fn e4_inv(a : @bigint.BigInt) -> @bigint.BigInt {
-  a.pow(ed448_p - ed448_one - ed448_one, modulus=ed448_p)
+  e4_pow_bits(a, e4_pm2_bits)
 }
 
 ///|
 // p ≡ 3 (mod 4): sqrt(x) = x^((p+1)/4), when it exists.
 let ed448_sqrt_exp : @bigint.BigInt = (ed448_p + ed448_one) /
   @bigint.BigInt::from_uint64(4UL)
+
+///|
+let e4_sqrt_bits : Array[Bool] = e4_bits_of(ed448_sqrt_exp)
 
 // ---------- little-endian byte <-> BigInt ----------
 
@@ -205,7 +261,7 @@ fn e448_recover_x(y : @bigint.BigInt, sign : Int) -> E448Point? {
     }
     return Some(E448Point::{ x: ed448_zero, y, z: ed448_one, })
   }
-  let x = x2.pow(ed448_sqrt_exp, modulus=ed448_p)
+  let x = e4_pow_bits(x2, e4_sqrt_bits)
   if e4_sqr(x) != x2 {
     return None
   }
