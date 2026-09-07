@@ -710,6 +710,17 @@ pycryptodome (RFC 4231 TC6-style long key). P-384 HPKE is verified by
 differential vectors from an independent Python oracle (the HPKE
 composition machinery itself is RFC-vector-verified via P-256/P-521).
 
+**v0.46.0 features.** **Performance: division-free EC arithmetic.**
+Every modular multiply on the NIST curves (P-256, P-384, P-521) and
+secp256k1 now reduces with a per-curve Barrett constant
+(mu = floor(2^2k / p), derived once at init) instead of BigInt
+division; field add/sub became conditional add/sub (no reduction op at
+all); modular inversion (field and scalar order) runs a precomputed
+MSB-first bit chain over the Barrett multiply instead of the generic
+modular exponentiation. **ECDSA P-256 sign 8.2 → 5.6 ms (1.46x),
+verify 9.5 → 7.1 ms (1.33x)**; secp256k1 and all HPKE NIST-curve DH
+benefit identically.
+
 **v0.45.0 features.** **Performance: native Curve25519 field
 arithmetic (radix 2^25.5, ten signed Int64 limbs — donna/ref10 style).**
 New `fe25519` core with multiplication coefficients DERIVED at init

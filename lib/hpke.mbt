@@ -276,29 +276,29 @@ fn hpke_labeled_expand(
 
 ///|
 /// HPKE DeriveKeyPair (RFC 9180 §5.1): deterministic from `ikm`
-let hpke_p384_curve : EcCurve = {
-  p: @bigint.BigInt::from_string(
+let hpke_p384_curve : EcCurve = ec_make_curve(
+  @bigint.BigInt::from_string(
     "fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffeffffffff0000000000000000ffffffff",
     radix=16,
   ),
-  n: @bigint.BigInt::from_string(
+  @bigint.BigInt::from_string(
     "ffffffffffffffffffffffffffffffffffffffffffffffffc7634d81f4372ddf581a0db248b0a77aecec196accc52973",
     radix=16,
   ),
-  b: @bigint.BigInt::from_string(
+  @bigint.BigInt::from_string(
     "b3312fa7e23ee7e4988e056be3f82d19181d9c6efe8141120314088f5013875ac656398d8a2ed19d2a85c8edd3ec2aef",
     radix=16,
   ),
-  a_minus3: true,
-  gx: @bigint.BigInt::from_string(
+  true,
+  @bigint.BigInt::from_string(
     "aa87ca22be8b05378eb1c71ef320ad746e1d3b628ba79b9859f741e082542a385502f25dbf55296c3a545e3872760ab7",
     radix=16,
   ),
-  gy: @bigint.BigInt::from_string(
+  @bigint.BigInt::from_string(
     "3617de4a96262c6f5d9e98bf9292dc29f8f41dbd289a147ce9da3113b5f0b8c00a60b1ce1d7e819d7a431d7c90ea0e5f",
     radix=16,
   ),
-}
+)
 
 ///|
 fn hpke_p384_point_serialize(
@@ -317,29 +317,29 @@ fn hpke_p384_point_deserialize(pk : Bytes) -> (BigInt, BigInt) {
 }
 
 ///|
-let hpke_p521_curve : EcCurve = {
-  p: @bigint.BigInt::from_string(
+let hpke_p521_curve : EcCurve = ec_make_curve(
+  @bigint.BigInt::from_string(
     "01ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
     radix=16,
   ),
-  n: @bigint.BigInt::from_string(
+  @bigint.BigInt::from_string(
     "01fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffa51868783bf2f966b7fcc0148f709a5d03bb5c9b8899c47aebb6fb71e91386409",
     radix=16,
   ),
-  b: @bigint.BigInt::from_string(
+  @bigint.BigInt::from_string(
     "051953eb9618e1c9a1f929a21a0b68540eea2da725b99b315f3b8b489918ef109e156193951ec7e937b1652c0bd3bb1bf073573df883d2c34f1ef451fd46b503f00",
     radix=16,
   ),
-  a_minus3: true,
-  gx: @bigint.BigInt::from_string(
+  true,
+  @bigint.BigInt::from_string(
     "c6858e06b70404e9cd9e3ecb662395b4429c648139053fb521f828af606b4d3dbaa14b5e77efe75928fe1dc127a2ffa8de3348b3c1856a429bf97e7e31c2e5bd66",
     radix=16,
   ),
-  gy: @bigint.BigInt::from_string(
+  @bigint.BigInt::from_string(
     "11839296a789a3bc0045c8a5fb42c7d1bd998f54449579b446817afbd17273e662c97ee72995ef42640c550b9013fad0761353c7086a272c24088be94769fd16650",
     radix=16,
   ),
-}
+)
 
 ///|
 fn hpke_p521_point_serialize(
