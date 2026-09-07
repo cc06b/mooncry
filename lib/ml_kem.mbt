@@ -403,7 +403,33 @@ fn kem_poly_compress(v : Array[UInt], d : Int) -> Unit {
 
 ///|
 // Generate matrix A-hat[i][j] = SampleNTT(rho || j || i), flat k*k array.
+///|
+/// Single-slot cache for the expanded matrix A-hat (depends only on
+/// rho and k; expansion is k^2 XOF rejection samplings — it dominated
+/// encaps/decaps, v0.50.0 perf). CONTRACT: shared instance — callers
+/// must treat it as read-only.
+priv struct KemMatCache {
+  mut valid : Bool
+  mut rho : Bytes
+  mut k : Int
+  mut mat : Array[Array[UInt]]
+}
+
+///|
+let kem_mat_cache : KemMatCache = KemMatCache::{
+  valid: false,
+  rho: Bytes::make(0, b'\x00'),
+  k: 0,
+  mat: Array::make(0, Array::make(0, 0U)),
+}
+
+///|
 fn kem_expand_matrix(rho : Bytes, k : Int) -> Array[Array[UInt]] {
+  if kem_mat_cache.valid &&
+    kem_mat_cache.k == k &&
+    bytes_equal(kem_mat_cache.rho, rho) {
+    return kem_mat_cache.mat
+  }
   let mat = Array::make(k * k, Array::make(256, 0U))
   let buf = Array::make(34, b'\x00')
   for i in 0..<32 {
@@ -416,6 +442,10 @@ fn kem_expand_matrix(rho : Bytes, k : Int) -> Array[Array[UInt]] {
       mat[i * k + j] = kem_sample_ntt(Bytes::from_array(buf[:]))
     }
   }
+  kem_mat_cache.valid = true
+  kem_mat_cache.rho = rho
+  kem_mat_cache.k = k
+  kem_mat_cache.mat = mat
   mat
 }
 
@@ -531,6 +561,8 @@ fn kem_kpke_encrypt(
   kem_poly_compress(v, params.dv)
   concat_bytes(kem_vec_encode(u_vec, params.du), kem_byte_encode(v, params.dv))
 }
+
+///|
 
 ///|
 fn kem_kpke_decrypt(params : MlKemParams, dk_pke : Bytes, c : Bytes) -> Bytes {

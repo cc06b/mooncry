@@ -775,12 +775,7 @@ fn dsa_keygen_internal(params : DsaParams, seed : Bytes) -> (Bytes, Bytes) {
   let rho_b = Bytes::from_array(rho[:])
   let rho_prime_b = Bytes::from_array(rho_prime[:])
   // A matrix (k x l) in NTT domain
-  let mat = Array::make(params.k * params.l, Array::make(256, 0))
-  for i in 0..<params.k {
-    for j in 0..<params.l {
-      mat[i * params.l + j] = dsa_sample_uniform(rho_b, j + 256 * i)
-    }
-  }
+  let mat = dsa_get_mat(rho_b, params.k, params.l)
   // s1 (l polys), s2 (k polys)
   let s1 = Array::make(params.l, Array::make(256, 0))
   for i in 0..<params.l {
@@ -1123,6 +1118,53 @@ fn dsa_format_msg_prehash(msg : Bytes, ctx : Bytes, ph : DsaPrehash) -> Bytes {
 }
 
 ///|
+/// Single-slot cache for the expanded matrix A (FIPS 204 ExpandA).
+/// A depends only on rho (fixed per key) and k,l — expanding it costs
+/// k*l rejection-sampled polynomials per call, which dominated signing
+/// and verification (v0.50.0 perf). CONTRACT: the cached matrix is
+/// shared — callers must treat it as read-only (all current consumers
+/// only read it inside dsa_mat_vec_mul).
+priv struct DsaMatCache {
+  mut valid : Bool
+  mut rho : Bytes
+  mut k : Int
+  mut l : Int
+  mut mat : Array[Array[Int]]
+}
+
+///|
+let dsa_mat_cache : DsaMatCache = DsaMatCache::{
+  valid: false,
+  rho: Bytes::make(0, b' '),
+  k: 0,
+  l: 0,
+  mat: Array::make(0, Array::make(0, 0)),
+}
+
+///|
+fn dsa_get_mat(rho : Bytes, k : Int, l : Int) -> Array[Array[Int]] {
+  if dsa_mat_cache.valid &&
+    dsa_mat_cache.k == k &&
+    dsa_mat_cache.l == l &&
+    bytes_equal(dsa_mat_cache.rho, rho) {
+    return dsa_mat_cache.mat
+  }
+  let mat = Array::make(k * l, Array::make(256, 0))
+  for i in 0..<k {
+    for j in 0..<l {
+      let p = dsa_sample_uniform(rho, j + 256 * i)
+      mat[i * l + j] = p
+    }
+  }
+  dsa_mat_cache.valid = true
+  dsa_mat_cache.rho = rho
+  dsa_mat_cache.k = k
+  dsa_mat_cache.l = l
+  dsa_mat_cache.mat = mat
+  mat
+}
+
+///|
 fn dsa_sign_mu(
   params : DsaParams,
   sk : Bytes,
@@ -1158,12 +1200,7 @@ fn dsa_sign_mu(
     dsa_ntt(p)
     t0_hat[i] = p
   }
-  let mat = Array::make(params.k * params.l, Array::make(256, 0))
-  for i in 0..<params.k {
-    for j in 0..<params.l {
-      mat[i * params.l + j] = dsa_sample_uniform(rho, j + 256 * i)
-    }
-  }
+  let mat = dsa_get_mat(rho, params.k, params.l)
   let rho_pp = shake_256(concat_all([key, rnd, mu]), 64)
   let mut kappa = 0
   let mut attempts = 0
@@ -1371,15 +1408,7 @@ fn dsa_verify_mu(
     }
   }
   let cp = dsa_sample_in_ball(params, Bytes::from_array(c_tilde[:]))
-  let mat = Array::make(params.k * params.l, Array::make(256, 0))
-  for i in 0..<params.k {
-    for j in 0..<params.l {
-      mat[i * params.l + j] = dsa_sample_uniform(
-        Bytes::from_array(rho[:]),
-        j + 256 * i,
-      )
-    }
-  }
+  let mat = dsa_get_mat(Bytes::from_array(rho[:]), params.k, params.l)
   let z_hat = Array::make(params.l, Array::make(256, 0))
   for i in 0..<params.l {
     let p = Array::make(256, 0)

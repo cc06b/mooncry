@@ -710,6 +710,18 @@ pycryptodome (RFC 4231 TC6-style long key). P-384 HPKE is verified by
 differential vectors from an independent Python oracle (the HPKE
 composition machinery itself is RFC-vector-verified via P-256/P-521).
 
+**v0.50.0 features.** **Performance: matrix-expansion caching for the
+lattice schemes.** ML-DSA re-expanded the full k x l A matrix (FIPS 204
+ExpandA, k*l rejection-sampled polynomials) on every sign, verify and
+keygen, and ML-KEM did the same with its k x k A-hat (FIPS 203 XOF
+rejection sampling); both now live in single-slot caches keyed by
+(rho, dimensions) — A depends only on the key's public seed, never on
+the message. **ML-DSA-65 verify 1.78 ms → 0.61 ms (2.9x), sign 8.4 →
+7.2 ms; ML-KEM-768 keygen 620 → 364 µs (1.7x), encaps 623 → 389 µs
+(1.6x), decaps 583 µs.** New benchmarks: ml_dsa_65 sign/verify,
+ml_kem_768 keygen/encaps/decaps. Cached matrices are contractually
+read-only for all consumers.
+
 **v0.49.0 features.** **Performance: native Curve448-Goldilocks field
 arithmetic (radix 2^28, sixteen signed Int64 limbs).** p448 = 2^448 -
 2^224 - 1 folds via 2^448 = 2^224 + 1; the fold coefficients are
