@@ -710,6 +710,20 @@ pycryptodome (RFC 4231 TC6-style long key). P-384 HPKE is verified by
 differential vectors from an independent Python oracle (the HPKE
 composition machinery itself is RFC-vector-verified via P-256/P-521).
 
+**v0.43.0 features.** **LMS / HSS hash-based signatures (RFC 8554)**
+— the Leighton-Micali Signature scheme and its Hierarchical variant,
+SHA256 parameter sets (LMOTS_SHA256_N32_W1/W2/W4/W8 x
+LMS_SHA256_M32_H5/H10/H15/H20/H25). Stateful: `lms_sign` consumes one
+Merkle leaf per signature and aborts at exhaustion; HSS chains L
+levels with fixed inter-level signatures (caller re-keys on bottom-level
+exhaustion). Pseudorandom key generation follows RFC 8554 Appendix A
+(SEED/I). Verified against the official RFC 8554 Appendix F test cases
+(HSS L=2 verify + public-key regeneration from SEED/I) plus 12
+oracle-generated vectors covering all four Winternitz widths, tree
+heights 5/10/15, non-zero leaf counters, and HSS L=1/2/3, and
+sign/verify round-trips. Completes the hash-based signature families
+alongside SLH-DSA (stateless).
+
 **v0.42.0 features.** **Performance polish (benchmarked, wasm-gc).**
 Ed25519 rewritten on extended twisted Edwards coordinates (X:Y:Z:T,
 Hisil et al. formulas) with 4-bit fixed-window scalar multiplication
