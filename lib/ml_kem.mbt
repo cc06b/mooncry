@@ -402,8 +402,6 @@ fn kem_poly_compress(v : Array[UInt], d : Int) -> Unit {
 // ---------- K-PKE (Algorithms 13-15) ----------
 
 ///|
-// Generate matrix A-hat[i][j] = SampleNTT(rho || j || i), flat k*k array.
-///|
 /// Single-slot cache for the expanded matrix A-hat (depends only on
 /// rho and k; expansion is k^2 XOF rejection samplings — it dominated
 /// encaps/decaps, v0.50.0 perf). CONTRACT: shared instance — callers
@@ -424,6 +422,8 @@ let kem_mat_cache : KemMatCache = KemMatCache::{
 }
 
 ///|
+/// Generate matrix A-hat[i][j] = SampleNTT(rho || j || i), flat k*k
+/// array (cached; see KemMatCache).
 fn kem_expand_matrix(rho : Bytes, k : Int) -> Array[Array[UInt]] {
   if kem_mat_cache.valid &&
     kem_mat_cache.k == k &&
