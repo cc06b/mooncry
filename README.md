@@ -710,6 +710,23 @@ pycryptodome (RFC 4231 TC6-style long key). P-384 HPKE is verified by
 differential vectors from an independent Python oracle (the HPKE
 composition machinery itself is RFC-vector-verified via P-256/P-521).
 
+**v0.47.0 features.** **XMSS / XMSS^MT eXtended Merkle Signatures
+(RFC 8391)** — the second major stateful hash-based family (with
+LMS/HSS), ported 1:1 from the official reference implementation
+(github.com/XMSS/xmss-reference, CC0, by the RFC authors). WOTS+
+(w=16) with PRF_keygen-derived chain seeds, tweakable hashes thash_f/
+thash_h with per-address PRF keys/masks, L-tree WOTS-pk compression,
+stack-based treehash with auth-path extraction, and the XMSS^MT
+layer machinery (d layers, per-layer subtree addresses). All five
+domain-tagged hash instantiations: SHA2 with n=24/32/64 and SHAKE128/
+SHAKE256 with n=32/64. Verified against the reference's deterministic
+KATs (seed[i]=i, msg=0x25, index=2^(H-1)): WOTS+ pk/sign/pk-from-sig/
+leaf byte-exact for all 7 parameter sets; XMSS^MT (H=20/2_256 family,
+4 layers, all 7 sets) keygen+sign byte-exact; XMSS H10 verify for all
+7 sets plus byte-exact keygen+sign for SHA2_10_256. Completes the
+three-family post-quantum signature coverage: ML-DSA (lattice,
+stateless), SLH-DSA (hash, stateless), LMS+XMSS (hash, stateful).
+
 **v0.46.0 features.** **Performance: division-free EC arithmetic.**
 Every modular multiply on the NIST curves (P-256, P-384, P-521) and
 secp256k1 now reduces with a per-curve Barrett constant
