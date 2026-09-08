@@ -710,6 +710,23 @@ pycryptodome (RFC 4231 TC6-style long key). P-384 HPKE is verified by
 differential vectors from an independent Python oracle (the HPKE
 composition machinery itself is RFC-vector-verified via P-256/P-521).
 
+**v0.51.0 features.** **Performance: native P-256 field and curve
+arithmetic.** New eight-32-bit-limb implementation of GF(p256):
+schoolbook multiply with UInt64 accumulators (provably overflow-free)
+and the NIST Solinas fast reduction — the fold table for
+2^256 = 2^224 - 2^192 - 2^96 + 1 is DERIVED at init by a fixpoint
+loop (cross-validated in Python against modular arithmetic on random
+x < p^2) and the prime words come from the existing p256_curve
+constant. Jacobian doubling/addition (a = -3), 4-bit windowed scalar
+multiplication and Shamir double-scalar multiplication mirror the
+vector-verified generic code; ec_scalar_mult and
+ec_double_scalar_mult_jac dispatch to the native path whenever the
+curve modulus is P-256's, so ECDSA, low-S signing, and HPKE P-256 DH
+all benefit. **ECDSA P-256 sign 5.6 → 3.6 ms, verify 7.1 → 4.5 ms**
+(3.5x / 5x versus the pre-optimization BigInt baseline). Differential
+tests against the generic BigInt path (64 random field multiplies,
+10 scalar multiples) run permanently in the suite.
+
 **v0.50.0 features.** **Performance: matrix-expansion caching for the
 lattice schemes.** ML-DSA re-expanded the full k x l A matrix (FIPS 204
 ExpandA, k*l rejection-sampled polynomials) on every sign, verify and

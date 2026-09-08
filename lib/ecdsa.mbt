@@ -428,6 +428,10 @@ fn ec_scalar_mult_jac(
 
 ///|
 fn ec_scalar_mult(c : EcCurve, k : @bigint.BigInt, p : EcPoint) -> EcPoint {
+  if c.p == p256_curve.p {
+    // native 8x32-limb Solinas path (v0.51.0, ~3x the BigInt ladder)
+    return p256_scalar_mult_native(k, p)
+  }
   jac_to_affine(c, ec_scalar_mult_jac(c, k, ec_to_jac(p)))
 }
 
@@ -442,6 +446,9 @@ fn ec_double_scalar_mult_jac(
   k2 : @bigint.BigInt,
   p2 : EcPoint,
 ) -> JacPoint {
+  if c.p == p256_curve.p {
+    return ec_to_jac(p256_double_scalar_mult_native(k1, p1, k2, p2))
+  }
   let j1 = ec_to_jac(p1)
   let j2 = ec_to_jac(p2)
   let t1 = Array::make(16, jac_identity())
