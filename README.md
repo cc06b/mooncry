@@ -367,6 +367,11 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `slh_sign_prehash / slh_verify_prehash` | HashSLH-DSA (OID-tagged pre-hash, 12 hash functions) |
 | `slh_sign_raw / slh_verify_raw` | raw-M' internal interface |
 | `slh_sha2_128s ... slh_shake_256f` | all 12 SLH-DSA parameter sets |
+| `falcon512_keypair_from_seed(seed) -> (pk, sk)` | Falcon-512 keygen (NTRU solve; deterministic in the 48-byte seed) |
+| `falcon512_sign(sk, msg, rand) -> Bytes` | Falcon-512 signing (rand supplies nonce+seed like randombytes) |
+| `falcon512_sign_padded(sk, msg, rand) -> Bytes` | Falcon-512 padded form (fixed 666 bytes) |
+| `falcon512_verify(pk, msg, sig) -> Bool` | Falcon-512 verification (compact + padded forms) |
+| `falcon1024_keypair_from_seed / sign / sign_padded / verify` | Falcon-1024 (same shapes; padded = 1280 bytes) |
 | `crc32 / crc32c(data : Bytes) -> Bytes` | CRC-32 (IEEE) / CRC-32C, 4-byte big-endian |
 | `crc64_xz / crc64_go_iso(data : Bytes) -> Bytes` | CRC-64/XZ / CRC-64/GO-ISO, 8-byte big-endian |
 | `siphash_2_4(key, data : Bytes) -> Bytes` | SipHash-2-4 (64-bit), key 16 bytes → 8 bytes |
@@ -710,6 +715,19 @@ pycryptodome (RFC 4231 TC6-style long key). P-384 HPKE is verified by
 differential vectors from an independent Python oracle (the HPKE
 composition machinery itself is RFC-vector-verified via P-256/P-521).
 
+**v0.55.0-v0.63.0 features.** **Falcon-512/1024 lattice signatures** —
+a from-scratch pure-MoonBit port of the PQClean `clean` reference
+(the official Falcon submission codebase): NTRU keygen via the
+small-prime RNS + binary-GCD Bezout tree with f64 Babai reduction,
+FFT-domain signing with on-the-fly LDL Gaussian sampling (Salsa20
+prng + discrete Gaussian via the raykzhao exp polynomial), and
+q = 12289 Montgomery-NTT verification. Every stage is byte-exact or
+bit-exact against dumps from the C reference compiled locally: the
+deterministic keypair (PK 897/1793 B, SK 1281/2305 B), all official
+harness signatures (compact and padded forms), and rejection streams.
+The single logn-parameterized tree covers both parameter sets (the
+PQClean 512/1024 sources are functionally identical modulo prefixes).
+
 **v0.53.0 features.** **Performance: Ed448 Shamir verification +
 housekeeping.** Ed448 verify rewrites the cofactor equation
 [4][S]B = [4]R + [4][k]A as [4](S*B - k*A - R) = O and evaluates it
@@ -721,7 +739,7 @@ constant. ML-DSA's dq_mul keeps i64.rem after THREE measured-negative
 alternatives (f64 reciprocal, folding with a subtraction loop, and
 branch-free folding over q = 2^23-2^13+1) — all documented in-code so
 nobody retries them. Also normalized 118 stray NUL bytes inside byte
-literals across 22 files to ` ` escapes (semantics unchanged; the
+literals across 22 files to `` escapes (semantics unchanged; the
 files are text-clean for grep/diff again).
 
 **v0.52.0 features.** **Performance: word-oriented scrypt.** The

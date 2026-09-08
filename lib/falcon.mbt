@@ -66,17 +66,28 @@ pub fn falcon_verify(pk : Bytes, sig : Bytes, msg : Bytes, logn : Int) -> Bool {
   // consumed-length check: re-encode must reproduce the body prefix,
   // and any remaining bytes must be zero (padded form).
   let enc = falcon_comp_encode(s2, logn)
-  if enc.length() > body.length() {
-    return false
-  }
-  for i = 0; i < enc.length(); i = i + 1 {
-    if enc[i] != body[i] {
+  if enc.length() != body.length() {
+    // C semantics: a length mismatch is only accepted for the exact
+    // padded-form size, with all-zero trailing bytes.
+    let padded_body = (if logn == 9 { 666 } else { 1280 }) - 41
+    if body.length() != padded_body || enc.length() > body.length() {
       return false
     }
-  }
-  for i = enc.length(); i < body.length(); i = i + 1 {
-    if body[i].to_int() != 0 {
-      return false
+    for i = 0; i < enc.length(); i = i + 1 {
+      if enc[i] != body[i] {
+        return false
+      }
+    }
+    for i = enc.length(); i < body.length(); i = i + 1 {
+      if body[i].to_int() != 0 {
+        return false
+      }
+    }
+  } else {
+    for i = 0; i < enc.length(); i = i + 1 {
+      if enc[i] != body[i] {
+        return false
+      }
     }
   }
   let nonce = Array::make(nonce_len, (0).to_byte())
@@ -273,4 +284,41 @@ pub fn falcon1024_keypair_from_seed(seed : Bytes) -> (Bytes, Bytes) {
     }
   }
   (Bytes::from_array(pk_arr), Bytes::from_array(sk_arr))
+}
+
+/// Falcon-512 padded signature size (fixed).
+pub let falcon512_padded_sig_bytes : Int = 666
+/// Falcon-1024 padded signature size (fixed).
+pub let falcon1024_padded_sig_bytes : Int = 1280
+
+/// Sign and pad the signature to the fixed padded-form length
+/// (falcon-padded-512 semantics: comp encoding followed by zeros).
+pub fn falcon512_sign_padded(
+  sk : Bytes,
+  msg : Bytes,
+  rand : (Int) -> Bytes
+) -> Bytes {
+  let sig = falcon_sign(sk, msg, rand, 9)
+  pad_sig(sig, 666)
+}
+
+/// Falcon-1024 padded signing (fixed 1280 bytes).
+pub fn falcon1024_sign_padded(
+  sk : Bytes,
+  msg : Bytes,
+  rand : (Int) -> Bytes
+) -> Bytes {
+  let sig = falcon_sign(sk, msg, rand, 10)
+  pad_sig(sig, 1280)
+}
+
+fn pad_sig(sig : Bytes, total : Int) -> Bytes {
+  if sig.length() == 0 {
+    return sig
+  }
+  let a = Array::make(total, (0).to_byte())
+  for i = 0; i < sig.length(); i = i + 1 {
+    a[i] = sig[i]
+  }
+  Bytes::from_array(a)
 }
