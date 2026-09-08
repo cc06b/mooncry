@@ -1,6 +1,6 @@
 name = "cc06b/mooncry"
 
-version = "0.53.0"
+version = "0.53.1"
 
 readme = "README.md"
 
