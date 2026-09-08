@@ -429,7 +429,7 @@ pub fn hss_keygen(specs : Array[(Int, Int, Bytes, Bytes)]) -> HssPrivateKey {
   if specs.is_empty() {
     abort("hss_keygen: need at least one level")
   }
-  let keys = Array::new()
+  let keys : Array[LmsPrivateKey] = []
   for sp in specs {
     keys.push(lms_keygen(sp.0, sp.1, sp.2, sp.3))
   }
@@ -450,7 +450,7 @@ pub fn hss_keygen_with(
     cs.length() != specs.length() {
     abort("hss_keygen_with: length mismatch")
   }
-  let keys = Array::new()
+  let keys : Array[LmsPrivateKey] = []
   for i in 0..<specs.length() {
     let sp = specs[i]
     let k = lms_keygen(sp.0, sp.1, sp.2, sp.3)
@@ -463,7 +463,7 @@ pub fn hss_keygen_with(
 ///|
 fn hss_finalize(keys : Array[LmsPrivateKey]) -> HssPrivateKey {
   let n = keys.length()
-  let cs = Array::new()
+  let cs : Array[Bytes] = []
   for i in 0..<n {
     let k = keys[i]
     cs.push(sha256(concat_all([k.seed, lms_u32str(k.q), lms_u8str(0xcc)])))
@@ -477,11 +477,11 @@ fn hss_finalize_with(
   cs : Array[Bytes],
 ) -> HssPrivateKey {
   let n = keys.length()
-  let pubs = Array::new()
+  let pubs : Array[Bytes] = []
   for k in keys {
     pubs.push(lms_public_key(k))
   }
-  let sigs = Array::new()
+  let sigs : Array[Bytes] = []
   for i in 0..<(n - 1) {
     sigs.push(lms_sign(keys[i], pubs[i + 1], Some(cs[i])))
   }
