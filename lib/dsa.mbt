@@ -90,6 +90,8 @@ fn dq_sub(a : Int, b : Int) -> Int {
 ///|
 fn dq_mul(a : Int, b : Int) -> Int {
   // NOTE: MoonBit Int is 32-bit on wasm-gc; (q-1)^2 overflows. Widen.
+  // (An f64-reciprocal reduction was measured 5% SLOWER here — the
+  // engine already strength-reduces i64.rem by a constant. Keep %.)
   (a.to_int64() * b.to_int64() % 8380417L).to_int()
 }
 
