@@ -226,3 +226,51 @@ fn slice_bytes(b : Bytes, off : Int, len : Int) -> Bytes {
 pub fn falcon_test_rng_set_ctr(r : FalconTestRng, c : UInt64) -> Unit {
   r.ctr = c
 }
+
+///|
+/// Falcon-1024 public key size in bytes.
+pub let falcon1024_pk_bytes : Int = 1793
+
+///|
+/// Falcon-1024 secret key size in bytes.
+pub let falcon1024_sk_bytes : Int = 2305
+
+///|
+/// Falcon-1024 maximum (padded) signature size in bytes.
+pub let falcon1024_sig_bytes : Int = 1462
+
+///|
+/// Verify a Falcon-1024 signature.
+pub fn falcon1024_verify(pk : Bytes, sig : Bytes, msg : Bytes) -> Bool {
+  falcon_verify(pk, sig, msg, 10)
+}
+
+///|
+/// Sign with a Falcon-1024 secret key.
+pub fn falcon1024_sign(sk : Bytes, msg : Bytes, rand : (Int) -> Bytes) -> Bytes {
+  falcon_sign(sk, msg, rand, 10)
+}
+
+///|
+/// Falcon-1024 keypair from an explicit 48-byte seed.
+pub fn falcon1024_keypair_from_seed(seed : Bytes) -> (Bytes, Bytes) {
+  let x = falcon_xof_init()
+  falcon_xof_inject(x, seed)
+  let _ = falcon_xof_extract(x, 0)
+  let (f, g, big_f, h) = falcon_keygen(x, 10)
+  let pk_arr : Array[Byte] = [(0x0A).to_byte()]
+  let pk_body = falcon_modq_encode(h, 10)
+  for i = 0; i < pk_body.length(); i = i + 1 {
+    pk_arr.push(pk_body[i])
+  }
+  let sk_arr : Array[Byte] = [(0x5A).to_byte()]
+  let ef = falcon_trim_encode(f, 10, falcon_max_fg_bits[10])
+  let eg = falcon_trim_encode(g, 10, falcon_max_fg_bits[10])
+  let eF = falcon_trim_encode(big_f, 10, falcon_max_FG_bits[10])
+  for part in [ef, eg, eF] {
+    for i = 0; i < part.length(); i = i + 1 {
+      sk_arr.push(part[i])
+    }
+  }
+  (Bytes::from_array(pk_arr), Bytes::from_array(sk_arr))
+}
