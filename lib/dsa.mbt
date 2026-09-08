@@ -90,8 +90,13 @@ fn dq_sub(a : Int, b : Int) -> Int {
 ///|
 fn dq_mul(a : Int, b : Int) -> Int {
   // NOTE: MoonBit Int is 32-bit on wasm-gc; (q-1)^2 overflows. Widen.
-  // (An f64-reciprocal reduction was measured 5% SLOWER here — the
-  // engine already strength-reduces i64.rem by a constant. Keep %.)
+  // PERF NEGATIVE RESULTS (measured A/B on the same bench, do not retry):
+  //  - f64-reciprocal reduction (x*(1/q) truncated + corrections): ~5% slower
+  //  - q = 2^23-2^13+1 fold with a while-subtract loop: ~1.5x slower
+  //    (branch cost inside the butterfly)
+  //  - the same fold made branch-free (3 folds + 1 conditional sub):
+  //    still ~5% slower
+  // The engine already strength-reduces i64.rem by a constant. Keep %.
   (a.to_int64() * b.to_int64() % 8380417L).to_int()
 }
 
