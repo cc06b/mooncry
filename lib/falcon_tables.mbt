@@ -1026,3 +1026,24 @@ pub let falcon_rev10 : Array[Int] = [
   863, 223, 735, 479, 991, 63, 575, 319, 831, 191, 703, 447, 959, 127, 639, 383,
   895, 255, 767, 511, 1023,
 ]
+
+///|
+/// MAX_BL_SMALL: zint limb counts for resultants, by depth (keygen.c).
+pub let falcon_max_bl_small : Array[Int] = [
+  1, 1, 2, 2, 4, 7, 14, 27, 53, 106, 209,
+]
+
+///|
+/// MAX_BL_LARGE: zint limb counts for the NTRU solution, by depth.
+pub let falcon_max_bl_large : Array[Int] = [
+  2, 2, 5, 7, 12, 21, 40, 78, 157, 308,
+]
+
+///|
+/// BITLENGTH[logn] = (avg, std): bit-length stats of f,g coefficients.
+pub let falcon_bitlength_avg : Array[Int] = [
+  4, 11, 24, 50, 102, 202, 401, 794, 1577, 3138, 6308,
+]
+
+///|
+pub let falcon_bitlength_std : Array[Int] = [0, 1, 1, 1, 1, 2, 4, 5, 8, 13, 25]

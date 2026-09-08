@@ -351,17 +351,18 @@ pub fn zint_norm_zero(x : Array[Int], p : Array[Int], len : Int) -> Unit {
     let wx = x[u]
     let wp = ((p[u] >> 1) & fp_mask31) | (bb << 30)
     bb = p[u] & 1
-    if (r & 1) == 0 {
-      // still undecided: set borrow flag iff wx > wp
+    // C: r |= cc & ((r&1)-1) locks r once odd; the first differing
+    // limb from the top decides: wx > wp -> subtract (C r = all ones),
+    // wx < wp -> never subtract (C r = 1, r>>31 = 0).
+    if r == 0 {
       if wx > wp {
+        r = -1
+      } else if wx < wp {
         r = 1
       }
-      // already decided "subtract": re-affirm unless wx < wp strictly
-    } else if wx < wp {
-      r = 0
     }
   }
-  ignore(zint_sub(x, p, len, if r != 0 { 1 } else { 0 }))
+  ignore(zint_sub(x, p, len, if r == -1 { 1 } else { 0 }))
 }
 
 ///|
@@ -535,8 +536,10 @@ pub fn zint_bezout(
         b1 = bw
       }
       c1 = c0
-      let t = (aw | bw) + fp_mask31 // limbs < 2^31: no Int overflow
-      let bit = if t >= fp_2_31 { 1 } else { 0 }
+      // limbs < 2^31, but the sum can reach 2^32-2: compare in Int64
+      // (wasm Int is 32-bit and would wrap negative)
+      let t = (aw | bw).to_int64() + 0x7FFFFFFFL
+      let bit = if t >= 0x80000000L { 1 } else { 0 }
       c0 = c0 & (bit - 1)
     }
     if c1 != 0 {
@@ -679,7 +682,11 @@ pub fn zint_sub_scaled(
 /// Interpret a one-limb zint as a plain signed int.
 pub fn zint_one_to_plain(x : Array[Int]) -> Int {
   let w = x[0]
-  if (w & 0x40000000) != 0 {
+  // Two compatible representations: C stores u32 two's-complement whose
+  // low 31 bits carry the magnitude with bit30 as sign; our pipeline
+  // keeps native signed Ints. Only non-negative words with bit30 set
+  // need the fold; already-negative words pass through unchanged.
+  if w >= 0 && (w & 0x40000000) != 0 {
     w - fp_2_31
   } else {
     w

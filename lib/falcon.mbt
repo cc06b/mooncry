@@ -86,3 +86,60 @@ pub fn falcon_verify(pk : Bytes, sig : Bytes, msg : Bytes, logn : Int) -> Bool {
   let hm = falcon_hash_to_point(Bytes::from_array(nonce), msg, logn)
   falcon_verify_raw(hm, s2, h, logn)
 }
+
+///|
+/// Reproduce the deterministic test RNG used by the C vector harness:
+/// randombytes(buf, n) = SHAKE256(16 * 0xA5 || u64le(counter)), with a
+/// per-stream counter starting at 0.
+pub struct FalconTestRng {
+  x : FalconXof
+  mut ctr : UInt64
+}
+
+///|
+pub fn falcon_test_rng_init() -> FalconTestRng {
+  { x: falcon_xof_init(), ctr: 0UL, }
+}
+
+///|
+pub fn falcon_test_rng_bytes(r : FalconTestRng, n : Int) -> Bytes {
+  let seed = Array::make(24, (0xA5).to_byte())
+  let c = r.ctr
+  for i = 0; i < 8; i = i + 1 {
+    seed[16 + i] = ((c >> (i * 8)) & 0xFFUL).to_byte()
+  }
+  r.ctr = r.ctr + 1UL
+  let x = falcon_xof_init()
+  falcon_xof_inject(x, Bytes::from_array(seed))
+  falcon_xof_extract(x, n)
+}
+
+///|
+/// Falcon-512 keypair from an explicit 48-byte seed (the seed feeds
+/// SHAKE256 exactly as PQClean's crypto_sign_keypair does with the
+/// output of randombytes).
+pub fn falcon512_keypair_from_seed(seed : Bytes) -> (Bytes, Bytes) {
+  let x = falcon_xof_init()
+  falcon_xof_inject(x, seed)
+  let _ = falcon_xof_extract(x, 0) // flip
+  let (f, g, big_f, h) = falcon_keygen(x, 9)
+  let n = 512
+  // pk = 0x09 || modq_encode(h)
+  let pk_arr : Array[Byte] = [(0x09).to_byte()]
+  let pk_body = falcon_modq_encode(h, 9)
+  for i = 0; i < pk_body.length(); i = i + 1 {
+    pk_arr.push(pk_body[i])
+  }
+  // sk = 0x59 || trim_i8(f, max_fg_bits) || trim_i8(g) || trim_i8(F, max_FG_bits)
+  let sk_arr : Array[Byte] = [(0x59).to_byte()]
+  let ef = falcon_trim_encode(f, 9, falcon_max_fg_bits[9])
+  let eg = falcon_trim_encode(g, 9, falcon_max_fg_bits[9])
+  let eF = falcon_trim_encode(big_f, 9, falcon_max_FG_bits[9])
+  for part in [ef, eg, eF] {
+    for i = 0; i < part.length(); i = i + 1 {
+      sk_arr.push(part[i])
+    }
+  }
+  ignore(n)
+  (Bytes::from_array(pk_arr), Bytes::from_array(sk_arr))
+}
