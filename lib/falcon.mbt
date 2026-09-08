@@ -143,3 +143,86 @@ pub fn falcon512_keypair_from_seed(seed : Bytes) -> (Bytes, Bytes) {
   ignore(n)
   (Bytes::from_array(pk_arr), Bytes::from_array(sk_arr))
 }
+
+///|
+/// Sign a message with a Falcon-512 secret key. `rand` supplies the
+/// 40-byte nonce and then the 48-byte sampler seed (matching the C
+/// randombytes call order in crypto_sign_signature).
+pub fn falcon512_sign(sk : Bytes, msg : Bytes, rand : (Int) -> Bytes) -> Bytes {
+  falcon_sign(sk, msg, rand, 9)
+}
+
+///|
+/// Sign with explicit logn (9 = Falcon-512, 10 = Falcon-1024).
+pub fn falcon_sign(
+  sk : Bytes,
+  msg : Bytes,
+  rand : (Int) -> Bytes,
+  logn : Int,
+) -> Bytes {
+  let n = 1 << logn
+  // decode sk: 0x50+logn || trim_i8(f) || trim_i8(g) || trim_i8(F)
+  if sk.length() == 0 || sk[0].to_int() != 0x50 + logn {
+    return b""
+  }
+  let fb = falcon_max_fg_bits[logn]
+  let fbits = (n * fb + 7) / 8
+  let bigfb = falcon_max_FG_bits[logn]
+  let fgbits = (n * bigfb + 7) / 8
+  if sk.length() != 1 + 2 * fbits + fgbits {
+    return b""
+  }
+  let f = falcon_trim_decode(slice_bytes(sk, 1, fbits), logn, fb)
+  let g = falcon_trim_decode(slice_bytes(sk, 1 + fbits, fbits), logn, fb)
+  let big_f = falcon_trim_decode(
+    slice_bytes(sk, 1 + 2 * fbits, fgbits),
+    logn,
+    bigfb,
+  )
+  if f.length() != n || g.length() != n || big_f.length() != n {
+    return b""
+  }
+  let big_g = Array::make(n, 0)
+  if falcon_complete_private(big_g, f, g, big_f, logn) == false {
+    return b""
+  }
+  let nonce = rand(40)
+  let hm = falcon_hash_to_point(nonce, msg, logn)
+  let seed = rand(48)
+  let sc = falcon_xof_init()
+  falcon_xof_inject(sc, seed)
+  let s2 = Array::make(n, 0)
+  let mut ok = false
+  while ok == false {
+    let p = falcon_prng_init(sc)
+    let ctx = falcon_sampler_ctx_make(
+      p,
+      falcon_sigma_min_bits[logn].reinterpret_as_double(),
+    )
+    ok = falcon_do_sign_dyn(ctx, s2, f, g, big_f, big_g, hm, logn)
+  }
+  let comp = falcon_comp_encode(s2, logn)
+  let out : Array[Byte] = [(0x30 + logn).to_byte()]
+  for i = 0; i < nonce.length(); i = i + 1 {
+    out.push(nonce[i])
+  }
+  for i = 0; i < comp.length(); i = i + 1 {
+    out.push(comp[i])
+  }
+  Bytes::from_array(out)
+}
+
+///|
+fn slice_bytes(b : Bytes, off : Int, len : Int) -> Bytes {
+  let a = Array::make(len, (0).to_byte())
+  for i = 0; i < len; i = i + 1 {
+    a[i] = b[off + i]
+  }
+  Bytes::from_array(a)
+}
+
+///|
+/// Set the counter of a deterministic test RNG (for KAT replay).
+pub fn falcon_test_rng_set_ctr(r : FalconTestRng, c : UInt64) -> Unit {
+  r.ctr = c
+}
