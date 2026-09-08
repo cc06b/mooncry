@@ -710,6 +710,20 @@ pycryptodome (RFC 4231 TC6-style long key). P-384 HPKE is verified by
 differential vectors from an independent Python oracle (the HPKE
 composition machinery itself is RFC-vector-verified via P-256/P-521).
 
+**v0.53.0 features.** **Performance: Ed448 Shamir verification +
+housekeeping.** Ed448 verify rewrites the cofactor equation
+[4][S]B = [4]R + [4][k]A as [4](S*B - k*A - R) = O and evaluates it
+with one interleaved-window double-scalar multiplication instead of
+two independent ones (using L-k for -k is cofactor-safe: the
+difference is [4](L*A) = O for ANY point since the group order is
+4L). **Ed448 verify 15.2 → 12.0 ms**; the base point is hoisted to a
+constant. ML-DSA's dq_mul keeps i64.rem after THREE measured-negative
+alternatives (f64 reciprocal, folding with a subtraction loop, and
+branch-free folding over q = 2^23-2^13+1) — all documented in-code so
+nobody retries them. Also normalized 118 stray NUL bytes inside byte
+literals across 22 files to ` ` escapes (semantics unchanged; the
+files are text-clean for grep/diff again).
+
 **v0.52.0 features.** **Performance: word-oriented scrypt.** The
 Salsa20/8 core, scryptBlockMix and ROMix now operate on UInt word
 arrays in place (V table = a single flat allocation; XORs and

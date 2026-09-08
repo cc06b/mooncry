@@ -1088,7 +1088,7 @@ test "ML-DSA-44 sigGen pure deterministic ACVP #7" {
     "5B38B7AF7ED2FC40E1C790A4C75D1BD9B3FFE56DE2055B423047DFDADE4FDC15F83BD6E557776DF2" +
     "8B2A1315E96FB118258C9C30DADBAB311D0E27EC",
   )
-  let rnd = Bytes::make(32, b' ')
+  let rnd = Bytes::make(32, b'\x00')
   let sig = ml_dsa_44_sign(sk, msg, rnd, ctx)
   assert_true(
     bytes_equal(
@@ -1267,7 +1267,7 @@ test "ML-DSA-65 sigGen pure deterministic ACVP #41" {
   )
   let msg = hex_to_bytes("22")
   let ctx = hex_to_bytes("73BDBBAA6D36302B2115C5")
-  let rnd = Bytes::make(32, b' ')
+  let rnd = Bytes::make(32, b'\x00')
   let sig = ml_dsa_65_sign(sk, msg, rnd, ctx)
   assert_true(
     bytes_equal(
@@ -1498,7 +1498,7 @@ test "ML-DSA-87 sigGen pure deterministic ACVP #72" {
     "982BB81FAF21065A8EBF16BE96427243DC6C0E0098546F11D3B51008C39B0B439A6E4C9A25735347" +
     "CBEA701747",
   )
-  let rnd = Bytes::make(32, b' ')
+  let rnd = Bytes::make(32, b'\x00')
   let sig = ml_dsa_87_sign(sk, msg, rnd, ctx)
   assert_true(
     bytes_equal(

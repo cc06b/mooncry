@@ -131,7 +131,7 @@ test "ML-DSA-87 sigGen external-mu #151" {
     "F5F6B274070FA8CED053B71F1F9FA37CFAD56BC040D9F89F60FB565BC36E34017037B1108D6C97B7" +
     "F98A63FBA0C16E20FCFEC8A3177981A60740E19EC6A25934",
   )
-  let rnd = Bytes::make(32, b' ')
+  let rnd = Bytes::make(32, b'\x00')
   let sig = ml_dsa_87_sign_mu(sk, mu, rnd)
   assert_true(
     bytes_equal(
@@ -389,7 +389,7 @@ test "ML-DSA-87 sigGen external-mu #152" {
     "8B839A85D1ADEB6B33BCE8802F0833596F0ABADF370651DCBF69A42A6007AECA421E74A720688C3D" +
     "620A4F17E40153605D715875E07340FF2ABAEE5EEA4D7683",
   )
-  let rnd = Bytes::make(32, b' ')
+  let rnd = Bytes::make(32, b'\x00')
   let sig = ml_dsa_87_sign_mu(sk, mu, rnd)
   assert_true(
     bytes_equal(
@@ -647,7 +647,7 @@ test "ML-DSA-87 sigGen external-mu #153" {
     "E57FB24B76388A61FE025288194D0BC6ECE4798B56D6744AA396787EEF5720F387D69CDBE2D025BB" +
     "67154D311FD6A6409050762C0526DD825B941C9BF4F2764B",
   )
-  let rnd = Bytes::make(32, b' ')
+  let rnd = Bytes::make(32, b'\x00')
   let sig = ml_dsa_87_sign_mu(sk, mu, rnd)
   assert_true(
     bytes_equal(
@@ -905,7 +905,7 @@ test "ML-DSA-87 sigGen external-mu #154" {
     "41218CB6A8801B420A25E18B9239F69A343981AA51B11D4B0F49DB3FFA68AF6FCC629192FDCC56B7" +
     "79F124BA6C2BA793FF8328C897F605D2B38983FF3894342E",
   )
-  let rnd = Bytes::make(32, b' ')
+  let rnd = Bytes::make(32, b'\x00')
   let sig = ml_dsa_87_sign_mu(sk, mu, rnd)
   assert_true(
     bytes_equal(
@@ -1163,7 +1163,7 @@ test "ML-DSA-87 sigGen external-mu #155" {
     "77FA72CA2CDB5D9685234CCD6FE91E540E6667DE4FD4F5A4E3D77FA1C83D4D179739CE1C729AD160" +
     "28D9C3BCBF682ECF11FD28C5247D074616E465FE3C866F48",
   )
-  let rnd = Bytes::make(32, b' ')
+  let rnd = Bytes::make(32, b'\x00')
   let sig = ml_dsa_87_sign_mu(sk, mu, rnd)
   assert_true(
     bytes_equal(
@@ -1421,7 +1421,7 @@ test "ML-DSA-87 sigGen external-mu #156" {
     "95CB5045BC5C92C1EE9809E598DD0F1E0796CCC8FCD11A8AFCFE86F15379FC20EDAAD201FDF19586" +
     "B37E18F466835C57AF215B2455B43E68CD4E3652E2453F07",
   )
-  let rnd = Bytes::make(32, b' ')
+  let rnd = Bytes::make(32, b'\x00')
   let sig = ml_dsa_87_sign_mu(sk, mu, rnd)
   assert_true(
     bytes_equal(
@@ -1679,7 +1679,7 @@ test "ML-DSA-87 sigGen external-mu #157" {
     "EAAE2CE4DAEA4AF8D887D752DE9B552321B472617E10D1E0BBA2161CEF3D62D950D034FCC9EFF149" +
     "78901BA5F535005A82E1F16E4E29AF1FABF5D4CB34C388F4",
   )
-  let rnd = Bytes::make(32, b' ')
+  let rnd = Bytes::make(32, b'\x00')
   let sig = ml_dsa_87_sign_mu(sk, mu, rnd)
   assert_true(
     bytes_equal(
@@ -1937,7 +1937,7 @@ test "ML-DSA-87 sigGen external-mu #158" {
     "1F2CF7D4461A515B6F2989DCBED592FD5B38DAEED2BEBAFFD5E1B1E4D6B8616334CC928B2136017E" +
     "EB33B9233B9175CEEF449C03DF395AB1B8190B47993D8E28",
   )
-  let rnd = Bytes::make(32, b' ')
+  let rnd = Bytes::make(32, b'\x00')
   let sig = ml_dsa_87_sign_mu(sk, mu, rnd)
   assert_true(
     bytes_equal(
@@ -2195,7 +2195,7 @@ test "ML-DSA-87 sigGen external-mu #159" {
     "8909449C5D6F9883FB0E3F78583F38323571342F10D637A712E886E611DC305BAFB5D4E259A93DDB" +
     "754C2D6C34158AB0F1F917A1958A7D5EEC9D469B4B0ECF28",
   )
-  let rnd = Bytes::make(32, b' ')
+  let rnd = Bytes::make(32, b'\x00')
   let sig = ml_dsa_87_sign_mu(sk, mu, rnd)
   assert_true(
     bytes_equal(
@@ -2453,7 +2453,7 @@ test "ML-DSA-87 sigGen external-mu #160" {
     "E9BC6E6296F5E09DB917C30B1D3541136BF88296EED8E079F72CC66FCBE381D57CD2A9A3493F6A57" +
     "4E71D6879FDA546ACDB9653FFA99E0935FB7A1004D2E0E90",
   )
-  let rnd = Bytes::make(32, b' ')
+  let rnd = Bytes::make(32, b'\x00')
   let sig = ml_dsa_87_sign_mu(sk, mu, rnd)
   assert_true(
     bytes_equal(
@@ -2711,7 +2711,7 @@ test "ML-DSA-87 sigGen external-mu #161" {
     "182CFF580B0F08CEF1963E94D757D645357AFFE899B9A4C0612FBAB858FDF856A062FE86F1AF8B54" +
     "DC209DC970C12FF6DC54766AD0CC2816B2F0089664E4EF8F",
   )
-  let rnd = Bytes::make(32, b' ')
+  let rnd = Bytes::make(32, b'\x00')
   let sig = ml_dsa_87_sign_mu(sk, mu, rnd)
   assert_true(
     bytes_equal(
@@ -2969,7 +2969,7 @@ test "ML-DSA-87 sigGen external-mu #162" {
     "CC036F58B806242410D2470DCA68976C5D5319022F2C488BCEA066105A76501FD5FB1312266B3FB3" +
     "C9879ADA322D503B53ECDCAE9E28F3DF1696C4F7B9EEACAB",
   )
-  let rnd = Bytes::make(32, b' ')
+  let rnd = Bytes::make(32, b'\x00')
   let sig = ml_dsa_87_sign_mu(sk, mu, rnd)
   assert_true(
     bytes_equal(
@@ -3227,7 +3227,7 @@ test "ML-DSA-87 sigGen external-mu #163" {
     "8953BB66BEF1E981CF336E395B092EFA599AA18CD4A7EADD134884664275B064B1B54D0382B4BDBE" +
     "9F392F43F68A06D1AA736FF94A829CD6573D1A7CB089BBFE",
   )
-  let rnd = Bytes::make(32, b' ')
+  let rnd = Bytes::make(32, b'\x00')
   let sig = ml_dsa_87_sign_mu(sk, mu, rnd)
   assert_true(
     bytes_equal(
@@ -3485,7 +3485,7 @@ test "ML-DSA-87 sigGen external-mu #164" {
     "D679113995FEEB886207054164F5E6FB4756CE892A8827B01B687893872D5EBD70219CB49F47C6F0" +
     "04185EBA7CDECC9560CEE0062B87E9722DB1805BEFF0A0C0",
   )
-  let rnd = Bytes::make(32, b' ')
+  let rnd = Bytes::make(32, b'\x00')
   let sig = ml_dsa_87_sign_mu(sk, mu, rnd)
   assert_true(
     bytes_equal(
@@ -3743,7 +3743,7 @@ test "ML-DSA-87 sigGen external-mu #165" {
     "E76E386A01C57977A481276E954DF39AD82432BCB7C4465624C5FC6320491574802B733DE1CCA74B" +
     "1DBEF6521CAD85DF0AC400AEDDAB905BAC1A37A81197359B",
   )
-  let rnd = Bytes::make(32, b' ')
+  let rnd = Bytes::make(32, b'\x00')
   let sig = ml_dsa_87_sign_mu(sk, mu, rnd)
   assert_true(
     bytes_equal(

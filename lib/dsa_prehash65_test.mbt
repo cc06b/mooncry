@@ -208,7 +208,7 @@ test "HashML-DSA-65 sigGen preHash SHA2-512 tr1 #76" {
     "CDA08DE19BD3DB984CD2E907CD8C516F4AF4337A90F0F5B68392C5CC7D3AD7D563B6EBEF5C05233C" +
     "A95A5CC6B25A3D84AE308FA3CC5CB6B88FEAE6",
   )
-  let rnd = Bytes::make(32, b' ')
+  let rnd = Bytes::make(32, b'\x00')
   let sig = ml_dsa_65_sign_prehash(sk, msg, rnd, ctx, dsa_prehash_sha2_512)
   assert_true(
     bytes_equal(
@@ -319,7 +319,7 @@ test "HashML-DSA-65 sigGen preHash SHA3-384 tr1 #77" {
     "4024A70DA7E974B05B59722C5F201C53F791D1D4ED78C6A6129BC887D605B09F146C916DA466EDC4" +
     "827717E2028EBFF4194108CA8CD189",
   )
-  let rnd = Bytes::make(32, b' ')
+  let rnd = Bytes::make(32, b'\x00')
   let sig = ml_dsa_65_sign_prehash(sk, msg, rnd, ctx, dsa_prehash_sha3_384)
   assert_true(
     bytes_equal(
@@ -587,7 +587,7 @@ test "HashML-DSA-65 sigGen preHash SHA2-384 tr1 #78" {
     "6C3648A55CE1B9232BF0111A8C3A91B55E90E3A5728A2C9FCBC276F4890FF28A64C61A3589F94DFB" +
     "834AECAED083A510B1E4093916E59C",
   )
-  let rnd = Bytes::make(32, b' ')
+  let rnd = Bytes::make(32, b'\x00')
   let sig = ml_dsa_65_sign_prehash(sk, msg, rnd, ctx, dsa_prehash_sha2_384)
   assert_true(
     bytes_equal(
@@ -832,7 +832,7 @@ test "HashML-DSA-65 sigGen preHash SHA3-512 tr1 #79" {
   let ctx = hex_to_bytes(
     "DD7F43C6E52CAE998D51DBF79002689AC714023FCFE56C9831E83B5081A34BAB",
   )
-  let rnd = Bytes::make(32, b' ')
+  let rnd = Bytes::make(32, b'\x00')
   let sig = ml_dsa_65_sign_prehash(sk, msg, rnd, ctx, dsa_prehash_sha3_512)
   assert_true(
     bytes_equal(
@@ -1134,7 +1134,7 @@ test "HashML-DSA-65 sigGen preHash SHAKE-256 tr1 #80" {
     "CC84B54144A952A9A38814908DF17792D921D79D9664AD206F55AE374AE49E4F7B49B436F4EEF1C4" +
     "1D3528",
   )
-  let rnd = Bytes::make(32, b' ')
+  let rnd = Bytes::make(32, b'\x00')
   let sig = ml_dsa_65_sign_prehash(sk, msg, rnd, ctx, dsa_prehash_shake256)
   assert_true(
     bytes_equal(
@@ -1355,7 +1355,7 @@ test "HashML-DSA-65 sigGen preHash SHA2-512/256 tr1 #81" {
     "FF23886491AB96BB7373FD4793B49CF0C84701AB5468D06D3076565FC0EA4D56E00B853E37AA9758" +
     "60B4BCDE49131C784E",
   )
-  let rnd = Bytes::make(32, b' ')
+  let rnd = Bytes::make(32, b'\x00')
   let sig = ml_dsa_65_sign_prehash(sk, msg, rnd, ctx, dsa_prehash_sha2_512_256)
   assert_true(
     bytes_equal(
@@ -1474,7 +1474,7 @@ test "HashML-DSA-65 sigGen preHash SHA3-224 tr1 #82" {
     "141F8157FE597E2E57642F9D4500560A303F6C701F5A8375B962509F37AD2D14D029E5BAD0B1124D" +
     "0EF10F1F60320A67BD65850AC61F9A",
   )
-  let rnd = Bytes::make(32, b' ')
+  let rnd = Bytes::make(32, b'\x00')
   let sig = ml_dsa_65_sign_prehash(sk, msg, rnd, ctx, dsa_prehash_sha3_224)
   assert_true(
     bytes_equal(
@@ -1731,7 +1731,7 @@ test "HashML-DSA-65 sigGen preHash SHA2-512/224 tr1 #83" {
     "23B1B72636308079B5F60B9323CF8568DBD6CE6F4E9E78DC19C32D7A73D45C1E471F6142C6D9BBA0" +
     "D06AB602F3A0811C3A3D78E132091185F37D00F1D151E46CF9FF34",
   )
-  let rnd = Bytes::make(32, b' ')
+  let rnd = Bytes::make(32, b'\x00')
   let sig = ml_dsa_65_sign_prehash(sk, msg, rnd, ctx, dsa_prehash_sha2_512_224)
   assert_true(
     bytes_equal(
@@ -1895,7 +1895,7 @@ test "HashML-DSA-65 sigGen preHash SHA2-224 tr1 #84" {
     "93AE1C10E75905B41AED460A1FB6527356F9F6F3C911699CAE2E6A2B51FA5A6DE20322914E8DE854" +
     "26BBDC4AFB54DD23F9DCA947D8D9DCB63F6A9ECFAD2C6FF738425EFCD94B4FFF41CECCA6",
   )
-  let rnd = Bytes::make(32, b' ')
+  let rnd = Bytes::make(32, b'\x00')
   let sig = ml_dsa_65_sign_prehash(sk, msg, rnd, ctx, dsa_prehash_sha2_224)
   assert_true(
     bytes_equal(
@@ -2061,7 +2061,7 @@ test "HashML-DSA-65 sigGen preHash SHA3-256 tr1 #85" {
     "56ED5A0EE83606BFF2967819EF10A67186681F7986B5767BF4686333734348EDF786C4838BFD9ED5" +
     "770ED6",
   )
-  let rnd = Bytes::make(32, b' ')
+  let rnd = Bytes::make(32, b'\x00')
   let sig = ml_dsa_65_sign_prehash(sk, msg, rnd, ctx, dsa_prehash_sha3_256)
   assert_true(
     bytes_equal(
@@ -2244,7 +2244,7 @@ test "HashML-DSA-65 sigGen preHash SHA2-512/224 tr1 #86" {
     "E146FEF918DF63E15FD7FC460BBA5EAD67FA12059EED26B54D5466B4701FF9AD181903DC28F0EF29" +
     "D2C9702A7556243D8B381C",
   )
-  let rnd = Bytes::make(32, b' ')
+  let rnd = Bytes::make(32, b'\x00')
   let sig = ml_dsa_65_sign_prehash(sk, msg, rnd, ctx, dsa_prehash_sha2_512_224)
   assert_true(
     bytes_equal(
@@ -2459,7 +2459,7 @@ test "HashML-DSA-65 sigGen preHash SHA3-256 tr1 #87" {
     "94C85629191504195A9F014CE3E080D4BF8E8D397A8F3A8075CAC4F0ABC3",
   )
   let ctx = hex_to_bytes("AEF5AC057ABDA5AACE6655E7")
-  let rnd = Bytes::make(32, b' ')
+  let rnd = Bytes::make(32, b'\x00')
   let sig = ml_dsa_65_sign_prehash(sk, msg, rnd, ctx, dsa_prehash_sha3_256)
   assert_true(
     bytes_equal(
@@ -2745,7 +2745,7 @@ test "HashML-DSA-65 sigGen preHash SHAKE-128 tr1 #88" {
     "81F765111459F97109FC2948889BC8FBEA6BD4605954CFF6C514463EB8A75938E3F6F5A48201BF41" +
     "AB5FDA96F03B87D414A0547B018D97",
   )
-  let rnd = Bytes::make(32, b' ')
+  let rnd = Bytes::make(32, b'\x00')
   let sig = ml_dsa_65_sign_prehash(sk, msg, rnd, ctx, dsa_prehash_shake128)
   assert_true(
     bytes_equal(
@@ -2906,7 +2906,7 @@ test "HashML-DSA-65 sigGen preHash SHA2-512 tr1 #89" {
     "140B4AF5ABE8D32EA1B79BB508350CA7FAE74060D9B0F5AA5F5306BC10D5E1A36B0B0FDDCCD66752" +
     "A2EB1073AF",
   )
-  let rnd = Bytes::make(32, b' ')
+  let rnd = Bytes::make(32, b'\x00')
   let sig = ml_dsa_65_sign_prehash(sk, msg, rnd, ctx, dsa_prehash_sha2_512)
   assert_true(
     bytes_equal(
@@ -3215,7 +3215,7 @@ test "HashML-DSA-65 sigGen preHash SHA2-256 tr1 #90" {
     "0708761BB6EB108A58F8BE4B51EDED67891E1842BBE0BF1B2291A03B589AA7D3",
   )
   let ctx = b""
-  let rnd = Bytes::make(32, b' ')
+  let rnd = Bytes::make(32, b'\x00')
   let sig = ml_dsa_65_sign_prehash(sk, msg, rnd, ctx, dsa_prehash_sha2_256)
   assert_true(
     bytes_equal(

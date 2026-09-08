@@ -313,7 +313,7 @@ test "Ed448 verify rejects tampered message/signature" {
   let pk = ed448_public_key(ed448_v0_sk)
   assert_true(ed448_verify(pk, b"original", sig))
   assert_false(ed448_verify(pk, b"tampered", sig))
-  let bad = Array::make(114, b' ')
+  let bad = Array::make(114, b'\x00')
   for i in 0..<114 {
     bad[i] = sig[i]
   }
@@ -338,7 +338,7 @@ test "Ed448 verify rejects S >= L and bad lengths" {
   let l_bytes = hex_to_bytes(
     "3fffffffffffffffffffffffffffffffffffffffffffffffffffffff7cca23e9c44edb49aed63690216cc2728dc58f552378c292ab5844f3",
   )
-  let bad = Array::make(114, b' ')
+  let bad = Array::make(114, b'\x00')
   for i in 0..<57 {
     bad[i] = sig[i]
   }
@@ -346,9 +346,9 @@ test "Ed448 verify rejects S >= L and bad lengths" {
   for i in 0..<56 {
     bad[57 + i] = l_bytes[55 - i]
   }
-  bad[57 + 56] = b' '
+  bad[57 + 56] = b'\x00'
   assert_false(ed448_verify(pk, b"", Bytes::from_array(bad[:])))
   // wrong lengths
-  assert_false(ed448_verify(b" ", b"", sig))
-  assert_false(ed448_verify(pk, b"", b" "))
+  assert_false(ed448_verify(b"\x00", b"", sig))
+  assert_false(ed448_verify(pk, b"", b"\x00"))
 }

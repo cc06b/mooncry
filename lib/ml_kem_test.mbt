@@ -1628,7 +1628,7 @@ test "property: ML-KEM round-trip (keygen -> encaps -> decaps)" {
   assert_true(bytes_equal(k1, k2))
   // tampered ciphertext triggers implicit rejection: decaps returns
   // J(z || c') != k1
-  let bad = Array::make(c.length(), b' ')
+  let bad = Array::make(c.length(), b'\x00')
   for i in 0..<c.length() {
     bad[i] = c[i]
   }

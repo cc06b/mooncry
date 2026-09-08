@@ -1142,7 +1142,7 @@ priv struct DsaMatCache {
 ///|
 let dsa_mat_cache : DsaMatCache = DsaMatCache::{
   valid: false,
-  rho: Bytes::make(0, b' '),
+  rho: Bytes::make(0, b'\x00'),
   k: 0,
   l: 0,
   mat: Array::make(0, Array::make(0, 0)),
