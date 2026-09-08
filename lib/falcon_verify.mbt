@@ -164,3 +164,63 @@ pub fn falcon_verify_raw(
   }
   falcon_is_short(tt, s2, logn)
 }
+
+///|
+/// Reduce a small signed integer (in [-q/2, q/2]) modulo q.
+fn mq_conv_small(x : Int) -> Int {
+  let mut y = x
+  y = y + (falcon_q & (y >> 31))
+  y
+}
+
+///|
+/// x / y mod q via y^(q-2) (addition chain, Montgomery domain).
+pub fn falcon_mq_div(x : Int, y : Int) -> Int {
+  let y0 = mq_montymul(y, falcon_r2)
+  let y1 = mq_montymul(y0, y0)
+  let y2 = mq_montymul(y1, y0)
+  let y3 = mq_montymul(y2, y1)
+  let y4 = mq_montymul(y3, y3)
+  let y5 = mq_montymul(y4, y4)
+  let y6 = mq_montymul(y5, y5)
+  let y7 = mq_montymul(y6, y6)
+  let y8 = mq_montymul(y7, y7)
+  let y9 = mq_montymul(y8, y2)
+  let y10 = mq_montymul(y9, y8)
+  let y11 = mq_montymul(y10, y10)
+  let y12 = mq_montymul(y11, y11)
+  let y13 = mq_montymul(y12, y9)
+  let y14 = mq_montymul(y13, y13)
+  let y15 = mq_montymul(y14, y14)
+  let y16 = mq_montymul(y15, y10)
+  let y17 = mq_montymul(y16, y16)
+  let y18 = mq_montymul(y17, y0)
+  mq_montymul(y18, x)
+}
+
+///|
+/// compute_public: h = g/f mod (X^n+1) mod q. Returns false if f is not
+/// invertible mod q.
+pub fn falcon_compute_public(
+  h : Array[Int],
+  f : Array[Int],
+  g : Array[Int],
+  logn : Int,
+) -> Bool {
+  let n = 1 << logn
+  let tt = Array::make(n, 0)
+  for u = 0; u < n; u = u + 1 {
+    tt[u] = mq_conv_small(f[u])
+    h[u] = mq_conv_small(g[u])
+  }
+  falcon_mq_ntt(h, logn)
+  falcon_mq_ntt(tt, logn)
+  for u = 0; u < n; u = u + 1 {
+    if tt[u] == 0 {
+      return false
+    }
+    h[u] = falcon_mq_div(h[u], tt[u])
+  }
+  falcon_mq_intt(h, logn)
+  true
+}
