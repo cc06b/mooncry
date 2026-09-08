@@ -715,7 +715,7 @@ pycryptodome (RFC 4231 TC6-style long key). P-384 HPKE is verified by
 differential vectors from an independent Python oracle (the HPKE
 composition machinery itself is RFC-vector-verified via P-256/P-521).
 
-**v0.55.0-v0.63.0 features.** **Falcon-512/1024 lattice signatures** —
+**v0.55.0-v0.64.0 features.** **Falcon-512/1024 lattice signatures** —
 a from-scratch pure-MoonBit port of the PQClean `clean` reference
 (the official Falcon submission codebase): NTRU keygen via the
 small-prime RNS + binary-GCD Bezout tree with f64 Babai reduction,
