@@ -710,6 +710,12 @@ pycryptodome (RFC 4231 TC6-style long key). P-384 HPKE is verified by
 differential vectors from an independent Python oracle (the HPKE
 composition machinery itself is RFC-vector-verified via P-256/P-521).
 
+**v0.52.0 features.** **Performance: word-oriented scrypt.** The
+Salsa20/8 core, scryptBlockMix and ROMix now operate on UInt word
+arrays in place (V table = a single flat allocation; XORs and
+interleaving at word granularity; no per-block Bytes conversions) —
+~1.4x on the memory-hard loop. RFC 7914 vectors unchanged.
+
 **v0.51.0 features.** **Performance: native P-256 field and curve
 arithmetic.** New eight-32-bit-limb implementation of GF(p256):
 schoolbook multiply with UInt64 accumulators (provably overflow-free)
