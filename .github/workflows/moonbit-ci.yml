@@ -38,8 +38,12 @@ jobs:
       - name: moon info
         run: moon info
 
-      - name: moon test --deny-warn
-        run: moon test --deny-warn
+      # Release mode: the debug-wasm suite takes ~40 min (crypto KATs are
+      # compute-heavy); release runs the same 1084 tests in ~8 min. Debug
+      # full runs remain part of the local pre-publish discipline (debug
+      # builds also trap integer overflow, so they are the stricter check).
+      - name: moon test --deny-warn --release
+        run: moon test --deny-warn --release
 
       # Build artifacts (_build/, *.mi, *.core, *.bak, *.mbti,
       # pkg.generated.mbti, *.log) must never be committed — .gitignore
