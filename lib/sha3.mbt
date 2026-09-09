@@ -115,13 +115,17 @@ fn new_state() -> Array[UInt64] {
 ///|
 /// Keccak-f[1600] permutation on a flat 25-lane state in place
 fn keccak_f(st : Array[UInt64]) -> Unit {
-  keccak_f_from(st, 0)
+  keccak_f_fast(st)
 }
 
 ///|
 /// Keccak-p[1600]: rounds `start`..23 of Keccak-f. TurboSHAKE (RFC 9861)
 /// uses start = 12 (the last 12 rounds). v0.36.0.
 fn keccak_f_from(st : Array[UInt64], start : Int) -> Unit {
+  if start == 0 {
+    keccak_f_fast(st)
+    return
+  }
   let c = Array::make(5, 0UL)
   let d = Array::make(5, 0UL)
   let b = Array::make(25, 0UL)
@@ -282,4 +286,149 @@ pub fn shake_128(data : Bytes, out_len : Int) -> Bytes {
 /// Compute SHAKE256 (FIPS 202), variable-length output
 pub fn shake_256(data : Bytes, out_len : Int) -> Bytes {
   shake_sponge(136, data, out_len)
+}
+
+///|
+/// Fully unrolled Keccak-f[1600]: 25 local lanes, constant rotations,
+/// no inner-loop array traffic / modulo / table reads. Generated from
+/// the same repo formulas as the flat tables (never hand-typed).
+fn keccak_f_fast(st : Array[UInt64]) -> Unit {
+  let mut v00 = st[0]
+  let mut v05 = st[5]
+  let mut v10 = st[10]
+  let mut v15 = st[15]
+  let mut v20 = st[20]
+  let mut v01 = st[1]
+  let mut v06 = st[6]
+  let mut v11 = st[11]
+  let mut v16 = st[16]
+  let mut v21 = st[21]
+  let mut v02 = st[2]
+  let mut v07 = st[7]
+  let mut v12 = st[12]
+  let mut v17 = st[17]
+  let mut v22 = st[22]
+  let mut v03 = st[3]
+  let mut v08 = st[8]
+  let mut v13 = st[13]
+  let mut v18 = st[18]
+  let mut v23 = st[23]
+  let mut v04 = st[4]
+  let mut v09 = st[9]
+  let mut v14 = st[14]
+  let mut v19 = st[19]
+  let mut v24 = st[24]
+  for round = 0; round < 24; round = round + 1 {
+    let c0 = v00 ^ v05 ^ v10 ^ v15 ^ v20
+    let c1 = v01 ^ v06 ^ v11 ^ v16 ^ v21
+    let c2 = v02 ^ v07 ^ v12 ^ v17 ^ v22
+    let c3 = v03 ^ v08 ^ v13 ^ v18 ^ v23
+    let c4 = v04 ^ v09 ^ v14 ^ v19 ^ v24
+    let d0 = c4 ^ ((c1 << 1) | (c1 >> 63))
+    let d1 = c0 ^ ((c2 << 1) | (c2 >> 63))
+    let d2 = c1 ^ ((c3 << 1) | (c3 >> 63))
+    let d3 = c2 ^ ((c4 << 1) | (c4 >> 63))
+    let d4 = c3 ^ ((c0 << 1) | (c0 >> 63))
+    v00 = v00 ^ d0
+    v05 = v05 ^ d0
+    v10 = v10 ^ d0
+    v15 = v15 ^ d0
+    v20 = v20 ^ d0
+    v01 = v01 ^ d1
+    v06 = v06 ^ d1
+    v11 = v11 ^ d1
+    v16 = v16 ^ d1
+    v21 = v21 ^ d1
+    v02 = v02 ^ d2
+    v07 = v07 ^ d2
+    v12 = v12 ^ d2
+    v17 = v17 ^ d2
+    v22 = v22 ^ d2
+    v03 = v03 ^ d3
+    v08 = v08 ^ d3
+    v13 = v13 ^ d3
+    v18 = v18 ^ d3
+    v23 = v23 ^ d3
+    v04 = v04 ^ d4
+    v09 = v09 ^ d4
+    v14 = v14 ^ d4
+    v19 = v19 ^ d4
+    v24 = v24 ^ d4
+    let b00 = v00
+    let b01 = (v06 << 44) | (v06 >> 20)
+    let b02 = (v12 << 43) | (v12 >> 21)
+    let b03 = (v18 << 21) | (v18 >> 43)
+    let b04 = (v24 << 14) | (v24 >> 50)
+    let b05 = (v03 << 28) | (v03 >> 36)
+    let b06 = (v09 << 20) | (v09 >> 44)
+    let b07 = (v10 << 3) | (v10 >> 61)
+    let b08 = (v16 << 45) | (v16 >> 19)
+    let b09 = (v22 << 61) | (v22 >> 3)
+    let b10 = (v01 << 1) | (v01 >> 63)
+    let b11 = (v07 << 6) | (v07 >> 58)
+    let b12 = (v13 << 25) | (v13 >> 39)
+    let b13 = (v19 << 8) | (v19 >> 56)
+    let b14 = (v20 << 18) | (v20 >> 46)
+    let b15 = (v04 << 27) | (v04 >> 37)
+    let b16 = (v05 << 36) | (v05 >> 28)
+    let b17 = (v11 << 10) | (v11 >> 54)
+    let b18 = (v17 << 15) | (v17 >> 49)
+    let b19 = (v23 << 56) | (v23 >> 8)
+    let b20 = (v02 << 62) | (v02 >> 2)
+    let b21 = (v08 << 55) | (v08 >> 9)
+    let b22 = (v14 << 39) | (v14 >> 25)
+    let b23 = (v15 << 41) | (v15 >> 23)
+    let b24 = (v21 << 2) | (v21 >> 62)
+    v00 = b00 ^ ((0xFFFFFFFFFFFFFFFFUL ^ b01) & b02)
+    v05 = b05 ^ ((0xFFFFFFFFFFFFFFFFUL ^ b06) & b07)
+    v10 = b10 ^ ((0xFFFFFFFFFFFFFFFFUL ^ b11) & b12)
+    v15 = b15 ^ ((0xFFFFFFFFFFFFFFFFUL ^ b16) & b17)
+    v20 = b20 ^ ((0xFFFFFFFFFFFFFFFFUL ^ b21) & b22)
+    v01 = b01 ^ ((0xFFFFFFFFFFFFFFFFUL ^ b02) & b03)
+    v06 = b06 ^ ((0xFFFFFFFFFFFFFFFFUL ^ b07) & b08)
+    v11 = b11 ^ ((0xFFFFFFFFFFFFFFFFUL ^ b12) & b13)
+    v16 = b16 ^ ((0xFFFFFFFFFFFFFFFFUL ^ b17) & b18)
+    v21 = b21 ^ ((0xFFFFFFFFFFFFFFFFUL ^ b22) & b23)
+    v02 = b02 ^ ((0xFFFFFFFFFFFFFFFFUL ^ b03) & b04)
+    v07 = b07 ^ ((0xFFFFFFFFFFFFFFFFUL ^ b08) & b09)
+    v12 = b12 ^ ((0xFFFFFFFFFFFFFFFFUL ^ b13) & b14)
+    v17 = b17 ^ ((0xFFFFFFFFFFFFFFFFUL ^ b18) & b19)
+    v22 = b22 ^ ((0xFFFFFFFFFFFFFFFFUL ^ b23) & b24)
+    v03 = b03 ^ ((0xFFFFFFFFFFFFFFFFUL ^ b04) & b00)
+    v08 = b08 ^ ((0xFFFFFFFFFFFFFFFFUL ^ b09) & b05)
+    v13 = b13 ^ ((0xFFFFFFFFFFFFFFFFUL ^ b14) & b10)
+    v18 = b18 ^ ((0xFFFFFFFFFFFFFFFFUL ^ b19) & b15)
+    v23 = b23 ^ ((0xFFFFFFFFFFFFFFFFUL ^ b24) & b20)
+    v04 = b04 ^ ((0xFFFFFFFFFFFFFFFFUL ^ b00) & b01)
+    v09 = b09 ^ ((0xFFFFFFFFFFFFFFFFUL ^ b05) & b06)
+    v14 = b14 ^ ((0xFFFFFFFFFFFFFFFFUL ^ b10) & b11)
+    v19 = b19 ^ ((0xFFFFFFFFFFFFFFFFUL ^ b15) & b16)
+    v24 = b24 ^ ((0xFFFFFFFFFFFFFFFFUL ^ b20) & b21)
+    v00 = v00 ^ keccak_rndc[round]
+  }
+  st[0] = v00
+  st[5] = v05
+  st[10] = v10
+  st[15] = v15
+  st[20] = v20
+  st[1] = v01
+  st[6] = v06
+  st[11] = v11
+  st[16] = v16
+  st[21] = v21
+  st[2] = v02
+  st[7] = v07
+  st[12] = v12
+  st[17] = v17
+  st[22] = v22
+  st[3] = v03
+  st[8] = v08
+  st[13] = v13
+  st[18] = v18
+  st[23] = v23
+  st[4] = v04
+  st[9] = v09
+  st[14] = v14
+  st[19] = v19
+  st[24] = v24
 }
