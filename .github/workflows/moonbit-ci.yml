@@ -60,3 +60,20 @@ jobs:
 
       - name: Build
         run: moon build
+
+  # 64-bit Int semantics: the default wasm target has 32-bit Int; the
+  # native Linux target has 64-bit Int. Crypto code with width-sensitive
+  # masking/comparison logic must pass on both (the bezout extraction bug
+  # of the Falcon campaign was exactly a wasm-32 wrap that native hides).
+  native64:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> $GITHUB_PATH
+
+      - name: moon test (native, 64-bit Int)
+        run: moon test --target native --release
