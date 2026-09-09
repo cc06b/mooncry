@@ -15,7 +15,7 @@ let fp_mask31 : Int = 0x7FFFFFFF
 // ---------------------------------------------------------------------------
 
 ///|
-pub fn modp_set(x : Int, p : Int) -> Int {
+fn modp_set(x : Int, p : Int) -> Int {
   let mut w = x
   if w < 0 {
     w = w + p
@@ -380,7 +380,7 @@ pub fn zint_negate(a : Array[Int], len : Int, ctl : Int) -> Unit {
 ///|
 /// (a,b) <- (xa*a + xb*b, ya*a + yb*b) over 31-bit limbs; result kept
 /// non-negative via conditional negate. Returns nega | (negb << 1).
-pub fn zint_co_reduce(
+fn zint_co_reduce(
   a : Array[Int],
   b : Array[Int],
   len : Int,
@@ -443,7 +443,7 @@ fn zint_finish_mod(
 
 ///|
 /// co_reduce followed by reduction modulo m.
-pub fn zint_co_reduce_mod(
+fn zint_co_reduce_mod(
   a : Array[Int],
   b : Array[Int],
   m : Array[Int],

@@ -153,7 +153,7 @@ pub fn prng_get_u8(p : FalconPrng) -> Int {
 ///|
 /// FPR(s, e, m): pack sign/exponent/scaled-mantissa (m in [2^54,2^55))
 /// into an f64, with round-to-nearest-even on the dropped 2 bits.
-pub fn fpr_pack(sgn : Int, e0 : Int, m0 : UInt64) -> Double {
+fn fpr_pack(sgn : Int, e0 : Int, m0 : UInt64) -> Double {
   let e = e0 + 1076
   let mut m = m0
   if e < 0 {
@@ -304,7 +304,7 @@ pub fn falcon_gaussian0_sampler(p : FalconPrng) -> Int {
 
 ///|
 /// BerExp: Bernoulli(exp(-x)) via the expm_p63 fixed-point stream.
-pub fn falcon_ber_exp(p : FalconPrng, x : Double, ccs : Double) -> Int {
+fn falcon_ber_exp(p : FalconPrng, x : Double, ccs : Double) -> Int {
   let mut s = fp_trunc(x * fp_inv_log2_val()).to_int()
   let r = x - s.to_double() * fp_log2_val()
   let mut sw = s

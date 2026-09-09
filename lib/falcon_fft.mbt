@@ -98,11 +98,7 @@ pub fn falcon_ifft(f : Array[Double], logn : Int) -> Unit {
 
 ///|
 /// a += b (coefficient or FFT domain).
-pub fn falcon_poly_add(
-  a : Array[Double],
-  b : Array[Double],
-  logn : Int,
-) -> Unit {
+fn falcon_poly_add(a : Array[Double], b : Array[Double], logn : Int) -> Unit {
   let n = 1 << logn
   for u = 0; u < n; u = u + 1 {
     a[u] = a[u] + b[u]
@@ -111,11 +107,7 @@ pub fn falcon_poly_add(
 
 ///|
 /// a -= b.
-pub fn falcon_poly_sub(
-  a : Array[Double],
-  b : Array[Double],
-  logn : Int,
-) -> Unit {
+fn falcon_poly_sub(a : Array[Double], b : Array[Double], logn : Int) -> Unit {
   let n = 1 << logn
   for u = 0; u < n; u = u + 1 {
     a[u] = a[u] - b[u]
@@ -124,7 +116,7 @@ pub fn falcon_poly_sub(
 
 ///|
 /// a = -a.
-pub fn falcon_poly_neg(a : Array[Double], logn : Int) -> Unit {
+fn falcon_poly_neg(a : Array[Double], logn : Int) -> Unit {
   let n = 1 << logn
   for u = 0; u < n; u = u + 1 {
     a[u] = 0.0 - a[u]
@@ -133,7 +125,7 @@ pub fn falcon_poly_neg(a : Array[Double], logn : Int) -> Unit {
 
 ///|
 /// Conjugate in FFT domain (negate imaginary halves).
-pub fn falcon_poly_adj_fft(a : Array[Double], logn : Int) -> Unit {
+fn falcon_poly_adj_fft(a : Array[Double], logn : Int) -> Unit {
   let n = 1 << logn
   for u = n >> 1; u < n; u = u + 1 {
     a[u] = 0.0 - a[u]
@@ -161,7 +153,7 @@ pub fn falcon_poly_mul_fft(
 
 ///|
 /// a *= conj(b) in FFT domain.
-pub fn falcon_poly_muladj_fft(
+fn falcon_poly_muladj_fft(
   a : Array[Double],
   b : Array[Double],
   logn : Int,
@@ -180,7 +172,7 @@ pub fn falcon_poly_muladj_fft(
 
 ///|
 /// a *= conj(a): real slots get |a|^2, imaginary slots zeroed.
-pub fn falcon_poly_mulselfadj_fft(a : Array[Double], logn : Int) -> Unit {
+fn falcon_poly_mulselfadj_fft(a : Array[Double], logn : Int) -> Unit {
   let n = 1 << logn
   let hn = n >> 1
   for u = 0; u < hn; u = u + 1 {
@@ -193,7 +185,7 @@ pub fn falcon_poly_mulselfadj_fft(a : Array[Double], logn : Int) -> Unit {
 
 ///|
 /// a *= x (all slots).
-pub fn falcon_poly_mulconst(a : Array[Double], x : Double, logn : Int) -> Unit {
+fn falcon_poly_mulconst(a : Array[Double], x : Double, logn : Int) -> Unit {
   let n = 1 << logn
   for u = 0; u < n; u = u + 1 {
     a[u] = a[u] * x
@@ -201,30 +193,8 @@ pub fn falcon_poly_mulconst(a : Array[Double], x : Double, logn : Int) -> Unit {
 }
 
 ///|
-/// Complex pointwise divide in FFT domain: a /= b.
-pub fn falcon_poly_div_fft(
-  a : Array[Double],
-  b : Array[Double],
-  logn : Int,
-) -> Unit {
-  let n = 1 << logn
-  let hn = n >> 1
-  for u = 0; u < hn; u = u + 1 {
-    let ar = a[u]
-    let ai = a[u + hn]
-    let br = b[u]
-    let bi = b[u + hn]
-    let m = 1.0 / (br * br + bi * bi)
-    let br2 = br * m
-    let bi2 = (0.0 - bi) * m
-    a[u] = ar * br2 - ai * bi2
-    a[u + hn] = ar * bi2 + ai * br2
-  }
-}
-
-///|
 /// d[u] = 1 / (|a|^2 + |b|^2) per complex slot (real output in low half).
-pub fn falcon_poly_invnorm2_fft(
+fn falcon_poly_invnorm2_fft(
   d : Array[Double],
   a : Array[Double],
   b : Array[Double],
@@ -243,7 +213,7 @@ pub fn falcon_poly_invnorm2_fft(
 
 ///|
 /// d = F*conj(f) + G*conj(g) in FFT domain.
-pub fn falcon_poly_add_muladj_fft(
+fn falcon_poly_add_muladj_fft(
   d : Array[Double],
   big_f : Array[Double],
   big_g : Array[Double],
@@ -273,7 +243,7 @@ pub fn falcon_poly_add_muladj_fft(
 
 ///|
 /// a *= b where b is auto-adjoint (real slots only).
-pub fn falcon_poly_mul_autoadj_fft(
+fn falcon_poly_mul_autoadj_fft(
   a : Array[Double],
   b : Array[Double],
   logn : Int,
@@ -289,7 +259,7 @@ pub fn falcon_poly_mul_autoadj_fft(
 
 ///|
 /// a /= b where b is auto-adjoint (real slots only).
-pub fn falcon_poly_div_autoadj_fft(
+fn falcon_poly_div_autoadj_fft(
   a : Array[Double],
   b : Array[Double],
   logn : Int,
@@ -305,7 +275,7 @@ pub fn falcon_poly_div_autoadj_fft(
 
 ///|
 /// In-place LDL decomposition of a 2x2 Gram matrix in FFT domain.
-pub fn falcon_poly_LDL_fft(
+fn falcon_poly_LDL_fft(
   g00 : Array[Double],
   g01 : Array[Double],
   g11 : Array[Double],
@@ -331,37 +301,6 @@ pub fn falcon_poly_LDL_fft(
     g11[u + hn] = g11[u + hn] - p_i
     g01[u] = mu_r
     g01[u + hn] = 0.0 - mu_i
-  }
-}
-
-///|
-/// Non-destructive LDL step: d11 = g11 - mu*conj(g01), l10 = conj(mu).
-pub fn falcon_poly_LDLmv_fft(
-  d11 : Array[Double],
-  l10 : Array[Double],
-  g00 : Array[Double],
-  g01 : Array[Double],
-  g11 : Array[Double],
-  logn : Int,
-) -> Unit {
-  let n = 1 << logn
-  let hn = n >> 1
-  for u = 0; u < hn; u = u + 1 {
-    let a_r = g00[u]
-    let a_i = g00[u + hn]
-    let b_r = g01[u]
-    let b_i = g01[u + hn]
-    let m = 1.0 / (a_r * a_r + a_i * a_i)
-    let a2r = a_r * m
-    let a2i = (0.0 - a_i) * m
-    let mu_r = b_r * a2r - b_i * a2i
-    let mu_i = b_r * a2i + b_i * a2r
-    let p_r = mu_r * b_r - mu_i * (0.0 - b_i)
-    let p_i = mu_r * (0.0 - b_i) + mu_i * b_r
-    d11[u] = g11[u] - p_r
-    d11[u + hn] = g11[u + hn] - p_i
-    l10[u] = mu_r
-    l10[u + hn] = 0.0 - mu_i
   }
 }
 

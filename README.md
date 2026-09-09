@@ -408,6 +408,13 @@ cause an `abort` with a descriptive message.
   longer bit-sliced and is likewise **not side-channel-safe**; the GCM
   *tag comparison* and CBC PKCS#7 *verification* remain constant-time
   (no early exit on mismatch).
+- **Falcon keygen/sign are not constant-time.** The port favours clarity and
+  cross-platform bit-exactness over the C reference's constant-time discipline:
+  the NTRU solver's bignum comparisons, conditional reductions, and rejection
+  loops branch on secret-dependent values. Falcon *verify* only branches on
+  public data (pk, signature, message). Keygen/sign run on the key owner's
+  machine with freshly generated secrets; treat them as **not side-channel-safe**
+  against local timing/cache attackers.
 - **Nonce reuse is catastrophic** for AES-GCM and ChaCha20(-Poly1305). Never
   reuse a (key, nonce) pair. The library does not track nonces — generate a
   fresh one per message (e.g. a counter or CSPRNG).
@@ -714,6 +721,9 @@ New public `hmac_sha384` (with the long-key zero-padding handled) and
 pycryptodome (RFC 4231 TC6-style long key). P-384 HPKE is verified by
 differential vectors from an independent Python oracle (the HPKE
 composition machinery itself is RFC-vector-verified via P-256/P-521).
+
+Falcon operation benchmarks (release, wasm, this host — `moon bench`):
+**falcon512 keygen ~97 ms, sign ~4.4 ms, verify ~348 µs**.
 
 **v0.55.0-v0.64.0 features.** **Falcon-512/1024 lattice signatures** —
 a from-scratch pure-MoonBit port of the PQClean `clean` reference

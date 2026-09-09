@@ -8,7 +8,7 @@
 ///|
 /// G = g*F/f mod q, normalized to ±q/2, must fit ±127. Returns false
 /// if f is not invertible or G is out of range.
-pub fn falcon_complete_private(
+fn falcon_complete_private(
   big_g : Array[Int],
   f : Array[Int],
   g : Array[Int],
@@ -70,7 +70,7 @@ fn fpr_inv_sigma_at(logn : Int) -> Double {
 /// ffSampling_fft_dyntree: recursive Gaussian sampling with on-the-fly
 /// LDL tree. Arrays are level-sized (n = 1<<logn); halves are passed as
 /// fresh copies at recursion (parent never re-reads mutated regions).
-pub fn ff_sampling_dyntree(
+fn ff_sampling_dyntree(
   ctx : FalconSamplerCtx,
   t0 : Array[Double],
   t1 : Array[Double],
@@ -153,7 +153,7 @@ pub fn ff_sampling_dyntree(
 /// do_sign_dyn: one signing attempt. Returns -1 on rejection, else the
 /// squared norm seed... C returns 0/−1 with s2 output; we return true
 /// and fill s2.
-pub fn falcon_do_sign_dyn(
+fn falcon_do_sign_dyn(
   ctx : FalconSamplerCtx,
   s2 : Array[Int],
   f : Array[Int],
@@ -303,7 +303,7 @@ fn falcon_inv_q_val() -> Double {
 
 ///|
 /// is_short_half: sqn (from s1) + sum(s2^2) <= l2bound (exact Int64).
-pub fn falcon_is_short_half(sqn0 : Int64, s2 : Array[Int], logn : Int) -> Bool {
+fn falcon_is_short_half(sqn0 : Int64, s2 : Array[Int], logn : Int) -> Bool {
   let n = 1 << logn
   let mut sqn = sqn0
   for u = 0; u < n; u = u + 1 {

@@ -9,7 +9,7 @@ let fp_two31 : Double = 2147483648.0
 
 ///|
 /// Strided forward NTT mod p (elements at a[off + i*stride]).
-pub fn modp_ntt2_ext(
+fn modp_ntt2_ext(
   a : Array[Int],
   off : Int,
   stride : Int,
@@ -47,7 +47,7 @@ pub fn modp_ntt2_ext(
 
 ///|
 /// Strided inverse NTT mod p.
-pub fn modp_intt2_ext(
+fn modp_intt2_ext(
   a : Array[Int],
   off : Int,
   stride : Int,
@@ -91,7 +91,7 @@ pub fn modp_intt2_ext(
 
 ///|
 /// zint_mod_small_unsigned over a slice d[doff .. doff+dlen).
-pub fn zint_mod_small_unsigned_at(
+fn zint_mod_small_unsigned_at(
   d : Array[Int],
   doff : Int,
   dlen : Int,
@@ -115,7 +115,7 @@ pub fn zint_mod_small_unsigned_at(
 
 ///|
 /// zint_mod_small_signed over a slice.
-pub fn zint_mod_small_signed_at(
+fn zint_mod_small_signed_at(
   d : Array[Int],
   doff : Int,
   dlen : Int,
@@ -136,7 +136,7 @@ pub fn zint_mod_small_signed_at(
 
 ///|
 /// x[xoff..) += y[0..len) * s; carry written to x[xoff+len].
-pub fn zint_add_mul_small_at(
+fn zint_add_mul_small_at(
   x : Array[Int],
   xoff : Int,
   y : Array[Int],
@@ -156,7 +156,7 @@ pub fn zint_add_mul_small_at(
 
 ///|
 /// zint_norm_zero over a slice.
-pub fn zint_norm_zero_at(
+fn zint_norm_zero_at(
   x : Array[Int],
   xoff : Int,
   p : Array[Int],
@@ -191,45 +191,9 @@ pub fn zint_norm_zero_at(
 }
 
 ///|
-/// CRT rebuild: xx holds `num` polynomials (stride xstride) as residues
-/// modulo primes[0..xlen); rebuilds them as zint bignums in place.
-pub fn zint_rebuild_crt(
-  xx : Array[Int],
-  xlen : Int,
-  xstride : Int,
-  num : Int,
-  normalize_signed : Int,
-  tmp : Array[Int],
-) -> Unit {
-  tmp[0] = falcon_primes_p[0]
-  for u = 1; u < xlen; u = u + 1 {
-    let p = falcon_primes_p[u]
-    let s = falcon_primes_s[u]
-    let p0i = modp_ninv31(p)
-    let r2 = modp_r2(p, p0i)
-    let mut xoff = 0
-    for _v = 0; _v < num; _v = _v + 1 {
-      let xp = xx[xoff + u]
-      let xq = zint_mod_small_unsigned_at(xx, xoff, u, p, p0i, r2)
-      let xr = modp_montymul(s, modp_sub(xp, xq, p), p, p0i)
-      zint_add_mul_small_at(xx, xoff, tmp, u, xr)
-      xoff = xoff + xstride
-    }
-    tmp[u] = zint_mul_small(tmp, u, p)
-  }
-  if normalize_signed != 0 {
-    let mut xoff = 0
-    for _u = 0; _u < num; _u = _u + 1 {
-      zint_norm_zero_at(xx, xoff, tmp, xlen)
-      xoff = xoff + xstride
-    }
-  }
-}
-
-///|
 /// Big-limb polynomial (flen limbs per coefficient, stride fstride) ->
 /// f64 array of 2^logn coefficients.
-pub fn poly_big_to_fp(
+fn poly_big_to_fp(
   d : Array[Double],
   f : Array[Int],
   foff : Int,
@@ -272,7 +236,7 @@ pub fn poly_big_to_fp(
 ///|
 /// One-limb-per-coefficient big -> int8 with range check; false if any
 /// coefficient exceeds ±lim.
-pub fn poly_big_to_small(
+fn poly_big_to_small(
   d : Array[Int],
   s : Array[Int],
   soff : Int,
@@ -293,7 +257,7 @@ pub fn poly_big_to_small(
 
 ///|
 /// F -= (X^k-scaled) f * k[u] with negacyclic wrap (direct method).
-pub fn poly_sub_scaled(
+fn poly_sub_scaled(
   big_f : Array[Int],
   foff : Int,
   flen : Int,
@@ -366,7 +330,7 @@ fn zint_add_scaled_slice(
 /// NTT-accelerated poly_sub_scaled: computes k*f in RNS over tlen
 /// primes, CRT-rebuilds, then subtracts with scaling.
 /// tmp layout: gm(n) | igm(n) | fk(n*tlen) | t1(n), tlen = flen+1.
-pub fn poly_sub_scaled_ntt(
+fn poly_sub_scaled_ntt(
   big_f : Array[Int],
   foff : Int,
   flen : Int,
@@ -434,7 +398,7 @@ pub fn poly_sub_scaled_ntt(
 
 ///|
 /// mkgm2 writing gm/igm into slices of one array.
-pub fn modp_mkgm2_slice(
+fn modp_mkgm2_slice(
   gm : Array[Int],
   gm_off : Int,
   igm : Array[Int],
@@ -539,7 +503,7 @@ fn zint_sub_scaled_slice(
 // ---------------------------------------------------------------------------
 
 ///|
-pub fn fold_rec_res_at(
+fn fold_rec_res_at(
   t1 : Array[Int],
   t1_off : Int,
   dst : Array[Int],
@@ -560,230 +524,4 @@ pub fn fold_rec_res_at(
       p0i,
     )
   }
-}
-
-///|
-/// One make_fg level. data layout (C pointer math, flat array):
-/// fd[0..hn*tlen) gd[..2*hn*tlen) fs[..+n*slen) gs[..+n*slen)
-/// gm[..+n) igm[..+n) t1[..+n).
-pub fn make_fg_step(
-  data : Array[Int],
-  logn : Int,
-  depth : Int,
-  in_ntt : Int,
-  out_ntt : Int,
-) -> Unit {
-  let n = 1 << logn
-  let hn = n >> 1
-  let slen = falcon_max_bl_small[depth]
-  let tlen = falcon_max_bl_small[depth + 1]
-  let fd_off = 0
-  let gd_off = hn * tlen
-  let fs_off = 2 * hn * tlen
-  let gs_off = fs_off + n * slen
-  let gm_off = gs_off + n * slen
-  let igm_off = gm_off + n
-  let t1_off = igm_off + n
-  // memmove(fs, data, 2*n*slen) — overlapping: buffer through a copy
-  let cnt = 2 * n * slen
-  let buf = Array::make(cnt, 0)
-  for i = 0; i < cnt; i = i + 1 {
-    buf[i] = data[i]
-  }
-  for i = 0; i < cnt; i = i + 1 {
-    data[fs_off + i] = buf[i]
-  }
-  for u = 0; u < slen; u = u + 1 {
-    let p = falcon_primes_p[u]
-    let p0i = modp_ninv31(p)
-    let r2 = modp_r2(p, p0i)
-    modp_mkgm2_slice(
-      data,
-      gm_off,
-      data,
-      igm_off,
-      logn,
-      falcon_primes_g[u],
-      p,
-      p0i,
-    )
-    // f branch
-    for v = 0; v < n; v = v + 1 {
-      data[t1_off + v] = data[fs_off + u + v * slen]
-    }
-    if in_ntt == 0 {
-      modp_ntt2_ext(data, t1_off, 1, data, gm_off, logn, p, p0i)
-    }
-    fold_rec_res_at(data, t1_off, data, fd_off + u, tlen, hn, p, p0i, r2)
-    if in_ntt != 0 {
-      modp_intt2_ext(data, fs_off + u, slen, data, igm_off, logn, p, p0i)
-    }
-    // g branch
-    for v = 0; v < n; v = v + 1 {
-      data[t1_off + v] = data[gs_off + u + v * slen]
-    }
-    if in_ntt == 0 {
-      modp_ntt2_ext(data, t1_off, 1, data, gm_off, logn, p, p0i)
-    }
-    fold_rec_res_at(data, t1_off, data, gd_off + u, tlen, hn, p, p0i, r2)
-    if in_ntt != 0 {
-      modp_intt2_ext(data, gs_off + u, slen, data, igm_off, logn, p, p0i)
-    }
-    if out_ntt == 0 {
-      modp_intt2_ext(data, fd_off + u, tlen, data, igm_off, logn - 1, p, p0i)
-      modp_intt2_ext(data, gd_off + u, tlen, data, igm_off, logn - 1, p, p0i)
-    }
-  }
-  zint_rebuild_crt_from(data, fs_off, slen, slen, n, gm_off)
-  zint_rebuild_crt_from(data, gs_off, slen, slen, n, gm_off)
-  for u = slen; u < tlen; u = u + 1 {
-    let p = falcon_primes_p[u]
-    let p0i = modp_ninv31(p)
-    let r2 = modp_r2(p, p0i)
-    let rx = modp_rx(slen, p, p0i, r2)
-    modp_mkgm2_slice(
-      data,
-      gm_off,
-      data,
-      igm_off,
-      logn,
-      falcon_primes_g[u],
-      p,
-      p0i,
-    )
-    for v = 0; v < n; v = v + 1 {
-      data[t1_off + v] = zint_mod_small_signed_at(
-        data,
-        fs_off + v * slen,
-        slen,
-        p,
-        p0i,
-        r2,
-        rx,
-      )
-    }
-    modp_ntt2_ext(data, t1_off, 1, data, gm_off, logn, p, p0i)
-    fold_rec_res_at(data, t1_off, data, fd_off + u, tlen, hn, p, p0i, r2)
-    for v = 0; v < n; v = v + 1 {
-      data[t1_off + v] = zint_mod_small_signed_at(
-        data,
-        gs_off + v * slen,
-        slen,
-        p,
-        p0i,
-        r2,
-        rx,
-      )
-    }
-    modp_ntt2_ext(data, t1_off, 1, data, gm_off, logn, p, p0i)
-    fold_rec_res_at(data, t1_off, data, gd_off + u, tlen, hn, p, p0i, r2)
-    if out_ntt == 0 {
-      modp_intt2_ext(data, fd_off + u, tlen, data, igm_off, logn - 1, p, p0i)
-      modp_intt2_ext(data, gd_off + u, tlen, data, igm_off, logn - 1, p, p0i)
-    }
-  }
-}
-
-///|
-/// Full make_fg: writes resultants (or their NTTs) of f,g with
-/// X^(N/2^depth)+1 into data.
-pub fn make_fg(
-  data : Array[Int],
-  f : Array[Int],
-  g : Array[Int],
-  logn : Int,
-  depth : Int,
-  out_ntt : Int,
-) -> Unit {
-  let n = 1 << logn
-  let ft_off = 0
-  let gt_off = n
-  let p0 = falcon_primes_p[0]
-  for u = 0; u < n; u = u + 1 {
-    data[ft_off + u] = modp_set(f[u], p0)
-    data[gt_off + u] = modp_set(g[u], p0)
-  }
-  if depth == 0 && out_ntt != 0 {
-    let p = falcon_primes_p[0]
-    let p0i = modp_ninv31(p)
-    let gm_off = gt_off + n
-    let igm_off = gm_off + n
-    modp_mkgm2_slice(
-      data,
-      gm_off,
-      data,
-      igm_off,
-      logn,
-      falcon_primes_g[0],
-      p,
-      p0i,
-    )
-    modp_ntt2_ext(data, ft_off, 1, data, gm_off, logn, p, p0i)
-    modp_ntt2_ext(data, gt_off, 1, data, gm_off, logn, p, p0i)
-    return
-  }
-  if depth == 0 {
-    return
-  }
-  if depth == 1 {
-    make_fg_step(data, logn, 0, 0, out_ntt)
-    return
-  }
-  make_fg_step(data, logn, 0, 0, 1)
-  for d = 1; d + 1 < depth; d = d + 1 {
-    make_fg_step(data, logn - d, d, 1, 1)
-  }
-  make_fg_step(data, logn - depth + 1, depth - 1, 1, out_ntt)
-}
-
-///|
-/// solve_NTRU deepest level: resultants + binary GCD. Fp = tmp[0..len),
-/// Gp = tmp[len..2len). Returns false on failure.
-pub fn solve_ntru_deepest(
-  logn_top : Int,
-  f : Array[Int],
-  g : Array[Int],
-  tmp : Array[Int],
-) -> Bool {
-  let len = falcon_max_bl_small[logn_top]
-  let fp_off = 2 * len
-  let gp_off = 3 * len
-  let t1_off = 4 * len
-  make_fg(tmp, f, g, logn_top, logn_top, 0)
-  zint_rebuild_crt_from(tmp, fp_off, len, len, 2, t1_off)
-  // bezout over slice copies
-  let fp = Array::make(len, 0)
-  let gp = Array::make(len, 0)
-  let big_f = Array::make(len, 0)
-  let big_g = Array::make(len, 0)
-  for i = 0; i < len; i = i + 1 {
-    fp[i] = tmp[fp_off + i]
-    gp[i] = tmp[gp_off + i]
-  }
-  if zint_bezout(big_g, big_f, fp, gp, len) == 0 {
-    return false
-  }
-  for i = 0; i < len; i = i + 1 {
-    tmp[i] = big_f[i]
-    tmp[len + i] = big_g[i]
-  }
-  let q = 12289
-  if zint_mul_small_slice(tmp, 0, len, q) != 0 {
-    return false
-  }
-  if zint_mul_small_slice(tmp, len, len, q) != 0 {
-    return false
-  }
-  true
-}
-
-///|
-fn zint_mul_small_slice(m : Array[Int], off : Int, mlen : Int, x : Int) -> Int {
-  let mut cc = 0
-  for u = 0; u < mlen; u = u + 1 {
-    let z = m[off + u].to_int64() * x.to_int64() + cc.to_int64()
-    m[off + u] = (z & 0x7FFFFFFFL).to_int()
-    cc = (z >> 31).to_int()
-  }
-  cc
 }

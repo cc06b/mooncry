@@ -9,7 +9,7 @@ let fp_bnorm_max_bits : UInt64 = 4670353323383631276UL
 
 ///|
 /// fpr_rint: round-to-nearest-even, exact bit-level port (fpr.h).
-pub fn fp_rint(x : Double) -> Int64 {
+fn fp_rint(x : Double) -> Int64 {
   let xb = x.reinterpret_as_uint64()
   let mut m = ((xb << 10) | (1UL << 62)) & 0x7FFFFFFFFFFFFFFFUL
   let exp11 = (xb >> 52) & 0x7FFUL
@@ -48,7 +48,7 @@ let fp_mtwo63m1 : Double = 14114281232179134464UL.reinterpret_as_double()
 // ---------------------------------------------------------------------------
 
 ///|
-pub fn make_fg_step_at(
+fn make_fg_step_at(
   data : Array[Int],
   base : Int,
   logn : Int,
@@ -148,7 +148,7 @@ pub fn make_fg_step_at(
 }
 
 ///|
-pub fn make_fg_at(
+fn make_fg_at(
   data : Array[Int],
   base : Int,
   f : Array[Int],
@@ -191,7 +191,7 @@ pub fn make_fg_at(
 
 ///|
 /// CRT rebuild over a region with its own scratch (no aliasing).
-pub fn zint_rebuild_crt_at(
+fn zint_rebuild_crt_at(
   xx : Array[Int],
   xxoff : Int,
   xlen : Int,
@@ -230,7 +230,7 @@ pub fn zint_rebuild_crt_at(
 // ---------------------------------------------------------------------------
 
 ///|
-pub fn solve_ntru_deepest_at(
+fn solve_ntru_deepest_at(
   logn_top : Int,
   f : Array[Int],
   g : Array[Int],
@@ -275,7 +275,7 @@ pub fn solve_ntru_deepest_at(
 }
 
 ///|
-pub fn solve_ntru_intermediate(
+fn solve_ntru_intermediate(
   logn_top : Int,
   f : Array[Int],
   g : Array[Int],
@@ -524,7 +524,7 @@ fn copy_words(a : Array[Int], src : Int, dst : Int, cnt : Int) -> Unit {
 }
 
 ///|
-pub fn solve_ntru_depth1(
+fn solve_ntru_depth1(
   logn_top : Int,
   f : Array[Int],
   g : Array[Int],

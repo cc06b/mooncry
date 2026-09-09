@@ -134,7 +134,7 @@ pub fn falcon_is_short(s1 : Array[Int], s2 : Array[Int], logn : Int) -> Bool {
 ///|
 /// verify_raw: reconstruct -s1 = s2*h - c0 (mod phi, mod q), normalize
 /// to [-q/2, q/2], then is_short(-s1, s2).
-pub fn falcon_verify_raw(
+fn falcon_verify_raw(
   c0 : Array[Int],
   s2 : Array[Int],
   h : Array[Int],
@@ -175,7 +175,7 @@ fn mq_conv_small(x : Int) -> Int {
 
 ///|
 /// x / y mod q via y^(q-2) (addition chain, Montgomery domain).
-pub fn falcon_mq_div(x : Int, y : Int) -> Int {
+fn falcon_mq_div(x : Int, y : Int) -> Int {
   let y0 = mq_montymul(y, falcon_r2)
   let y1 = mq_montymul(y0, y0)
   let y2 = mq_montymul(y1, y0)

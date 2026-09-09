@@ -2,7 +2,7 @@
 // and the keygen rejection loop. Port of PQClean keygen.c.
 
 ///|
-pub fn solve_ntru_depth0(
+fn solve_ntru_depth0(
   logn : Int,
   f : Array[Int],
   g : Array[Int],
@@ -138,7 +138,7 @@ pub fn solve_ntru_depth0(
 ///|
 /// Full solve_NTRU: F,G (one signed limb per coefficient) land in
 /// tmp[0..n) and tmp[n..2n); the big-int outputs go to big_f/big_g.
-pub fn solve_ntru(
+fn solve_ntru(
   logn : Int,
   big_f : Array[Int],
   big_g : Array[Int],
@@ -217,7 +217,7 @@ pub fn solve_ntru(
 /// keygen: rejection loop producing f, g (small), F (large) and h.
 /// rng must be flipped and ready for extraction (matches the C flow:
 /// SHAKE256 seeded with the 48-byte seed).
-pub fn falcon_keygen(
+fn falcon_keygen(
   rng : FalconXof,
   logn : Int,
 ) -> (Array[Int], Array[Int], Array[Int], Array[Int]) {

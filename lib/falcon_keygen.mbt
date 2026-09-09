@@ -5,7 +5,7 @@
 
 ///|
 /// Extract a little-endian u64 from the (already flipped) XOF.
-pub fn falcon_get_rng_u64(x : FalconXof) -> UInt64 {
+fn falcon_get_rng_u64(x : FalconXof) -> UInt64 {
   let b = falcon_xof_extract(x, 8)
   let mut r = 0UL
   for i = 7; i >= 0; i = i - 1 {
@@ -45,7 +45,7 @@ pub fn falcon_mkgauss(rng : FalconXof, logn : Int) -> Int {
 /// Sample a small polynomial: n Gaussian coefficients in [-127,127]
 /// with coefficient-sum parity forced odd (last coefficient resampled
 /// until (mod2 ^ s&1) == 1).
-pub fn falcon_poly_small_mkgauss(
+fn falcon_poly_small_mkgauss(
   rng : FalconXof,
   f : Array[Int],
   logn : Int,
@@ -74,7 +74,7 @@ pub fn falcon_poly_small_mkgauss(
 ///|
 /// Squared norm of a small polynomial, with the C u32 saturation
 /// semantics expressed exactly via Int64.
-pub fn falcon_poly_small_sqnorm(f : Array[Int], logn : Int) -> Int {
+fn falcon_poly_small_sqnorm(f : Array[Int], logn : Int) -> Int {
   let n = 1 << logn
   let mut s = 0L
   for u = 0; u < n; u = u + 1 {
@@ -90,7 +90,7 @@ pub fn falcon_poly_small_sqnorm(f : Array[Int], logn : Int) -> Int {
 
 ///|
 /// Small ints -> f64 array.
-pub fn falcon_poly_small_to_fp(
+fn falcon_poly_small_to_fp(
   x : Array[Double],
   f : Array[Int],
   logn : Int,
