@@ -15,11 +15,10 @@ fn pad_msg(len : Int) -> Bytes {
 fn pad_rand_ctr(ctr : Int) -> (Int) -> Bytes {
   let r = falcon_test_rng_init()
   falcon_test_rng_set_ctr(r, ctr.to_uint64())
-  fn(k : Int) -> Bytes {
-    falcon_test_rng_bytes(r, k)
-  }
+  fn(k : Int) -> Bytes { falcon_test_rng_bytes(r, k) }
 }
 
+///|
 test "falcon-padded-512-roundtrip" {
   // keypair from the official seed, then padded sign/verify
   let r = falcon_test_rng_init()
@@ -50,5 +49,8 @@ test "falcon-padded-512-roundtrip" {
   for i = 0; i < 666; i = i + 1 {
     too_long[i] = sig[i]
   }
-  inspect(falcon512_verify(pk, Bytes::from_array(too_long), msg), content="false")
+  inspect(
+    falcon512_verify(pk, Bytes::from_array(too_long), msg),
+    content="false",
+  )
 }

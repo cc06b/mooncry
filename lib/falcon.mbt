@@ -286,32 +286,38 @@ pub fn falcon1024_keypair_from_seed(seed : Bytes) -> (Bytes, Bytes) {
   (Bytes::from_array(pk_arr), Bytes::from_array(sk_arr))
 }
 
+///|
 /// Falcon-512 padded signature size (fixed).
 pub let falcon512_padded_sig_bytes : Int = 666
+
+///|
 /// Falcon-1024 padded signature size (fixed).
 pub let falcon1024_padded_sig_bytes : Int = 1280
 
+///|
 /// Sign and pad the signature to the fixed padded-form length
 /// (falcon-padded-512 semantics: comp encoding followed by zeros).
 pub fn falcon512_sign_padded(
   sk : Bytes,
   msg : Bytes,
-  rand : (Int) -> Bytes
+  rand : (Int) -> Bytes,
 ) -> Bytes {
   let sig = falcon_sign(sk, msg, rand, 9)
   pad_sig(sig, 666)
 }
 
+///|
 /// Falcon-1024 padded signing (fixed 1280 bytes).
 pub fn falcon1024_sign_padded(
   sk : Bytes,
   msg : Bytes,
-  rand : (Int) -> Bytes
+  rand : (Int) -> Bytes,
 ) -> Bytes {
   let sig = falcon_sign(sk, msg, rand, 10)
   pad_sig(sig, 1280)
 }
 
+///|
 fn pad_sig(sig : Bytes, total : Int) -> Bytes {
   if sig.length() == 0 {
     return sig
