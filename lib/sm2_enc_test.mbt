@@ -140,3 +140,36 @@ test "sm2-sig-der" {
   let (_, b3) = sm2_sig_from_der(Bytes::from_array(short[:]))
   inspect(b3, content="false")
 }
+
+///|
+test "sm2-seal-open-roundtrip" {
+  for seed in 1..<=3 {
+    let ska = Array::make(32, (0).to_byte())
+    ska[31] = (seed * 17 + 3).to_byte()
+    ska[30] = (seed * 7 + 1).to_byte()
+    let sk = Bytes::from_array(ska[:])
+    let pk = sm2_public_key(sk)
+    let msg = Bytes::make(seed * 41 + 5, (0x30 + seed).to_byte())
+    let env = sm2_seal(pk, msg, sm2_test_rand(seed * 11))
+    inspect(env.length() == msg.length() + 153, content="true")
+    let (pt, ok) = sm2_open(sk, env)
+    inspect(ok, content="true")
+    inspect(bytes_equal(pt, msg), content="true")
+    // wrong key fails at the SM2 layer
+    let oth = Array::make(32, (0).to_byte())
+    oth[31] = (77).to_byte()
+    let (_, ok2) = sm2_open(Bytes::from_array(oth[:]), env)
+    inspect(ok2, content="false")
+    // flipped ciphertext byte fails at the GCM layer
+    let bad = Array::make(env.length(), (0).to_byte())
+    for i in 0..<env.length() {
+      bad[i] = env[i]
+    }
+    bad[140] = (bad[140].to_int() ^ 1).to_byte()
+    let (_, ok3) = sm2_open(sk, Bytes::from_array(bad[:]))
+    inspect(ok3, content="false")
+    // truncated envelope
+    let (_, ok4) = sm2_open(sk, Bytes::make(100, (0).to_byte()))
+    inspect(ok4, content="false")
+  }
+}

@@ -491,3 +491,51 @@ pub fn sm2_sig_from_der(der : Bytes) -> (Bytes, Bool) {
   }
   (Bytes::from_array(out[:]), true)
 }
+
+// ==================== SM2 sealed envelope (GM/T 0009 style) ====================
+
+///|
+/// Seal a message for an SM2 recipient: a fresh SM4 key + IV are encrypted
+/// to the recipient (raw C1||C3||C2, fixed 125 bytes for the 28-byte
+/// payload), then the message is SM4-GCM encrypted under them.
+/// Layout: enc_key(125) || iv(12) || ciphertext || tag(16).
+/// `rand` supplies 16 bytes for the SM4 key, then 12 for the IV, then 32
+/// for each SM2 nonce k draw — all must be cryptographically fresh.
+pub fn sm2_seal(pk : Bytes, msg : Bytes, rand : (Int) -> Bytes) -> Bytes {
+  let sm4_key = rand(16)
+  let iv = rand(12)
+  let mut payload = sm4_key
+  payload = concat_bytes(payload, iv)
+  let enc_key = sm2_encrypt(pk, payload, rand)
+  let (ct, tag) = sm4_gcm_encrypt(msg, sm4_key, iv, b"")
+  let mut out = enc_key
+  out = concat_bytes(out, iv)
+  out = concat_bytes(out, ct)
+  out = concat_bytes(out, tag)
+  out
+}
+
+///|
+/// Open a sealed envelope. Returns (b"", false) on malformed input, failed
+/// SM2 decryption, or GCM tag mismatch.
+pub fn sm2_open(sk : Bytes, envelope : Bytes) -> (Bytes, Bool) {
+  // 125 (enc key) + 12 (iv) + 16 (tag) = 153 bytes of overhead minimum
+  if envelope.length() < 153 {
+    return (b"", false)
+  }
+  let enc_key = ec_slice(envelope, 0, 125)
+  let iv = ec_slice(envelope, 125, 12)
+  let ct_len = envelope.length() - 153
+  let ct = ec_slice(envelope, 137, ct_len)
+  let tag = ec_slice(envelope, 137 + ct_len, 16)
+  let (payload, ok) = sm2_decrypt(sk, enc_key)
+  if !ok || payload.length() != 28 {
+    return (b"", false)
+  }
+  let sm4_key = ec_slice(payload, 0, 16)
+  let (pt, ok2) = sm4_gcm_decrypt(ct, sm4_key, iv, b"", tag)
+  if !ok2 {
+    return (b"", false)
+  }
+  (pt, true)
+}
