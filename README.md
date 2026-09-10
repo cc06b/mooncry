@@ -9,7 +9,7 @@ verified against official standard vectors.
 - **Correct** — every algorithm is checked against FIPS / NIST / RFC test
   vectors, and cross-validated against reference implementations
   (pycryptodome, cryptography, hashlib, libsodium, zlib) plus randomized
-  differential testing. 1108 tests, run with `moon test --deny-warn`.
+  differential testing. 1112 tests, run with `moon test --deny-warn`.
 - **Broad** — MD5, **SHA-1**, the SHA-2 and SHA-3 families (incl. **SHA-512/224
   and SHA-512/256**), **Keccak-256**,
   SHAKE/**cSHAKE** XOFs, **KMAC128/256**, BLAKE2b, **BLAKE2s**, BLAKE3,
@@ -106,6 +106,9 @@ git push gitlink master
   against openssl's SM4/SM3
 - **HKDF-SM3 / PBKDF2-SM3** (RFC 5869 / RFC 2898 over HMAC-SM3) and SM2
   signature DER encode/decode (openssl ASN.1 form) — vectors from openssl
+- **SM2 key serialization** — PKCS#8 / SPKI in DER and PEM, byte-identical
+  to openssl 3.x encodings (verified against PEMs openssl produced and
+  consumed); strict decoders with malformed-input rejection
 
 ### Key derivation
 - **HKDF-SHA256** (RFC 5869) — extract + expand
@@ -282,6 +285,8 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `sm2_sig_to_der(sig) / sm2_sig_from_der(der)` | SM2 signature raw r\|\|s <-> DER SEQUENCE{r,s} |
 | `hkdf_sm3(ikm, salt, info, out_len)` / `hkdf_sm3_extract` / `hkdf_sm3_expand` | HKDF-SM3 (RFC 5869) |
 | `pbkdf2_sm3(password, salt, iterations, dk_len)` | PBKDF2-HMAC-SM3 (RFC 2898) |
+| `sm2_sk_to_pem / sm2_sk_from_pem / sm2_pk_to_pem / sm2_pk_from_pem` | SM2 key PEM (PKCS#8 / SPKI, openssl-identical) |
+| `sm2_sk_to_pkcs8_der / sm2_pkcs8_der_to_sk / sm2_pk_to_spki_der / sm2_spki_der_to_pk` | SM2 key DER forms |
 | `hmac_sha256 / hmac_sha512(key, msg : Bytes) -> Bytes` | HMAC (RFC 2104) |
 | `hmac_sha3_256 / hmac_sha3_512(key, msg : Bytes) -> Bytes` | HMAC over SHA-3 (RFC 2104 + FIPS 202) |
 | `hmac_sha3_224 / hmac_sha3_384(key, msg : Bytes) -> Bytes` | HMAC over SHA3-224/384 (RFC 2104 + FIPS 202) |
