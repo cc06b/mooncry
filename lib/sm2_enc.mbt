@@ -416,3 +416,78 @@ pub fn sm2_ct_from_der(der : Bytes) -> (Bytes, Bool) {
   }
   (Bytes::from_array(out[:]), true)
 }
+
+///|
+/// Encode a raw r||s signature (64 bytes) into DER
+/// SEQUENCE { INTEGER r, INTEGER s } (the openssl/ASN.1 signature form).
+pub fn sm2_sig_to_der(sig : Bytes) -> Bytes {
+  guard sig.length() == 64 else {
+    abort("sm2_sig_to_der: raw signature must be 64 bytes")
+  }
+  let r = ec_slice(sig, 0, 32)
+  let s = ec_slice(sig, 32, 32)
+  let body : Array[Byte] = []
+  for b in sm2_der_int_bytes(r) {
+    body.push(b)
+  }
+  for b in sm2_der_int_bytes(s) {
+    body.push(b)
+  }
+  Bytes::from_array(sm2_der_tlv(0x30, body)[:])
+}
+
+///|
+/// Decode DER SEQUENCE { INTEGER r, INTEGER s } back to raw r||s (64 bytes).
+/// Returns (b"", false) on malformed input (strict length/order checks).
+pub fn sm2_sig_from_der(der : Bytes) -> (Bytes, Bool) {
+  let fail = (b"", false)
+  if der.length() < 8 || der[0] != (0x30).to_byte() {
+    return fail
+  }
+  let mut pos = 1
+  let l0 = der[pos].to_int()
+  pos = pos + 1
+  let total = if l0 < 0x80 {
+    l0
+  } else if l0 == 0x81 {
+    let v = der[pos].to_int()
+    pos = pos + 1
+    v
+  } else {
+    return fail
+  }
+  if pos + total != der.length() {
+    return fail
+  }
+  let out = Array::make(64, (0).to_byte())
+  for half in 0..<2 {
+    if pos >= der.length() || der[pos] != (2).to_byte() {
+      return fail
+    }
+    pos = pos + 1
+    let lv = der[pos].to_int()
+    pos = pos + 1
+    if lv < 1 || lv > 33 || pos + lv > der.length() {
+      return fail
+    }
+    let mut vs = pos
+    let vend = pos + lv
+    pos = vend
+    // strip a single leading zero pad
+    if vs < vend - 1 && der[vs] == (0).to_byte() {
+      vs = vs + 1
+    }
+    let vlen = vend - vs
+    if vlen > 32 {
+      return fail
+    }
+    if der[vs].to_int() >= 0x80 && vlen == lv && lv <= 32 {
+      // high bit set without padding -> negative INTEGER, invalid here
+      return fail
+    }
+    for i in 0..<vlen {
+      out[half * 32 + 32 - vlen + i] = der[vs + i]
+    }
+  }
+  (Bytes::from_array(out[:]), true)
+}

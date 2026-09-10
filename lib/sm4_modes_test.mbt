@@ -120,3 +120,45 @@ test "hmac-sm3-oracle" {
     content="3b2bc34e58128b360a11bbb0fe7e38ae9f29793b0448221945c6baa604273220",
   )
 }
+
+///|
+test "hkdf-sm3-oracle" {
+  // openssl (cryptography HKDF, SM3): RFC 5869-style test input
+  let ikm = hex_to_bytes("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b")
+  let salt = hex_to_bytes("000102030405060708090a0b0c")
+  let info = hex_to_bytes("f0f1f2f3f4f5f6f7f8f9")
+  inspect(
+    bytes_to_hex(hkdf_sm3(ikm, salt, info, 42)),
+    content="c69fe91b7aaee2dd5718d72dcaee0cce93f1b8e41f792da51261b6a517e68b36ed2c595572b01dfa359b",
+  )
+  // extract+expand split must equal the one-shot
+  let prk = hkdf_sm3_extract(salt, ikm)
+  inspect(
+    bytes_equal(hkdf_sm3_expand(prk, info, 42), hkdf_sm3(ikm, salt, info, 42)),
+    content="true",
+  )
+  // empty salt path (zeros) works and differs from the salted PRK
+  let prk0 = hkdf_sm3_extract(b"", ikm)
+  inspect(bytes_equal(prk0, prk), content="false")
+}
+
+///|
+test "pbkdf2-sm3-oracle" {
+  // openssl (cryptography PBKDF2HMAC, SM3, 1000 iterations)
+  let salt = hex_to_bytes("000102030405060708090a0b0c")
+  inspect(
+    bytes_to_hex(pbkdf2_sm3(b"password", salt, 1000, 32)),
+    content="20001962d8066f7945391a8b79f0776c2e4b1bde2265c7890e7cb30876c0ffb2",
+  )
+  // 2-block output: first block equals the 32-byte derivation
+  let dk64 = pbkdf2_sm3(b"password", salt, 1000, 64)
+  let one = pbkdf2_sm3(b"password", salt, 1000, 32)
+  let mut same = true
+  for i in 0..<32 {
+    if dk64[i] != one[i] {
+      same = false
+    }
+  }
+  inspect(same, content="true")
+  inspect(dk64.length(), content="64")
+}

@@ -107,3 +107,36 @@ test "sm2-der-interop" {
   let (_, bad) = sm2_ct_from_der(Bytes::make(20, (0x30).to_byte()))
   inspect(bad, content="false")
 }
+
+///|
+test "sm2-sig-der" {
+  // DER of the GB/T 32918.5 example signature, byte-identical to the
+  // encoding built for the openssl interop run (gb_sig.der)
+  let raw = hex_to_bytes(sm2_ex_sig_hex())
+  let der = sm2_sig_to_der(raw)
+  inspect(
+    bytes_to_hex(der),
+    content="3046022100f5a03b0648d2c4630eeac513e1bb81a15944da3827d5b74143ac7eaceee720b3022100b1b6aa29df212fd8763182bc0d421ca1bb9038fd1f7f42d4840b69c485bbc1aa",
+  )
+  let (back, ok) = sm2_sig_from_der(der)
+  inspect(ok, content="true")
+  inspect(bytes_equal(back, raw), content="true")
+  // the decoded signature still verifies
+  inspect(
+    sm2_verify(sm2_ex_pk(), sm2_ex_msg(), sm2_ex_id(), back),
+    content="true",
+  )
+  // malformed DERs rejected
+  let (_, b1) = sm2_sig_from_der(Bytes::make(10, (0x30).to_byte()))
+  inspect(b1, content="false")
+  let (_, b2) = sm2_sig_from_der(b"")
+  inspect(b2, content="false")
+  // length mismatch: declared total shorter than actual
+  let short = Array::make(70, (0).to_byte())
+  for i in 0..<70 {
+    short[i] = der[i]
+  }
+  short[1] = (short[1].to_int() - 2).to_byte()
+  let (_, b3) = sm2_sig_from_der(Bytes::from_array(short[:]))
+  inspect(b3, content="false")
+}

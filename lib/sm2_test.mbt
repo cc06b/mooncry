@@ -155,3 +155,8 @@ test "sm2-random-roundtrip" {
     inspect(sm2_verify(pk, b"other", sm2_ex_id(), sig), content="false")
   }
 }
+
+///|
+fn sm2_ex_sig_hex() -> String {
+  "f5a03b0648d2c4630eeac513e1bb81a15944da3827d5b74143ac7eaceee720b3b1b6aa29df212fd8763182bc0d421ca1bb9038fd1f7f42d4840b69c485bbc1aa"
+}

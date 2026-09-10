@@ -252,3 +252,96 @@ pub fn hmac_sm3(key : Bytes, msg : Bytes) -> Bytes {
   }
   sm3(Bytes::from_array(oh[:]))
 }
+
+// ==================== KDFs over HMAC-SM3 ====================
+
+///|
+/// HKDF-SM3 extract (RFC 5869): PRK = HMAC-SM3(salt, ikm).
+/// An empty salt means 32 zero bytes (hash-length block of zeros).
+pub fn hkdf_sm3_extract(salt : Bytes, ikm : Bytes) -> Bytes {
+  let s = if salt.length() == 0 { Bytes::make(32, (0).to_byte()) } else { salt }
+  hmac_sm3(s, ikm)
+}
+
+///|
+/// HKDF-SM3 expand (RFC 5869): OKM up to 255*32 bytes.
+pub fn hkdf_sm3_expand(prk : Bytes, info : Bytes, out_len : Int) -> Bytes {
+  guard prk.length() == 32 else {
+    abort("hkdf_sm3_expand: prk must be 32 bytes")
+  }
+  guard out_len > 0 && out_len <= 255 * 32 else {
+    abort("hkdf_sm3_expand: out_len out of range")
+  }
+  let out = Array::make(out_len, (0).to_byte())
+  let mut produced = 0
+  let mut t = b""
+  let mut ct = 1
+  while produced < out_len {
+    let mut acc = t
+    acc = concat_bytes(acc, info)
+    acc = concat_bytes(acc, Bytes::make(1, ct.to_byte()))
+    t = hmac_sm3(prk, acc)
+    let take = if produced + 32 <= out_len { 32 } else { out_len - produced }
+    for i in 0..<take {
+      out[produced + i] = t[i]
+    }
+    produced = produced + take
+    ct = ct + 1
+  }
+  Bytes::from_array(out[:])
+}
+
+///|
+/// HKDF-SM3 one-shot (extract-then-expand, RFC 5869).
+pub fn hkdf_sm3(
+  ikm : Bytes,
+  salt : Bytes,
+  info : Bytes,
+  out_len : Int,
+) -> Bytes {
+  hkdf_sm3_expand(hkdf_sm3_extract(salt, ikm), info, out_len)
+}
+
+///|
+/// PBKDF2-HMAC-SM3 (RFC 2898). dk_len should be a multiple of 32 for exact
+/// block semantics but any length is supported (final block truncated).
+pub fn pbkdf2_sm3(
+  password : Bytes,
+  salt : Bytes,
+  iterations : Int,
+  dk_len : Int,
+) -> Bytes {
+  guard iterations > 0 && dk_len > 0 && dk_len <= 512 * 32 else {
+    abort("pbkdf2_sm3: bad iterations/dk_len")
+  }
+  let out = Array::make(dk_len, (0).to_byte())
+  let mut produced = 0
+  let mut block = 1
+  while produced < dk_len {
+    let mut salt_block = salt
+    let idx = Array::make(4, (0).to_byte())
+    idx[0] = ((block >> 24) & 0xFF).to_byte()
+    idx[1] = ((block >> 16) & 0xFF).to_byte()
+    idx[2] = ((block >> 8) & 0xFF).to_byte()
+    idx[3] = (block & 0xFF).to_byte()
+    salt_block = concat_bytes(salt_block, Bytes::from_array(idx[:]))
+    let mut u = hmac_sm3(password, salt_block)
+    let acc = Array::make(32, (0).to_byte())
+    for i in 0..<32 {
+      acc[i] = u[i]
+    }
+    for _ in 1..<iterations {
+      u = hmac_sm3(password, u)
+      for i in 0..<32 {
+        acc[i] = (acc[i].to_int() ^ u[i].to_int()).to_byte()
+      }
+    }
+    let take = if produced + 32 <= dk_len { 32 } else { dk_len - produced }
+    for i in 0..<take {
+      out[produced + i] = acc[i]
+    }
+    produced = produced + take
+    block = block + 1
+  }
+  Bytes::from_array(out[:])
+}
