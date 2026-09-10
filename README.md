@@ -9,7 +9,7 @@ verified against official standard vectors.
 - **Correct** — every algorithm is checked against FIPS / NIST / RFC test
   vectors, and cross-validated against reference implementations
   (pycryptodome, cryptography, hashlib, libsodium, zlib) plus randomized
-  differential testing. 555 tests, run with `moon test --deny-warn`.
+  differential testing. 1092 tests, run with `moon test --deny-warn`.
 - **Broad** — MD5, **SHA-1**, the SHA-2 and SHA-3 families (incl. **SHA-512/224
   and SHA-512/256**), **Keccak-256**,
   SHAKE/**cSHAKE** XOFs, **KMAC128/256**, BLAKE2b, **BLAKE2s**, BLAKE3,
@@ -63,6 +63,8 @@ git push gitlink master
   **keyed** variant (MAC, 1..32-byte key)
 - **RIPEMD-160** (Dobbertin et al. 1996) — 160-bit digest (Bitcoin legacy)
 - **BLAKE3** (BLAKE3 spec) — 32-byte default digest, XOF (arbitrary-length via tree-Merkle)
+- **SM3** (GB/T 32905-2016) — Chinese national hash standard, 256-bit digest;
+  streaming API (`sm3_new/sm3_update/sm3_finalize`)
 
 ### Extendable-output functions (XOF)
 - **SHAKE128 / SHAKE256** (FIPS 202) — variable-length output
@@ -96,6 +98,9 @@ git push gitlink master
   via HChaCha20 subkey derivation
 - **XChaCha20-Poly1305** (draft-irtf-cfrg-xchacha / libsodium IETF) — AEAD
   with a 24-byte nonce (ciphertext || 16-byte tag)
+- **SM4** (GB/T 32907-2016) — Chinese national block cipher, 128-bit
+  block/key, 32-round Feistel; single-block encrypt/decrypt with reusable
+  round keys
 
 ### Key derivation
 - **HKDF-SHA256** (RFC 5869) — extract + expand
@@ -248,6 +253,10 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `blake2s_keyed(data, key : Bytes, out_len : Int) -> Bytes` | keyed BLAKE2s (MAC), key 1..32 |
 | `blake3(data : Bytes) -> Bytes` | BLAKE3, 32-byte digest |
 | `blake3_xof(data : Bytes, out_len : Int) -> Bytes` | BLAKE3 XOF (arbitrary-length) |
+| `sm3(data : Bytes) -> Bytes` | SM3 (GB/T 32905), 32-byte digest |
+| `sm3_new() / sm3_update(h, data) / sm3_finalize(h)` | SM3 streaming hasher |
+| `sm4_encrypt(key, block) / sm4_decrypt(key, block)` | SM4 (GB/T 32907) single-block with a 16-byte key |
+| `sm4_expand_key(key)` + `sm4_encrypt_block(rk, data, off)` / `sm4_decrypt_block` | SM4 with reusable round keys |
 | `hmac_sha256 / hmac_sha512(key, msg : Bytes) -> Bytes` | HMAC (RFC 2104) |
 | `hmac_sha3_256 / hmac_sha3_512(key, msg : Bytes) -> Bytes` | HMAC over SHA-3 (RFC 2104 + FIPS 202) |
 | `hmac_sha3_224 / hmac_sha3_384(key, msg : Bytes) -> Bytes` | HMAC over SHA3-224/384 (RFC 2104 + FIPS 202) |
