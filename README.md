@@ -9,7 +9,7 @@ verified against official standard vectors.
 - **Correct** — every algorithm is checked against FIPS / NIST / RFC test
   vectors, and cross-validated against reference implementations
   (pycryptodome, cryptography, hashlib, libsodium, zlib) plus randomized
-  differential testing. 1097 tests, run with `moon test --deny-warn`.
+  differential testing. 1101 tests, run with `moon test --deny-warn`.
 - **Broad** — MD5, **SHA-1**, the SHA-2 and SHA-3 families (incl. **SHA-512/224
   and SHA-512/256**), **Keccak-256**,
   SHAKE/**cSHAKE** XOFs, **KMAC128/256**, BLAKE2b, **BLAKE2s**, BLAKE3,
@@ -101,6 +101,9 @@ git push gitlink master
 - **SM4** (GB/T 32907-2016) — Chinese national block cipher, 128-bit
   block/key, 32-round Feistel; single-block encrypt/decrypt with reusable
   round keys
+- **SM4-CTR / SM4-CBC / SM4-GCM** — modes of operation (GCM reuses the
+  cipher-independent GHASH); **HMAC-SM3** (RFC 2104). Vectors cross-checked
+  against openssl's SM4/SM3
 
 ### Key derivation
 - **HKDF-SHA256** (RFC 5869) — extract + expand
@@ -265,6 +268,9 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `sm2_sign(sk, msg, id, rand) -> Bytes` | SM2 signature (r\|\|s, 64 bytes); `rand(32)` supplies the nonce k |
 | `sm2_sign_with_k(sk, msg, id, k) -> Bytes` | SM2 sign with explicit nonce (deterministic; aborts on degenerate k) |
 | `sm2_verify(pk, msg, id, sig) -> Bool` | SM2 verify (rejects off-curve keys and out-of-range r/s) |
+| `sm4_ctr(key, iv, data) / sm4_cbc_encrypt / sm4_cbc_decrypt` | SM4 modes (CTR 128-bit BE counter; CBC raw, no padding) |
+| `sm4_gcm_encrypt(pt, key, iv, aad)` / `sm4_gcm_decrypt(ct, key, iv, aad, tag)` | SM4-GCM AEAD (12-byte IV, 16-byte tag; RFC 8998 TLS building block) |
+| `hmac_sm3(key, msg) -> Bytes` | HMAC-SM3 (RFC 2104, 64-byte block, 32-byte MAC) |
 | `hmac_sha256 / hmac_sha512(key, msg : Bytes) -> Bytes` | HMAC (RFC 2104) |
 | `hmac_sha3_256 / hmac_sha3_512(key, msg : Bytes) -> Bytes` | HMAC over SHA-3 (RFC 2104 + FIPS 202) |
 | `hmac_sha3_224 / hmac_sha3_384(key, msg : Bytes) -> Bytes` | HMAC over SHA3-224/384 (RFC 2104 + FIPS 202) |
