@@ -9,7 +9,7 @@ verified against official standard vectors.
 - **Correct** — every algorithm is checked against FIPS / NIST / RFC test
   vectors, and cross-validated against reference implementations
   (pycryptodome, cryptography, hashlib, libsodium, zlib) plus randomized
-  differential testing. 1092 tests, run with `moon test --deny-warn`.
+  differential testing. 1097 tests, run with `moon test --deny-warn`.
 - **Broad** — MD5, **SHA-1**, the SHA-2 and SHA-3 families (incl. **SHA-512/224
   and SHA-512/256**), **Keccak-256**,
   SHAKE/**cSHAKE** XOFs, **KMAC128/256**, BLAKE2b, **BLAKE2s**, BLAKE3,
@@ -19,7 +19,7 @@ verified against official standard vectors.
   **Salsa20**, ChaCha20-Poly1305 AEAD, **XChaCha20 / XChaCha20-Poly1305**
   (24-byte nonce), HKDF, PBKDF2, **scrypt**, **Argon2**,
   **RSA (PKCS1-v1.5/OAEP/PSS**, incl. multi-hash `_with` variants**)**,
-  **ECDSA P-256 / secp256k1**, **Ed25519** (incl.
+  **ECDSA P-256 / secp256k1**, **SM2** (GB/T 32918, Chinese national standard), **Ed25519** (incl.
   **Ed25519ctx / Ed25519ph**), **Ed448** (incl. contexts), **X25519 / X448**,
   **ML-KEM-512/768/1024** (FIPS 203 post-quantum KEM),
   **HOTP/TOTP** (incl. **SHA-256/SHA-512** variants), SipHash-2-4, CRC32/CRC32C/**CRC-64**/**Adler-32**, a sealed-box AEAD envelope, Base64, Hex.
@@ -138,6 +138,10 @@ git push gitlink master
   pre-hashed variants (dom2 domain separation)
   Field arithmetic over GF(2^255-19) uses `@bigint`; the twisted-Edwards
   base point is recovered from y = 4/5. Signing is deterministic (no RNG).
+- **SM2** (GB/T 32918.2/.5) — Chinese national signature standard over
+  sm2p256v1; SM3-based Z value binds signer ID, curve, and public key;
+  raw r||s (64-byte) signatures; reuses the generic Barrett/Jacobian EC
+  engine (SM2's a = p-3, the P-256 fast-doubling case)
 
 ### Key agreement (X25519)
 - **X25519** (RFC 7748) — Diffie-Hellman over Curve25519 via the
@@ -257,6 +261,10 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `sm3_new() / sm3_update(h, data) / sm3_finalize(h)` | SM3 streaming hasher |
 | `sm4_encrypt(key, block) / sm4_decrypt(key, block)` | SM4 (GB/T 32907) single-block with a 16-byte key |
 | `sm4_expand_key(key)` + `sm4_encrypt_block(rk, data, off)` / `sm4_decrypt_block` | SM4 with reusable round keys |
+| `sm2_public_key(sk) -> Bytes` | SM2 public key (uncompressed 65 bytes) from a 32-byte secret key |
+| `sm2_sign(sk, msg, id, rand) -> Bytes` | SM2 signature (r\|\|s, 64 bytes); `rand(32)` supplies the nonce k |
+| `sm2_sign_with_k(sk, msg, id, k) -> Bytes` | SM2 sign with explicit nonce (deterministic; aborts on degenerate k) |
+| `sm2_verify(pk, msg, id, sig) -> Bool` | SM2 verify (rejects off-curve keys and out-of-range r/s) |
 | `hmac_sha256 / hmac_sha512(key, msg : Bytes) -> Bytes` | HMAC (RFC 2104) |
 | `hmac_sha3_256 / hmac_sha3_512(key, msg : Bytes) -> Bytes` | HMAC over SHA-3 (RFC 2104 + FIPS 202) |
 | `hmac_sha3_224 / hmac_sha3_384(key, msg : Bytes) -> Bytes` | HMAC over SHA3-224/384 (RFC 2104 + FIPS 202) |
