@@ -39,7 +39,7 @@ jobs:
         run: moon info
 
       # Release mode: the debug-wasm suite takes ~40 min (crypto KATs are
-      # compute-heavy); release runs the same 1084 tests in ~8 min. Debug
+      # compute-heavy); release runs the same tests in ~8 min. Debug
       # full runs remain part of the local pre-publish discipline (debug
       # builds also trap integer overflow, so they are the stricter check).
       - name: moon test --deny-warn --release
@@ -77,3 +77,21 @@ jobs:
 
       - name: moon test (native, 64-bit Int)
         run: moon test --target native --release
+
+  # The JS target is a first-class MoonBit backend (browser/node consumers).
+  # Locally verified: full suite green on node v24 (~24 min release).
+  js:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> $GITHUB_PATH
+
+      - name: Node version
+        run: node --version
+
+      - name: moon test (js target)
+        run: moon test --target js --release
