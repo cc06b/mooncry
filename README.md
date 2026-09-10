@@ -367,6 +367,11 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `slh_sign_prehash / slh_verify_prehash` | HashSLH-DSA (OID-tagged pre-hash, 12 hash functions) |
 | `slh_sign_raw / slh_verify_raw` | raw-M' internal interface |
 | `slh_sha2_128s ... slh_shake_256f` | all 12 SLH-DSA parameter sets |
+| `lms_keygen / lms_sign / lms_verify` | LMS (RFC 8554) stateful Merkle signatures; `lms_public_key` regenerates pk from SEED/I |
+| `hss_keygen / hss_sign / hss_verify` | HSS multi-level LMS (L=1..8); `hss_keygen_with` for explicit parameter chains |
+| `xmss_params(func, n, full_height, ...)` | XMSS/XMSS^MT parameter sets (RFC 8391): SHA2/SHAKE128/SHAKE256, n in {24,32,64}; d=1 is plain XMSS, d>1 multi-tree |
+| `xmss_keygen_from_seed / xmss_sign / xmss_verify` | XMSS from 48-byte seed; `xmss_set_index` manages the leaf counter; `xmss_public_key` regenerates pk |
+| `xmss_wots_pkgen / xmss_wots_sign / xmss_wots_pk_from_sig` | WOTS+ one-time primitives (exposed for verification tooling) |
 | `falcon512_keypair_from_seed(seed) -> (pk, sk)` | Falcon-512 keygen (NTRU solve; deterministic in the 48-byte seed) |
 | `falcon512_sign(sk, msg, rand) -> Bytes` | Falcon-512 signing (rand supplies nonce+seed like randombytes) |
 | `falcon512_sign_padded(sk, msg, rand) -> Bytes` | Falcon-512 padded form (fixed 666 bytes) |
@@ -433,7 +438,8 @@ cause an `abort` with a descriptive message.
 ## Performance
 
 Throughput is measured by the `lib` benchmark suite (`moon bench`) on 1 KiB
-inputs. Figures below are from the development sandbox; absolute numbers vary
+inputs. Figures below were refreshed for v0.66.0 (release mode, wasm, Windows
+host, toolchain 0.1.20260904); absolute numbers vary
 by host — run `moon bench` locally for comparable figures.
 
 ```bash
@@ -442,34 +448,33 @@ moon bench
 
 | Algorithm | 1 KiB (approx.) |
 | --- | --- |
-| MD5 | ~8.5 µs |
-| SHA-256 | ~16 µs |
-| SHA-512 | ~14 µs |
-| SHA3-256 | ~140 µs |
-| SHAKE128 1KiB (out=32) | ~80 µs |
-| SHAKE256 1KiB (out=64) | ~92 µs |
-| BLAKE2b | ~27 µs |
-| BLAKE3 | ~46 µs |
-| HMAC-SHA256 | ~23 µs |
-| HMAC-SHA3-256 | ~213 µs |
-| HMAC-SHA3-512 | ~338 µs |
-| AES-128-CMAC | ~347 µs |
-| SipHash-2-4 | ~4.2 µs |
-| CRC32 / CRC32C | ~4.7 µs |
-| sealed_box_seal | ~588 µs (HKDF + AES-256-GCM) |
-| scrypt (N=1024,r=8,p=1,dk32) | ~84 ms (memory-hard KDF) |
-| Argon2id (t=1,m=64,p=1,dk16) | ~1 ms (memory-hard KDF) |
-| ECDSA P-256 sign | ~13 ms (Jacobian, was ~270 ms affine) |
-| ECDSA P-256 verify | ~24 ms (Jacobian, was ~540 ms affine) |
-| AES-256-SIV encrypt 1KiB | ~950 µs (S2V + AES-CTR) |
-| AES-128-KW wrap 32B | ~146 µs |
-| ChaCha20 | ~48 µs |
-| ChaCha20-Poly1305 encrypt | ~73 µs (was ~456 µs) |
-| Poly1305 MAC | ~7 µs (was ~387 µs, BigInt) |
-| AES-256-CBC | ~315 µs (table-based GF mul) |
-| AES-256-GCM | ~487 µs (GHASH 4-bit tables) |
-| Base64 encode | ~10 µs |
-| Hex encode | ~6.7 µs |
+| MD5 | ~7.6 µs |
+| SHA-256 | ~11 µs |
+| SHA-512 | ~12 µs |
+| SHA3-256 | ~5.3 µs (unrolled Keccak, v0.66) |
+| SHA3-512 | ~8.0 µs |
+| SHAKE128 1KiB (out=32) | ~9.7 µs |
+| SHAKE256 1KiB (out=64) | ~8.2 µs |
+| BLAKE2b | ~32 µs |
+| BLAKE3 | ~54 µs |
+| HMAC-SHA256 | ~18 µs |
+| HMAC-SHA3-256 | ~21 µs |
+| HMAC-SHA3-512 | ~21 µs |
+| AES-128-CMAC | ~120 µs |
+| SipHash-2-4 | ~3.4 µs |
+| CRC32 / CRC32C | ~4.0 / ~3.2 µs |
+| sealed_box_seal | ~163 µs (HKDF + AES-256-GCM) |
+| scrypt (N=1024,r=8,p=1,dk32) | ~32 ms (memory-hard KDF) |
+| Argon2id (t=1,m=64,p=1,dk16) | ~1.2 ms (memory-hard KDF) |
+| ECDSA P-256 sign | ~5.8 ms (native field, v0.51) |
+| ECDSA P-256 verify | ~7.7 ms (native field, v0.51) |
+| AES-256-SIV encrypt 1KiB | ~311 µs (S2V + AES-CTR) |
+| AES-128-KW wrap 32B | ~56 µs |
+| ChaCha20 | ~37 µs |
+| AES-256-CBC | ~97 µs (T-table, v0.44) |
+| AES-256-GCM | ~116 µs (T-table + GHASH 4-bit tables) |
+| Base64 encode | ~9.1 µs |
+| Hex encode | ~7.7 µs |
 
 **v0.18.0 perf pass.** The Keccak-f[1600] state was flattened from a
 nested 5×5 `Array[Array[UInt64]]` to a flat 25-lane array (removing the

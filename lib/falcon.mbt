@@ -159,12 +159,16 @@ pub fn falcon512_keypair_from_seed(seed : Bytes) -> (Bytes, Bytes) {
 /// Sign a message with a Falcon-512 secret key. `rand` supplies the
 /// 40-byte nonce and then the 48-byte sampler seed (matching the C
 /// randombytes call order in crypto_sign_signature).
+/// SECURITY: `rand` MUST return fresh cryptographic randomness on every
+/// call — reusing a nonce/seed stream across signatures leaks the
+/// secret key (the sampler randomness masks the lattice structure).
 pub fn falcon512_sign(sk : Bytes, msg : Bytes, rand : (Int) -> Bytes) -> Bytes {
   falcon_sign(sk, msg, rand, 9)
 }
 
 ///|
 /// Sign with explicit logn (9 = Falcon-512, 10 = Falcon-1024).
+/// Same freshness requirement on `rand` as falcon512_sign.
 pub fn falcon_sign(
   sk : Bytes,
   msg : Bytes,

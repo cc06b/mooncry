@@ -12436,3 +12436,37 @@ test "falcon-1024-sign-sig0" {
   inspect(got.length(), content="1273")
   inspect(bytes_equal(got, f10_sig0()), content="true")
 }
+
+///|
+test "falcon-1024-padded-acceptance" {
+  // The padded verifier path at logn=10: compact official sig0 padded
+  // with zeros to the fixed 1280-byte form must verify; 1281 must not.
+  let sig = f10_sig0()
+  let msg = f10_msg_a(0, 0)
+  let padded = Array::make(1280, (0).to_byte())
+  for i = 0; i < sig.length(); i = i + 1 {
+    padded[i] = sig[i]
+  }
+  inspect(
+    falcon1024_verify(f10_pk(), Bytes::from_array(padded), msg),
+    content="true",
+  )
+  let too_long = Array::make(1281, (0).to_byte())
+  for i = 0; i < 1280; i = i + 1 {
+    too_long[i] = padded[i]
+  }
+  inspect(
+    falcon1024_verify(f10_pk(), Bytes::from_array(too_long), msg),
+    content="false",
+  )
+  // a nonzero byte in the padding region must fail
+  let dirty = Array::make(1280, (0).to_byte())
+  for i = 0; i < 1280; i = i + 1 {
+    dirty[i] = padded[i]
+  }
+  dirty[1279] = (1).to_byte()
+  inspect(
+    falcon1024_verify(f10_pk(), Bytes::from_array(dirty), msg),
+    content="false",
+  )
+}
