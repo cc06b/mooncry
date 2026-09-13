@@ -9,7 +9,7 @@ verified against official standard vectors.
 - **Correct** — every algorithm is checked against FIPS / NIST / RFC test
   vectors, and cross-validated against reference implementations
   (pycryptodome, cryptography, hashlib, libsodium, zlib) plus randomized
-  differential testing. 1134 tests, run with `moon test --deny-warn`.
+  differential testing. 1141 tests, run with `moon test --deny-warn`.
 - **Broad** — MD5, **SHA-1**, the SHA-2 and SHA-3 families (incl. **SHA-512/224
   and SHA-512/256**), **Keccak-256**,
   SHAKE/**cSHAKE** XOFs, **KMAC128/256**, BLAKE2b, **BLAKE2s**, BLAKE3,
@@ -191,7 +191,7 @@ allocation and a minimal hot path (~1.3x one-shot cost vs ~3.7x for
 calling it twice — or calling `update` after it — produces a *wrong digest
 with no error*. Create a new hasher per message. To fork a stream mid-way
 (e.g. to try two suffixes) use `sha256_clone` / `sha512_clone` /
-`sha3_clone` and finalize the copy.
+`sha3_clone` / `sm3_clone` and finalize the copy.
 
 ## Installation
 
@@ -293,6 +293,7 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `blake3_xof(data : Bytes, out_len : Int) -> Bytes` | BLAKE3 XOF (arbitrary-length) |
 | `sm3(data : Bytes) -> Bytes` | SM3 (GB/T 32905), 32-byte digest |
 | `sm3_new() / sm3_update(h, data) / sm3_finalize(h)` | SM3 streaming hasher |
+| `sm3_clone(h) -> Sm3Hasher` | Deep-copy an SM3 hasher (prefix reuse) |
 | `sm4_encrypt(key, block) / sm4_decrypt(key, block)` | SM4 (GB/T 32907) single-block with a 16-byte key |
 | `sm4_expand_key(key)` + `sm4_encrypt_block(rk, data, off)` / `sm4_decrypt_block` | SM4 with reusable round keys |
 | `sm2_public_key(sk) -> Bytes` | SM2 public key (uncompressed 65 bytes) from a 32-byte secret key |
@@ -304,8 +305,8 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `hmac_sm3(key, msg) -> Bytes` | HMAC-SM3 (RFC 2104, 64-byte block, 32-byte MAC) |
 | `sm2_encrypt(pk, msg, rand) / sm2_encrypt_with_k(pk, msg, k)` | SM2 encryption (GB/T 32918.4), raw C1\|\|C3\|\|C2 |
 | `sm2_decrypt(sk, ct) -> (Bytes, Bool)` | SM2 decryption (false on tamper/wrong key, GCM convention) |
-| `sm2_ct_to_der(ct) / sm2_ct_from_der(der)` | openssl-compatible ASN.1 DER ciphertext conversion |
-| `sm2_sig_to_der(sig) / sm2_sig_from_der(der)` | SM2 signature raw r\|\|s <-> DER SEQUENCE{r,s} |
+| `sm2_ct_to_der(ct) / sm2_ct_from_der(der)` | openssl-compatible ASN.1 DER ciphertext conversion; the decoder is strict DER (see below) |
+| `sm2_sig_to_der(sig) / sm2_sig_from_der(der)` | SM2 signature raw r\|\|s <-> DER SEQUENCE{r,s}; the decoder is strict DER (see below) |
 | `hkdf_sm3(ikm, salt, info, out_len)` / `hkdf_sm3_extract` / `hkdf_sm3_expand` | HKDF-SM3 (RFC 5869) |
 | `pbkdf2_sm3(password, salt, iterations, dk_len)` | PBKDF2-HMAC-SM3 (RFC 2898) |
 | `sm2_sk_to_pem / sm2_sk_from_pem / sm2_pk_to_pem / sm2_pk_from_pem` | SM2 key PEM (PKCS#8 / SPKI, openssl-identical) |
@@ -473,6 +474,20 @@ Streaming hashers (`<algo>_new` / `sha3_update` / `sha3_finalize` /
 and SHAKE128/256, plus SHA-512/224 / SHA-512/256 (`sha512_224_new` /
 `sha512_256_new` with `sha512_update`). For SHA-3/SHAKE, `sha3_update` is shared and the finalize
 method depends on the variant (`sha3_finalize` for fixed-length, `shake_finalize(h, out_len)` for XOF).
+
+**The SM2 DER decoders are strict DER, not BER.** `sm2_sig_from_der` and
+`sm2_ct_from_der` reject anything that is not the one canonical encoding of a
+value: non-minimal length forms (`81 06` where `06` is legal), indefinite
+lengths, a leading zero on an INTEGER that does not need a sign pad, and
+trailing bytes inside or after the SEQUENCE. That is what makes an accepted
+blob re-encode byte-identically — without it a peer could offer several
+distinct encodings of one signature or ciphertext (malleability, the bug class
+behind Bitcoin's BIP-62). The key decoders (`sm2_pkcs8_der_to_sk`,
+`sm2_spki_der_to_pk`, and both PEM parsers) apply the same length/INTEGER
+rules; PKCS#8 keeps its OPTIONAL `publicKey` field optional, so decoding and
+re-encoding a field-less key adds the field (decode/encode/decode is stable).
+Every read in all four parsers is bounds-checked: a hostile blob that is a
+valid DER *prefix* returns `(b"", false)` instead of trapping.
 
 AES-CBC/GCM/CTR keys may be 128, 192, or 256 bits; the nonce for GCM and
 ChaCha20 is 96 bits (12 bytes), the recommended length per spec. Wrong lengths
@@ -1058,6 +1073,29 @@ teeth: it catches a removed ML-DSA public-key length check with an
 out-of-bounds trap, and a removed HPKE on-curve check with an accepted
 invalid-curve point.
 
+**Structure-aware DER/PEM fuzzing** (`lib/robust_der_test.mbt`, 4 tests) targets
+the hand-written ASN.1 parsers, where byte-flip fuzzing is nearly useless: a
+mutated blob almost always dies at the first tag or length check, so the deep
+paths never run. These build blobs that *look* like DER — every prefix of a
+valid encoding, every single-byte substitution with a DER-meaningful value
+(tags, both length forms, `0x80` indefinite, `0x81`/`0x82` long forms),
+extra/inserted TLVs, non-minimal INTEGERs, trailing garbage — and hold each
+codec to the identity strict DER implies: **an accepted blob must re-encode
+byte-identically**. Two out-of-bounds traps were found this way, both of the
+"valid prefix, nothing after it" shape that random mutation never produces.
+
+**Streaming state** (`lib/robust_stream_test.mbt`, 3 tests) probes the two
+failure modes one-shot KATs cannot see: a `clone` that shares its buffer with
+the original, and a sub-block prefix overwritten when absorption crosses the
+block boundary. Clones are forked at every block boundary (0/1/2/62..66/127..129
+for the 64-byte-block hashes, the 128-byte range for SHA-512, and both SHA-3
+rates 136/168), each fork fed a different suffix, and both results compared
+against their one-shot digests. Plus streaming-vs-one-shot equality across 19
+chunk sizes for MD5, SHA-1, SHA-224/256/384/512, SHA-512/224, SHA-512/256,
+SHA3-224/512, SHAKE-256, SM3 and Poly1305; interleaved hashers; incremental
+GMAC at four IV lengths; and the ML-KEM hybrid envelope streamed in 1..500-byte
+chunks against its one-shot form.
+
 **Boundary-length sweeps** (`lib/robust_boundary_test.mbt`, 5 tests) complement
 the randomized property tests by pinning the sizes that block-oriented code
 actually cares about: `0, 1, 2, 15, 16, 17, 31, 32, 33, 63, 64, 65, 127, 128,
@@ -1072,7 +1110,7 @@ keys with 0/1/2 AD entries, AES-KW, AES-CBC (including the PKCS#7 full extra
 padding block on exact multiples of 16) and CTR, SM4-CBC/CTR, the sealed box,
 the ML-KEM hybrid envelope and the SM2 GM/T 0009 envelope.
 
-**1134 tests.**
+**1141 tests.**
 
 ## Development
 
