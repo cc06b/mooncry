@@ -111,18 +111,37 @@ pub fn xchacha20_poly1305_encrypt(
 /// XChaCha20-Poly1305 AEAD decrypt. `input` = ciphertext || 16-byte
 /// tag. Verifies the tag (constant-time) and returns the plaintext, or
 /// aborts on mismatch.
+///
+/// SECURITY: prefer `xchacha20_poly1305_decrypt_or` for attacker-supplied
+/// input — an abort on a bad tag is a denial of service.
 pub fn xchacha20_poly1305_decrypt(
   key : Bytes,
   nonce24 : Bytes,
   aad : Bytes,
   input : Bytes,
 ) -> Bytes {
+  match xchacha20_poly1305_decrypt_or(key, nonce24, aad, input) {
+    Ok(pt) => pt
+    Err(msg) => abort(msg)
+  }
+}
+
+///|
+/// XChaCha20-Poly1305 decrypt without aborting: `Ok(plaintext)` only when
+/// the tag verifies, `Err(msg)` otherwise. See
+/// `chacha20_poly1305_decrypt_or`.
+pub fn xchacha20_poly1305_decrypt_or(
+  key : Bytes,
+  nonce24 : Bytes,
+  aad : Bytes,
+  input : Bytes,
+) -> Result[Bytes, String] {
   if key.length() != 32 {
-    abort("xchacha20_poly1305_decrypt: key must be 32 bytes (256 bits)")
+    return Err("xchacha20_poly1305_decrypt: key must be 32 bytes (256 bits)")
   }
   if nonce24.length() != 24 {
-    abort("xchacha20_poly1305_decrypt: nonce must be 24 bytes (192 bits)")
+    return Err("xchacha20_poly1305_decrypt: nonce must be 24 bytes (192 bits)")
   }
   let subkey = hchacha20(key, bytes_sub(nonce24, 0, 16))
-  chacha20_poly1305_decrypt(subkey, xchacha_sub_nonce(nonce24), aad, input)
+  chacha20_poly1305_decrypt_or(subkey, xchacha_sub_nonce(nonce24), aad, input)
 }

@@ -104,11 +104,27 @@ fn rsa_i2osp(x : @bigint.BigInt, length : Int) -> Bytes {
 }
 
 ///|
+
+///|
+/// A usable RSA modulus. `BigInt.pow(modulus=n)` throws for n < 2 (it is a
+/// division by n), and the throw surfaces as an opaque runtime error deep in
+/// the bigint library. Every public entry point that can be handed a
+/// peer-supplied modulus (verify, and the `_or` decrypt variants) checks this
+/// first and reports the failure through its own channel; the primitives keep
+/// it as a last line of defence with an explicit message.
+fn rsa_modulus_ok(n : @bigint.BigInt) -> Bool {
+  n >= @bigint.BigInt::from_int(2)
+}
+
+///|
 fn rsa_ep(
   m : @bigint.BigInt,
   n : @bigint.BigInt,
   e : @bigint.BigInt,
 ) -> @bigint.BigInt {
+  if !rsa_modulus_ok(n) {
+    abort("rsa: modulus must be at least 2")
+  }
   m.pow(e, modulus=n)
 }
 
@@ -118,6 +134,9 @@ fn rsa_dp(
   n : @bigint.BigInt,
   d : @bigint.BigInt,
 ) -> @bigint.BigInt {
+  if !rsa_modulus_ok(n) {
+    abort("rsa: modulus must be at least 2")
+  }
   c.pow(d, modulus=n)
 }
 
@@ -133,6 +152,9 @@ fn rsa_dp_crt(
   dq : @bigint.BigInt,
   qinv : @bigint.BigInt,
 ) -> @bigint.BigInt {
+  if !rsa_modulus_ok(p) || !rsa_modulus_ok(q) {
+    abort("rsa: CRT primes must be at least 2")
+  }
   let m1 = c.pow(dp, modulus=p)
   let m2 = c.pow(dq, modulus=q)
   // h = qInv * (m1 - m2) mod p ; keep non-negative (BigInt % of a negative
@@ -234,10 +256,16 @@ pub fn rsa_pkcs1_v15_encrypt(
 }
 
 ///|
-/// Unpad a PKCS1-v1.5 encoded message EM = 0x00 || 0x02 || PS || 0x00 || M.
-fn rsa_pkcs1_v15_unpad(em : Bytes, k : Int) -> Bytes {
+/// Unpad a PKCS1-v1.5 encoded message EM = 0x00 || 0x02 || PS || 0x00 || M,
+/// without aborting. The error is deliberately uniform for every
+/// malformed-padding case (RFC 8017 §7.2.2 step 4): distinguishable errors
+/// are a Bleichenbacher padding oracle.
+fn rsa_pkcs1_v15_unpad_or(em : Bytes, k : Int) -> Result[Bytes, String] {
+  if k < 11 || em.length() != k {
+    return Err("rsa_pkcs1_v15 decrypt: decryption error")
+  }
   if em[0] != b'\x00' || em[1] != b'\x02' {
-    abort("rsa_pkcs1_v15 decrypt: invalid padding")
+    return Err("rsa_pkcs1_v15 decrypt: decryption error")
   }
   // PS is nonzero; find the 0x00 separator.
   let mut sep = 2
@@ -245,32 +273,51 @@ fn rsa_pkcs1_v15_unpad(em : Bytes, k : Int) -> Bytes {
     sep = sep + 1
   }
   if sep < 2 + 8 || sep >= k {
-    abort(
-      "rsa_pkcs1_v15 decrypt: invalid padding (no separator or PS too short)",
-    )
+    return Err("rsa_pkcs1_v15 decrypt: decryption error")
   }
   let msg_len = k - sep - 1
   let out = Array::make(msg_len, b'\x00')
   for i in 0..<msg_len {
     out[i] = em[sep + 1 + i]
   }
-  Bytes::from_array(out[:])
+  Ok(Bytes::from_array(out[:]))
 }
 
 ///|
 /// RSAES-PKCS1-v1.5 decrypt. Returns the recovered message. Aborts if the
 /// ciphertext length != modulus length or the padding is malformed.
+///
+/// SECURITY: `ct` is attacker-controlled. Prefer
+/// `rsa_pkcs1_v15_decrypt_or`, which reports failures as a uniform `Err`
+/// instead of trapping.
 pub fn rsa_pkcs1_v15_decrypt(ct : Bytes, n : Bytes, d : Bytes) -> Bytes {
+  match rsa_pkcs1_v15_decrypt_or(ct, n, d) {
+    Ok(msg) => msg
+    Err(e) => abort(e)
+  }
+}
+
+///|
+/// RSAES-PKCS1-v1.5 decrypt without aborting: `Ok(message)` or a single
+/// uniform `Err` for every failure (wrong length, malformed padding), so the
+/// caller cannot be turned into a Bleichenbacher oracle by error
+/// distinctions. See also `rsa_oaep_decrypt_or` (OAEP is the padding that
+/// resists adaptive chosen-ciphertext attacks).
+pub fn rsa_pkcs1_v15_decrypt_or(
+  ct : Bytes,
+  n : Bytes,
+  d : Bytes,
+) -> Result[Bytes, String] {
   let nn = rsa_os2ip(n)
   let dd = rsa_os2ip(d)
   let k = n.length()
-  if ct.length() != k {
-    abort("rsa_pkcs1_v15_decrypt: ciphertext length must equal modulus length")
+  if !rsa_modulus_ok(nn) || ct.length() != k {
+    return Err("rsa_pkcs1_v15 decrypt: decryption error")
   }
   let c = rsa_os2ip(ct)
   let m = rsa_dp(c, nn, dd)
   let em = rsa_i2osp(m, k)
-  rsa_pkcs1_v15_unpad(em, k)
+  rsa_pkcs1_v15_unpad_or(em, k)
 }
 
 ///|
@@ -285,11 +332,27 @@ pub fn rsa_pkcs1_v15_decrypt_crt(
   dq : Bytes,
   qinv : Bytes,
 ) -> Bytes {
+  match rsa_pkcs1_v15_decrypt_crt_or(ct, p, q, dp, dq, qinv) {
+    Ok(msg) => msg
+    Err(e) => abort(e)
+  }
+}
+
+///|
+/// CRT variant of `rsa_pkcs1_v15_decrypt_or` (no abort, uniform error).
+pub fn rsa_pkcs1_v15_decrypt_crt_or(
+  ct : Bytes,
+  p : Bytes,
+  q : Bytes,
+  dp : Bytes,
+  dq : Bytes,
+  qinv : Bytes,
+) -> Result[Bytes, String] {
   let k = p.length() + q.length()
-  if ct.length() != k {
-    abort(
-      "rsa_pkcs1_v15_decrypt_crt: ciphertext length must equal modulus length",
-    )
+  if ct.length() != k ||
+    !rsa_modulus_ok(rsa_os2ip(p)) ||
+    !rsa_modulus_ok(rsa_os2ip(q)) {
+    return Err("rsa_pkcs1_v15 decrypt: decryption error")
   }
   let c = rsa_os2ip(ct)
   let m = rsa_dp_crt(
@@ -301,7 +364,7 @@ pub fn rsa_pkcs1_v15_decrypt_crt(
     rsa_os2ip(qinv),
   )
   let em = rsa_i2osp(m, k)
-  rsa_pkcs1_v15_unpad(em, k)
+  rsa_pkcs1_v15_unpad_or(em, k)
 }
 
 ///|
@@ -383,6 +446,9 @@ pub fn rsa_pkcs1_v15_verify(
 ) -> Bool {
   let nn = rsa_os2ip(n)
   let ee = rsa_os2ip(e)
+  if !rsa_modulus_ok(nn) {
+    return false
+  }
   let k = n.length()
   if sig.length() != k {
     return false
@@ -430,6 +496,9 @@ pub fn rsa_pkcs1_v15_verify_with(
 ) -> Bool {
   let nn = rsa_os2ip(n)
   let ee = rsa_os2ip(e)
+  if !rsa_modulus_ok(nn) {
+    return false
+  }
   let k = n.length()
   if sig.length() != k {
     return false
@@ -545,9 +614,20 @@ pub fn rsa_oaep_encrypt_with(
 
 ///|
 /// Unpad an OAEP encoded message EM = Y || maskedSeed || maskedDB
-/// (SHA-256, MGF1-SHA256).
-fn rsa_oaep_unpad(em : Bytes, k : Int, label : Bytes, hash : RsaHash) -> Bytes {
+/// (SHA-256, MGF1-SHA256) without aborting. Every failure (length, lHash mismatch, missing
+/// 0x01 separator) yields the same uniform `Err` — RFC 8017 §7.1.2 step 5
+/// requires that decryption errors be indistinguishable, otherwise the
+/// caller becomes a Manger/Bleichenbacher-style oracle.
+fn rsa_oaep_unpad_or(
+  em : Bytes,
+  k : Int,
+  label : Bytes,
+  hash : RsaHash,
+) -> Result[Bytes, String] {
   let h_len = rsa_hash_len(hash)
+  if k < 2 * h_len + 2 || em.length() != k {
+    return Err("rsa_oaep decrypt: decryption error")
+  }
   let l_hash = rsa_hash_apply(hash, label)
   let masked_seed = Array::make(h_len, b'\x00')
   for i in 0..<h_len {
@@ -570,7 +650,7 @@ fn rsa_oaep_unpad(em : Bytes, k : Int, label : Bytes, hash : RsaHash) -> Bytes {
   // DB = lHash' || PS || 0x01 || M
   for i in 0..<h_len {
     if masked_db[i] != l_hash[i] {
-      abort("rsa_oaep decrypt: lHash mismatch (decryption error)")
+      return Err("rsa_oaep decrypt: decryption error")
     }
   }
   let mut idx = h_len
@@ -578,7 +658,7 @@ fn rsa_oaep_unpad(em : Bytes, k : Int, label : Bytes, hash : RsaHash) -> Bytes {
     idx = idx + 1
   }
   if idx >= db_len || masked_db[idx] != b'\x01' {
-    abort("rsa_oaep decrypt: invalid padding")
+    return Err("rsa_oaep decrypt: decryption error")
   }
   idx = idx + 1
   let msg_len = db_len - idx
@@ -586,30 +666,39 @@ fn rsa_oaep_unpad(em : Bytes, k : Int, label : Bytes, hash : RsaHash) -> Bytes {
   for i in 0..<msg_len {
     out[i] = masked_db[idx + i]
   }
-  Bytes::from_array(out[:])
+  Ok(Bytes::from_array(out[:]))
 }
 
 ///|
 /// RSAES-OAEP decrypt (SHA-256, MGF1-SHA256). Returns the recovered message;
 /// aborts on length/padding errors (do not rely on the abort message for
 /// distinguishing failure causes in a security context).
+///
+/// SECURITY: `ct` is attacker-controlled — prefer `rsa_oaep_decrypt_or`,
+/// which never traps and reports one uniform error.
 pub fn rsa_oaep_decrypt(
   ct : Bytes,
   n : Bytes,
   d : Bytes,
   label : Bytes,
 ) -> Bytes {
-  let nn = rsa_os2ip(n)
-  let dd = rsa_os2ip(d)
-  let k = n.length()
-  let h_len = 32
-  if ct.length() != k || k < 2 * h_len + 2 {
-    abort("rsa_oaep_decrypt: invalid ciphertext length")
+  match rsa_oaep_decrypt_or(ct, n, d, label) {
+    Ok(msg) => msg
+    Err(e) => abort(e)
   }
-  let c = rsa_os2ip(ct)
-  let m = rsa_dp(c, nn, dd)
-  let em = rsa_i2osp(m, k)
-  rsa_oaep_unpad(em, k, label, RsaHash::Sha256)
+}
+
+///|
+/// RSAES-OAEP decrypt without aborting (SHA-256, MGF1-SHA256):
+/// `Ok(message)` or one uniform `Err("rsa_oaep decrypt: decryption error")`
+/// for every failure cause.
+pub fn rsa_oaep_decrypt_or(
+  ct : Bytes,
+  n : Bytes,
+  d : Bytes,
+  label : Bytes,
+) -> Result[Bytes, String] {
+  rsa_oaep_decrypt_with_or(ct, n, d, label, RsaHash::Sha256)
 }
 
 ///|
@@ -623,17 +712,33 @@ pub fn rsa_oaep_decrypt_with(
   label : Bytes,
   hash : RsaHash,
 ) -> Bytes {
+  match rsa_oaep_decrypt_with_or(ct, n, d, label, hash) {
+    Ok(msg) => msg
+    Err(e) => abort(e)
+  }
+}
+
+///|
+/// Caller-chosen-hash variant of `rsa_oaep_decrypt_or` (no abort, uniform
+/// error).
+pub fn rsa_oaep_decrypt_with_or(
+  ct : Bytes,
+  n : Bytes,
+  d : Bytes,
+  label : Bytes,
+  hash : RsaHash,
+) -> Result[Bytes, String] {
   let nn = rsa_os2ip(n)
   let dd = rsa_os2ip(d)
   let k = n.length()
   let h_len = rsa_hash_len(hash)
-  if ct.length() != k || k < 2 * h_len + 2 {
-    abort("rsa_oaep_decrypt_with: invalid ciphertext length")
+  if !rsa_modulus_ok(nn) || ct.length() != k || k < 2 * h_len + 2 {
+    return Err("rsa_oaep decrypt: decryption error")
   }
   let c = rsa_os2ip(ct)
   let m = rsa_dp(c, nn, dd)
   let em = rsa_i2osp(m, k)
-  rsa_oaep_unpad(em, k, label, hash)
+  rsa_oaep_unpad_or(em, k, label, hash)
 }
 
 ///|
@@ -649,10 +754,30 @@ pub fn rsa_oaep_decrypt_crt(
   qinv : Bytes,
   label : Bytes,
 ) -> Bytes {
+  match rsa_oaep_decrypt_crt_or(ct, p, q, dp, dq, qinv, label) {
+    Ok(msg) => msg
+    Err(e) => abort(e)
+  }
+}
+
+///|
+/// CRT variant of `rsa_oaep_decrypt_or` (no abort, uniform error).
+pub fn rsa_oaep_decrypt_crt_or(
+  ct : Bytes,
+  p : Bytes,
+  q : Bytes,
+  dp : Bytes,
+  dq : Bytes,
+  qinv : Bytes,
+  label : Bytes,
+) -> Result[Bytes, String] {
   let k = p.length() + q.length()
   let h_len = 32
-  if ct.length() != k || k < 2 * h_len + 2 {
-    abort("rsa_oaep_decrypt_crt: invalid ciphertext length")
+  if ct.length() != k ||
+    k < 2 * h_len + 2 ||
+    !rsa_modulus_ok(rsa_os2ip(p)) ||
+    !rsa_modulus_ok(rsa_os2ip(q)) {
+    return Err("rsa_oaep decrypt: decryption error")
   }
   let c = rsa_os2ip(ct)
   let m = rsa_dp_crt(
@@ -664,7 +789,7 @@ pub fn rsa_oaep_decrypt_crt(
     rsa_os2ip(qinv),
   )
   let em = rsa_i2osp(m, k)
-  rsa_oaep_unpad(em, k, label, RsaHash::Sha256)
+  rsa_oaep_unpad_or(em, k, label, RsaHash::Sha256)
 }
 
 // ==================== RSASSA-PSS (RFC 8017 §8.1, SHA-256) ====================
@@ -704,7 +829,15 @@ fn rsa_pss_encode_em(
   let db_mask = rsa_mgf1(hash, h, db_len)
   rsa_xor_bytes(db, db_mask, 0, db_len)
   // Set the leftmost (8*em_len - em_bits) bits of maskedDB[0] to 0.
+  // A modulus whose byte length overshoots its bit length (a zero-padded or
+  // bogus n) pushes bits_to_clear past 8, where the shifts below wrap their
+  // shift count and silently produce garbage instead of the RFC 8017 mask.
+  // Reject up front so the caller fails loudly rather than signing/verifying
+  // with a meaningless mask.
   let bits_to_clear = 8 * em_len - em_bits
+  if bits_to_clear < 0 || bits_to_clear > 8 {
+    return b""
+  }
   if bits_to_clear > 0 {
     db[0] = (db[0].to_int() & (0xFF >> bits_to_clear)).to_byte()
   }
@@ -734,6 +867,9 @@ pub fn rsa_pss_sign(
   let k = n.length()
   let em_bits = rsa_bit_len(n) - 1 // RFC 8017: emBits = modBits - 1
   let em = rsa_pss_encode_em(message, salt, k, em_bits, RsaHash::Sha256)
+  if em.length() != k {
+    abort("rsa_pss sign: modulus byte length does not match its bit length")
+  }
   let m = rsa_os2ip(em)
   let s = rsa_dp(m, nn, dd)
   rsa_i2osp(s, k)
@@ -758,6 +894,9 @@ pub fn rsa_pss_sign_crt(
   let n_bytes = rsa_i2osp(pp * qq, k)
   let em_bits = rsa_bit_len(n_bytes) - 1 // RFC 8017: emBits = modBits - 1
   let em = rsa_pss_encode_em(message, salt, k, em_bits, RsaHash::Sha256)
+  if em.length() != k {
+    abort("rsa_pss sign: modulus byte length does not match its bit length")
+  }
   let m = rsa_os2ip(em)
   let s = rsa_dp_crt(m, pp, qq, rsa_os2ip(dp), rsa_os2ip(dq), rsa_os2ip(qinv))
   rsa_i2osp(s, k)
@@ -779,6 +918,11 @@ fn rsa_pss_verify_em(
     return false
   }
   let bits_to_clear = 8 * em_len - em_bits
+  // Same guard as the encoder: only 0..8 leading bits may be cleared, and a
+  // hostile zero-padded modulus must be rejected, not shifted into garbage.
+  if bits_to_clear < 0 || bits_to_clear > 8 {
+    return false
+  }
   if bits_to_clear > 0 &&
     (em[0].to_int() & ((0xFF << (8 - bits_to_clear)) & 0xFF)) != 0 {
     return false
@@ -836,6 +980,9 @@ pub fn rsa_pss_verify(
 ) -> Bool {
   let nn = rsa_os2ip(n)
   let ee = rsa_os2ip(e)
+  if !rsa_modulus_ok(nn) {
+    return false
+  }
   let k = n.length()
   let h_len = 32
   let em_bits = rsa_bit_len(n) - 1 // RFC 8017: emBits = modBits - 1
@@ -867,6 +1014,9 @@ pub fn rsa_pss_sign_with(
   let k = n.length()
   let em_bits = rsa_bit_len(n) - 1 // RFC 8017: emBits = modBits - 1
   let em = rsa_pss_encode_em(message, salt, k, em_bits, hash)
+  if em.length() != k {
+    abort("rsa_pss sign: modulus byte length does not match its bit length")
+  }
   let m = rsa_os2ip(em)
   let s = rsa_dp(m, nn, dd)
   rsa_i2osp(s, k)
@@ -885,6 +1035,9 @@ pub fn rsa_pss_verify_with(
 ) -> Bool {
   let nn = rsa_os2ip(n)
   let ee = rsa_os2ip(e)
+  if !rsa_modulus_ok(nn) {
+    return false
+  }
   let k = n.length()
   let h_len = rsa_hash_len(hash)
   let em_bits = rsa_bit_len(n) - 1 // RFC 8017: emBits = modBits - 1
@@ -948,6 +1101,9 @@ pub fn rsa_pss_sign_with_crt(
   let n_bytes = rsa_i2osp(pp * qq, k)
   let em_bits = rsa_bit_len(n_bytes) - 1 // RFC 8017: emBits = modBits - 1
   let em = rsa_pss_encode_em(message, salt, k, em_bits, hash)
+  if em.length() != k {
+    abort("rsa_pss sign: modulus byte length does not match its bit length")
+  }
   let m = rsa_os2ip(em)
   let s = rsa_dp_crt(m, pp, qq, rsa_os2ip(dp), rsa_os2ip(dq), rsa_os2ip(qinv))
   rsa_i2osp(s, k)

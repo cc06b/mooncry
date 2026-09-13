@@ -142,7 +142,11 @@ pub fn ml_kem_512_hybrid_open(dk : Bytes, blob : Bytes, aad : Bytes) -> Bytes? {
     return None
   }
   let c = bytes_sub(blob, 0, c_len)
-  let k = ml_kem_512_decaps(dk, c)
+  // A wrong-length local dk would trap inside decaps; surface it as None.
+  let k = match ml_kem_512_decaps_or(dk, c) {
+    Ok(shared) => shared
+    Err(_) => return None
+  }
   let (key, nonce) = ml_kem_hybrid_derive(c, k)
   let body = bytes_sub(blob, c_len, blob.length() - c_len)
   let ct = bytes_sub(body, 0, body.length() - 16)
@@ -196,7 +200,11 @@ pub fn ml_kem_768_hybrid_open(dk : Bytes, blob : Bytes, aad : Bytes) -> Bytes? {
     return None
   }
   let c = bytes_sub(blob, 0, c_len)
-  let k = ml_kem_768_decaps(dk, c)
+  // A wrong-length local dk would trap inside decaps; surface it as None.
+  let k = match ml_kem_768_decaps_or(dk, c) {
+    Ok(shared) => shared
+    Err(_) => return None
+  }
   let (key, nonce) = ml_kem_hybrid_derive(c, k)
   let body = bytes_sub(blob, c_len, blob.length() - c_len)
   let ct = bytes_sub(body, 0, body.length() - 16)
@@ -248,7 +256,11 @@ pub fn ml_kem_1024_hybrid_open(dk : Bytes, blob : Bytes, aad : Bytes) -> Bytes? 
     return None
   }
   let c = bytes_sub(blob, 0, c_len)
-  let k = ml_kem_1024_decaps(dk, c)
+  // A wrong-length local dk would trap inside decaps; surface it as None.
+  let k = match ml_kem_1024_decaps_or(dk, c) {
+    Ok(shared) => shared
+    Err(_) => return None
+  }
   let (key, nonce) = ml_kem_hybrid_derive(c, k)
   let body = bytes_sub(blob, c_len, blob.length() - c_len)
   let ct = bytes_sub(body, 0, body.length() - 16)

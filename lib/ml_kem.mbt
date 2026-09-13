@@ -619,14 +619,21 @@ fn kem_keygen_internal(
 }
 
 ///|
-fn kem_encaps_internal(
+/// Byte lengths fixed by a parameter set: (ek, dk, c). Every routine that
+/// consumes a peer-supplied ek/c or a caller-supplied dk validates against
+/// these first — parsing an undersized blob would otherwise run off the end
+/// of the input and trap (an attacker-triggerable abort).
+fn kem_lengths(params : MlKemParams) -> (Int, Int, Int) {
+  let k = params.k
+  (384 * k + 32, 768 * k + 96, 32 * params.du * k + 32 * params.dv)
+}
+
+///|
+fn kem_encaps_body(
   params : MlKemParams,
   ek : Bytes,
   m : Bytes,
 ) -> (Bytes, Bytes) {
-  if m.length() != 32 {
-    abort("ml_kem encaps: m must be 32 bytes")
-  }
   let gm = kem_g(concat_bytes(m, kem_h(ek)))
   let k_shared = Array::make(32, b'\x00')
   let r = Array::make(32, b'\x00')
@@ -639,7 +646,37 @@ fn kem_encaps_internal(
 }
 
 ///|
-fn kem_decaps_internal(params : MlKemParams, dk : Bytes, c : Bytes) -> Bytes {
+/// Encapsulation with input validation. `ek` is peer-supplied, so a wrong
+/// length is reported as `Err` rather than trapping.
+fn kem_encaps_or(
+  params : MlKemParams,
+  ek : Bytes,
+  m : Bytes,
+) -> Result[(Bytes, Bytes), String] {
+  let (ek_len, _, _) = kem_lengths(params)
+  if ek.length() != ek_len {
+    return Err("ml_kem encaps: ek has the wrong length for this parameter set")
+  }
+  if m.length() != 32 {
+    return Err("ml_kem encaps: m must be 32 bytes")
+  }
+  Ok(kem_encaps_body(params, ek, m))
+}
+
+///|
+fn kem_encaps_internal(
+  params : MlKemParams,
+  ek : Bytes,
+  m : Bytes,
+) -> (Bytes, Bytes) {
+  match kem_encaps_or(params, ek, m) {
+    Ok(pair) => pair
+    Err(msg) => abort(msg)
+  }
+}
+
+///|
+fn kem_decaps_body(params : MlKemParams, dk : Bytes, c : Bytes) -> Bytes {
   let k = params.k
   let dk_pke_len = 384 * k
   let ek_len = 384 * k + 32
@@ -678,6 +715,35 @@ fn kem_decaps_internal(params : MlKemParams, dk : Bytes, c : Bytes) -> Bytes {
     Bytes::from_array(k_prime[:])
   } else {
     k_bar
+  }
+}
+
+///|
+/// Decapsulation with input validation. FIPS 203 decapsulation never fails
+/// for a well-formed `c` (invalid ciphertexts get the implicit-rejection
+/// key), so the only errors here are wrong-length inputs: `c` is
+/// peer-supplied and `dk` is the local secret, and indexing either past its
+/// end would trap.
+fn kem_decaps_or(
+  params : MlKemParams,
+  dk : Bytes,
+  c : Bytes,
+) -> Result[Bytes, String] {
+  let (_, dk_len, c_len) = kem_lengths(params)
+  if dk.length() != dk_len {
+    return Err("ml_kem decaps: dk has the wrong length for this parameter set")
+  }
+  if c.length() != c_len {
+    return Err("ml_kem decaps: c has the wrong length for this parameter set")
+  }
+  Ok(kem_decaps_body(params, dk, c))
+}
+
+///|
+fn kem_decaps_internal(params : MlKemParams, dk : Bytes, c : Bytes) -> Bytes {
+  match kem_decaps_or(params, dk, c) {
+    Ok(k) => k
+    Err(msg) => abort(msg)
   }
 }
 
@@ -738,4 +804,58 @@ pub fn ml_kem_1024_encaps(ek : Bytes, m : Bytes) -> (Bytes, Bytes) {
 /// ML-KEM-1024 decapsulation. See `ml_kem_512_decaps`.
 pub fn ml_kem_1024_decaps(dk : Bytes, c : Bytes) -> Bytes {
   kem_decaps_internal(mlkem_1024, dk, c)
+}
+
+// ---------- graceful (Result-returning) variants ----------
+// `ek`/`c` cross a trust boundary: a peer can hand us a blob of any length.
+// The one-shot entry points above abort on a wrong-length blob (fail-fast,
+// per the documented contract); these `_or` variants return `Err` instead so
+// network-facing code can reject malformed input without a trap.
+
+///|
+/// ML-KEM-512 encapsulation without aborting. `Err` on a wrong-length `ek`
+/// (peer-supplied) or `m`; `Ok((K, c))` otherwise.
+pub fn ml_kem_512_encaps_or(
+  ek : Bytes,
+  m : Bytes,
+) -> Result[(Bytes, Bytes), String] {
+  kem_encaps_or(mlkem_512, ek, m)
+}
+
+///|
+/// ML-KEM-512 decapsulation without aborting. `Err` on a wrong-length `dk`
+/// or `c`; `Ok(K)` otherwise — including the implicit-rejection key for a
+/// well-formed but invalid ciphertext, which is never an error.
+pub fn ml_kem_512_decaps_or(dk : Bytes, c : Bytes) -> Result[Bytes, String] {
+  kem_decaps_or(mlkem_512, dk, c)
+}
+
+///|
+/// ML-KEM-768 encapsulation without aborting. See `ml_kem_512_encaps_or`.
+pub fn ml_kem_768_encaps_or(
+  ek : Bytes,
+  m : Bytes,
+) -> Result[(Bytes, Bytes), String] {
+  kem_encaps_or(mlkem_768, ek, m)
+}
+
+///|
+/// ML-KEM-768 decapsulation without aborting. See `ml_kem_512_decaps_or`.
+pub fn ml_kem_768_decaps_or(dk : Bytes, c : Bytes) -> Result[Bytes, String] {
+  kem_decaps_or(mlkem_768, dk, c)
+}
+
+///|
+/// ML-KEM-1024 encapsulation without aborting. See `ml_kem_512_encaps_or`.
+pub fn ml_kem_1024_encaps_or(
+  ek : Bytes,
+  m : Bytes,
+) -> Result[(Bytes, Bytes), String] {
+  kem_encaps_or(mlkem_1024, ek, m)
+}
+
+///|
+/// ML-KEM-1024 decapsulation without aborting. See `ml_kem_512_decaps_or`.
+pub fn ml_kem_1024_decaps_or(dk : Bytes, c : Bytes) -> Result[Bytes, String] {
+  kem_decaps_or(mlkem_1024, dk, c)
 }

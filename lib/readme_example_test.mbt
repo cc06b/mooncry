@@ -16,8 +16,8 @@ test "README Quick start example" {
   assert_true(bytes_to_hex(plaintext) == "7365637265742064617461")
 
   // Sealed-box envelope (HKDF-SHA256 + AES-256-GCM) from the README example.
-  let master = Bytes::make(32, b'')
-  let nonce = Bytes::make(12, b'')
+  let master = Bytes::make(32, b'\x07')
+  let nonce = Bytes::make(12, b'\x01')
   let envelope = sealed_box_seal(
     master, nonce, b"plaintext", b"aad", b"tenant-1",
   )

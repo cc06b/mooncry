@@ -13,7 +13,7 @@ test "AES-128-CTR: NIST SP 800-38A F.5.1 block 1" {
 test "AES-128-CTR: round-trip" {
   let key = hex_to_bytes("2b7e151628aed2a6abf7158809cf4f3c")
   let iv = hex_to_bytes("f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff")
-  let pt = Bytes::make(200, b'')
+  let pt = Bytes::make(200, b'\x07')
   let ct = aes_ctr(pt, key, iv)
   assert_true(bytes_equal(pt, aes_ctr(ct, key, iv)))
 }

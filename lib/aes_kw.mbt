@@ -104,13 +104,14 @@ pub fn aes_kw_wrap(kek : Bytes, key_data : Bytes) -> Bytes {
 
 ///|
 /// AES-KW unwrap: returns `Ok(key_data)` if the integrity check (IV) passes,
-/// `Err` otherwise. Aborts on bad lengths.
+/// `Err` otherwise — including a wrapped blob of the wrong shape, which is
+/// peer-supplied and must not trap.
 pub fn aes_kw_unwrap(kek : Bytes, wrapped : Bytes) -> Result[Bytes, String] {
   if kek.length() != 16 && kek.length() != 24 && kek.length() != 32 {
     abort("aes_kw_unwrap: kek length must be 16, 24, or 32 bytes")
   }
   if wrapped.length() < 16 || (wrapped.length() - 8) % 8 != 0 {
-    abort("aes_kw_unwrap: wrapped length must be 8*(n+1), n>=1")
+    return Err("aes_kw_unwrap: wrapped length must be 8*(n+1), n>=1")
   }
   let nr = kw_aes_nr(kek)
   let round_keys = aes_key_expansion(kek)

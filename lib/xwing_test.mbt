@@ -298,7 +298,7 @@ test "X-Wing decapsulation of a tampered ciphertext yields a different secret" {
   let eseed = Bytes::make(64, b'Z')
   let (ss, ct) = xwing_encaps(pk, eseed)
   let arr = ct.to_array()
-  arr[1100] = arr[1100] ^ b''
+  arr[1100] = arr[1100] ^ b'\x01'
   let bad = Bytes::from_array(arr)
   let ss_bad = xwing_decaps(bad, sk)
   assert_false(bytes_equal(ss_bad, ss))

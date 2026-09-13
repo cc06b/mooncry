@@ -773,6 +773,57 @@ pub fn aes_decrypt_cbc(data : Bytes, key : Bytes, iv : Bytes) -> Bytes {
   if data.length() < 16 || (data.length() - 16) % 16 != 0 {
     abort("aes_decrypt_cbc: ciphertext must be 16 (IV prefix) + N*16 bytes")
   }
+  aes_cbc_decrypt_blocks(data, key, iv) |> pkcs7_unpad
+}
+
+///|
+/// AES-CBC decrypt without aborting: `data` = IV prefix || N*16 ciphertext
+/// bytes (same shape as `aes_decrypt_cbc`).
+///
+/// Unlike the lenient original this validates the PKCS#7 padding strictly:
+/// `pkcs7_unpad` returns the input unchanged when the padding is invalid, so
+/// a caller of `aes_decrypt_cbc` cannot distinguish "plaintext legitimately
+/// ends in a byte > 16" from "the ciphertext was tampered with". This
+/// variant reports `Err` in that case, which is what untrusted ciphertext
+/// requires. Note that CBC is unauthenticated — prefer an AEAD
+/// (`aes_gcm_decrypt`, `chacha20_poly1305_decrypt_or`) whenever possible,
+/// and never expose the `Err`/`Ok` distinction to a network peer as a padding
+/// oracle without a MAC in front.
+pub fn aes_decrypt_cbc_or(
+  data : Bytes,
+  key : Bytes,
+  iv : Bytes,
+) -> Result[Bytes, String] {
+  if key.length() != 16 && key.length() != 24 && key.length() != 32 {
+    return Err("aes_decrypt_cbc: key length must be 16, 24, or 32 bytes")
+  }
+  if iv.length() != 16 {
+    return Err("aes_decrypt_cbc: iv length must be 16 bytes")
+  }
+  if data.length() < 32 || (data.length() - 16) % 16 != 0 {
+    return Err(
+      "aes_decrypt_cbc: ciphertext must be 16 (IV prefix) + N*16 bytes",
+    )
+  }
+  // `data` carries the IV in its first 16 bytes (the shape
+  // `aes_encrypt_cbc` emits), while the decryption itself uses the explicit
+  // `iv` argument. If the two disagree the blob is misframed — or was
+  // tampered with in the one region CBC does not protect — so reject it
+  // instead of silently ignoring the prefix.
+  if !bytes_equal(bytes_sub(data, 0, 16), iv) {
+    return Err(
+      "aes_decrypt_cbc: embedded IV prefix does not match the iv argument",
+    )
+  }
+  let raw = aes_cbc_decrypt_blocks(data, key, iv)
+  pkcs7_unpad_strict(raw)
+}
+
+///|
+/// The CBC decryption loop shared by `aes_decrypt_cbc` and its `_or`
+/// variant; lengths are validated by the callers. Returns the raw decrypted
+/// blocks — padding removal is the caller's choice (lenient vs strict).
+fn aes_cbc_decrypt_blocks(data : Bytes, key : Bytes, iv : Bytes) -> Bytes {
   let nr = if key.length() == 16 {
     10
   } else if key.length() == 24 {
@@ -802,7 +853,34 @@ pub fn aes_decrypt_cbc(data : Bytes, key : Bytes, iv : Bytes) -> Bytes {
     prev_block = block
   }
 
-  pkcs7_unpad(Bytes::from_array(decrypted[:]))
+  Bytes::from_array(decrypted[:])
+}
+
+///|
+/// Strict PKCS#7 unpadding: `Err` unless the final block carries a valid
+/// 1..16 padding run. Constant-time in the padding bytes it inspects.
+fn pkcs7_unpad_strict(data : Bytes) -> Result[Bytes, String] {
+  let len = data.length()
+  if len == 0 || len % 16 != 0 {
+    return Err("pkcs7_unpad: input must be a nonzero multiple of 16 bytes")
+  }
+  let pad_len = data[len - 1].to_int()
+  if pad_len < 1 || pad_len > 16 || pad_len > len {
+    return Err("pkcs7_unpad: invalid padding length")
+  }
+  let mut diff = 0
+  for i in 0..<pad_len {
+    diff = diff | (data[len - 1 - i].to_int() ^ pad_len)
+  }
+  if diff != 0 {
+    return Err("pkcs7_unpad: invalid padding bytes")
+  }
+  let unpadded_len = len - pad_len
+  let unpadded = Array::make(unpadded_len, b'\x00')
+  for i in 0..<unpadded_len {
+    unpadded[i] = data[i]
+  }
+  Ok(Bytes::from_array(unpadded[:]))
 }
 
 // ==================== AES-GCM (NIST SP 800-38D) ====================

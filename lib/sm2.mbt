@@ -167,6 +167,12 @@ pub fn sm2_verify(pk : Bytes, msg : Bytes, id : Bytes, sig : Bytes) -> Bool {
   if pk.length() != 65 || pk[0] != (4).to_byte() || sig.length() != 64 {
     return false
   }
+  // ENTL is the ID bit length encoded in two bytes, so an empty ID or one of
+  // 8192+ bytes cannot be represented (sm2_za aborts on those). The ID often
+  // comes from a peer or a certificate, so reject it here instead of trapping.
+  if id.length() == 0 || id.length() > 8191 {
+    return false
+  }
   let px = ec_be_to_int(ec_slice(pk, 1, 32))
   let py = ec_be_to_int(ec_slice(pk, 33, 32))
   if px <= ec_zero || px >= sm2_curve.p || py <= ec_zero || py >= sm2_curve.p {

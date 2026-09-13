@@ -1182,6 +1182,11 @@ fn slh_verify_internal(
   if sig.length() != sig_sz {
     return false
   }
+  // pk = PK.seed || PK.root (FIPS 205 §5): both halves are read at fixed
+  // offsets, so a short (hostile) pk must be rejected before slicing.
+  if pk.length() != 2 * n {
+    return false
+  }
   let pk_seed = slh_slice(pk, 0, n)
   let pk_root = slh_slice(pk, n, n)
   let s = slh_suite_new(p, pk_seed)

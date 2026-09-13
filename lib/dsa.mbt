@@ -1377,6 +1377,11 @@ fn dsa_verify_mu(
   if sig.length() != params.ctilde + z_bytes + params.omega + params.k {
     return false
   }
+  // pk = rho (32) || t1 (k * 320): both are parsed by fixed-offset reads, so
+  // a short (hostile) pk must be rejected here rather than trap downstream.
+  if pk.length() != 32 + 320 * params.k {
+    return false
+  }
   // unpack pk
   let rho = Array::make(32, b'\x00')
   for i in 0..<32 {

@@ -187,6 +187,9 @@ pub fn aes_ccm_encrypt(
 ///|
 /// AES-CCM decrypt. `input` = ciphertext || tag. Verifies the tag
 /// (constant-time) and returns the plaintext, or aborts on mismatch.
+///
+/// SECURITY: prefer `aes_ccm_decrypt_or` for attacker-supplied input — an
+/// abort on a bad tag is a denial of service.
 pub fn aes_ccm_decrypt(
   input : Bytes,
   key : Bytes,
@@ -194,17 +197,35 @@ pub fn aes_ccm_decrypt(
   aad : Bytes,
   mac_len : Int,
 ) -> Bytes {
+  match aes_ccm_decrypt_or(input, key, nonce, aad, mac_len) {
+    Ok(pt) => pt
+    Err(msg) => abort(msg)
+  }
+}
+
+///|
+/// AES-CCM decrypt without aborting: `Ok(plaintext)` only when the tag
+/// verifies (constant-time compare), `Err(msg)` for malformed parameters, an
+/// input shorter than the tag, or an authentication failure. The recovered
+/// plaintext of an unauthenticated input is discarded, never returned.
+pub fn aes_ccm_decrypt_or(
+  input : Bytes,
+  key : Bytes,
+  nonce : Bytes,
+  aad : Bytes,
+  mac_len : Int,
+) -> Result[Bytes, String] {
   if key.length() != 16 && key.length() != 24 && key.length() != 32 {
-    abort("aes_ccm_decrypt: key must be 16, 24, or 32 bytes")
+    return Err("aes_ccm_decrypt: key must be 16, 24, or 32 bytes")
   }
   if nonce.length() < 7 || nonce.length() > 13 {
-    abort("aes_ccm_decrypt: nonce must be 7..13 bytes")
+    return Err("aes_ccm_decrypt: nonce must be 7..13 bytes")
   }
   if mac_len < 4 || mac_len > 16 || mac_len % 2 != 0 {
-    abort("aes_ccm_decrypt: mac_len must be even and in 4..16")
+    return Err("aes_ccm_decrypt: mac_len must be even and in 4..16")
   }
   if input.length() < mac_len {
-    abort("aes_ccm_decrypt: input must be at least mac_len bytes")
+    return Err("aes_ccm_decrypt: input must be at least mac_len bytes")
   }
   let ct_len = input.length() - mac_len
   let ct = Array::make(ct_len, b'\x00')
@@ -242,7 +263,7 @@ pub fn aes_ccm_decrypt(
       Bytes::from_array(expected[:]),
       Bytes::from_array(received_tag[:]),
     ) {
-    abort("aes_ccm_decrypt: tag verification failed")
+    return Err("aes_ccm_decrypt: tag verification failed")
   }
-  pt_bytes
+  Ok(pt_bytes)
 }

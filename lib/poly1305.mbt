@@ -155,7 +155,7 @@ pub fn poly1305_update(st : Poly1305State, data : Bytes) -> Unit {
     st.buf_len = st.buf_len + take
     off = off + take
     if st.buf_len == 16 {
-      st.buffer[16] = b''
+      st.buffer[16] = b'\x01'
       poly1305_absorb(st)
       st.buf_len = 0
     }
@@ -169,7 +169,7 @@ pub fn poly1305_finalize(st : Poly1305State) -> Bytes {
     for i in (st.buf_len + 1)..<17 {
       st.buffer[i] = b'\x00'
     }
-    st.buffer[st.buf_len] = b''
+    st.buffer[st.buf_len] = b'\x01'
     poly1305_absorb(st)
     st.buf_len = 0
   }

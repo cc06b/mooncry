@@ -87,11 +87,27 @@ pub fn sm4_cbc_encrypt(key : Bytes, iv : Bytes, data : Bytes) -> Bytes {
 ///|
 /// SM4-CBC decrypt (raw, no padding): data length must be a multiple of 16.
 pub fn sm4_cbc_decrypt(key : Bytes, iv : Bytes, data : Bytes) -> Bytes {
+  match sm4_cbc_decrypt_or(key, iv, data) {
+    Ok(pt) => pt
+    Err(msg) => abort(msg)
+  }
+}
+
+///|
+/// SM4-CBC decrypt without aborting: `Err` for a wrong-length key/iv or a
+/// `data` that is not a nonzero multiple of 16 bytes (both can come from a
+/// peer), `Ok(plaintext)` otherwise. Raw mode — no padding is stripped and
+/// no authentication is performed.
+pub fn sm4_cbc_decrypt_or(
+  key : Bytes,
+  iv : Bytes,
+  data : Bytes,
+) -> Result[Bytes, String] {
   guard key.length() == 16 && iv.length() == 16 else {
-    abort("sm4_cbc_decrypt: key and iv must be 16 bytes")
+    return Err("sm4_cbc_decrypt: key and iv must be 16 bytes")
   }
   guard data.length() % 16 == 0 && data.length() > 0 else {
-    abort("sm4_cbc_decrypt: data must be a nonzero multiple of 16 bytes")
+    return Err("sm4_cbc_decrypt: data must be a nonzero multiple of 16 bytes")
   }
   let rk = sm4_expand_key(key)
   let out = Array::make(data.length(), (0).to_byte())
@@ -105,7 +121,7 @@ pub fn sm4_cbc_decrypt(key : Bytes, iv : Bytes, data : Bytes) -> Bytes {
     prev = ec_slice(data, off, 16)
     off = off + 16
   }
-  Bytes::from_array(out[:])
+  Ok(Bytes::from_array(out[:]))
 }
 
 ///|

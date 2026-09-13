@@ -87,22 +87,46 @@ pub fn chacha20_poly1305_encrypt(
 
 ///|
 /// ChaCha20-Poly1305 decrypt. `input` = ciphertext || 16-byte tag.
-/// Verifies the tag (constant-time) and returns the plaintext, or aborts on mismatch.
+/// Verifies the tag (constant-time) and returns the plaintext, or aborts on
+/// mismatch.
+///
+/// SECURITY: `input` is normally attacker-controlled, and an abort is a
+/// denial of service in a long-lived process. Prefer
+/// `chacha20_poly1305_decrypt_or`, which reports the same failures as `Err`.
 pub fn chacha20_poly1305_decrypt(
   key : Bytes,
   nonce : Bytes,
   aad : Bytes,
   input : Bytes,
 ) -> Bytes {
+  match chacha20_poly1305_decrypt_or(key, nonce, aad, input) {
+    Ok(pt) => pt
+    Err(msg) => abort(msg)
+  }
+}
+
+///|
+/// ChaCha20-Poly1305 decrypt without aborting: `Ok(plaintext)` only when the
+/// 16-byte tag verifies (constant-time compare), `Err(msg)` for malformed
+/// parameters, an input shorter than the tag, or an authentication failure.
+/// The plaintext of an unauthenticated input is never returned.
+pub fn chacha20_poly1305_decrypt_or(
+  key : Bytes,
+  nonce : Bytes,
+  aad : Bytes,
+  input : Bytes,
+) -> Result[Bytes, String] {
   if key.length() != 32 {
-    abort("chacha20_poly1305_decrypt: key must be 32 bytes (256 bits)")
+    return Err("chacha20_poly1305_decrypt: key must be 32 bytes (256 bits)")
   }
   if nonce.length() != 12 {
-    abort("chacha20_poly1305_decrypt: nonce must be 12 bytes (96 bits)")
+    return Err("chacha20_poly1305_decrypt: nonce must be 12 bytes (96 bits)")
   }
   let total = input.length()
   if total < 16 {
-    abort("chacha20_poly1305_decrypt: input must be at least 16 bytes (tag)")
+    return Err(
+      "chacha20_poly1305_decrypt: input must be at least 16 bytes (tag)",
+    )
   }
   let ct_len = total - 16
   let ct = bytes_sub(input, 0, ct_len)
@@ -110,7 +134,7 @@ pub fn chacha20_poly1305_decrypt(
   let otk = chacha20_poly1305_otk(key, nonce)
   let expected = poly1305(otk, poly1305_mac_data(aad, ct))
   if !bytes_equal(expected, tag) {
-    abort("chacha20_poly1305_decrypt: tag verification failed")
+    return Err("chacha20_poly1305_decrypt: tag verification failed")
   }
-  chacha20_xor(ct, key, nonce, 1U)
+  Ok(chacha20_xor(ct, key, nonce, 1U))
 }

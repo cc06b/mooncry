@@ -1,6 +1,6 @@
 ///|
 test "ChaCha20-Poly1305: round-trip" {
-  let key = Bytes::make(32, b'')
+  let key = Bytes::make(32, b'\x07')
   let nonce = Bytes::make(12, b'	')
   let aad = b"associated data"
   let pt = b"secret message for aead round-trip test"

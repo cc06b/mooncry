@@ -53,11 +53,24 @@ pub fn xwing_keygen(seed : Bytes) -> (Bytes, Bytes) {
 /// eseed[0:32] is the ML-KEM encapsulation randomness, eseed[32:64] the
 /// X25519 ephemeral scalar). Returns (ss, ct). v0.35.0.
 pub fn xwing_encaps(pk : Bytes, eseed : Bytes) -> (Bytes, Bytes) {
+  match xwing_encaps_or(pk, eseed) {
+    Ok(pair) => pair
+    Err(msg) => abort(msg)
+  }
+}
+
+///|
+/// X-Wing encapsulation without aborting: `Err` on a wrong-length peer `pk`
+/// (1216 bytes) or `eseed` (64 bytes), `Ok((ss, ct))` otherwise.
+pub fn xwing_encaps_or(
+  pk : Bytes,
+  eseed : Bytes,
+) -> Result[(Bytes, Bytes), String] {
   if pk.length() != 1216 {
-    abort("xwing_encaps: pk must be 1216 bytes")
+    return Err("xwing_encaps: pk must be 1216 bytes")
   }
   if eseed.length() != 64 {
-    abort("xwing_encaps: eseed must be 64 bytes")
+    return Err("xwing_encaps: eseed must be 64 bytes")
   }
   let pk_m = bytes_sub(pk, 0, 1184)
   let pk_x = bytes_sub(pk, 1184, 32)
@@ -65,7 +78,7 @@ pub fn xwing_encaps(pk : Bytes, eseed : Bytes) -> (Bytes, Bytes) {
   let ct_x = x25519_public_key(ek_x)
   let ss_x = x25519(ek_x, pk_x)
   let (ss_m, ct_m) = ml_kem_768_encaps(pk_m, bytes_sub(eseed, 0, 32))
-  (xwing_combiner(ss_m, ss_x, ct_x, pk_x), concat_bytes(ct_m, ct_x))
+  Ok((xwing_combiner(ss_m, ss_x, ct_x, pk_x), concat_bytes(ct_m, ct_x)))
 }
 
 ///|
@@ -73,16 +86,28 @@ pub fn xwing_encaps(pk : Bytes, eseed : Bytes) -> (Bytes, Bytes) {
 /// 32-byte seed. Invalid ciphertexts do not fail — as with ML-KEM, a
 /// different (implicit) shared secret is produced. v0.35.0.
 pub fn xwing_decaps(ct : Bytes, sk : Bytes) -> Bytes {
+  match xwing_decaps_or(ct, sk) {
+    Ok(ss) => ss
+    Err(msg) => abort(msg)
+  }
+}
+
+///|
+/// X-Wing decapsulation without aborting: `Err` on a wrong-length peer `ct`
+/// (1120 bytes) or local `sk` (32 bytes), `Ok(ss)` otherwise. As with
+/// ML-KEM, a well-formed but invalid ciphertext is not an error — it yields
+/// the implicit-rejection shared secret.
+pub fn xwing_decaps_or(ct : Bytes, sk : Bytes) -> Result[Bytes, String] {
   if ct.length() != 1120 {
-    abort("xwing_decaps: ct must be 1120 bytes")
+    return Err("xwing_decaps: ct must be 1120 bytes")
   }
   if sk.length() != 32 {
-    abort("xwing_decaps: sk must be 32 bytes")
+    return Err("xwing_decaps: sk must be 32 bytes")
   }
   let (sk_m, sk_x, _, pk_x) = xwing_expand(sk)
   let ct_m = bytes_sub(ct, 0, 1088)
   let ct_x = bytes_sub(ct, 1088, 32)
   let ss_m = ml_kem_768_decaps(sk_m, ct_m)
   let ss_x = x25519(sk_x, ct_x)
-  xwing_combiner(ss_m, ss_x, ct_x, pk_x)
+  Ok(xwing_combiner(ss_m, ss_x, ct_x, pk_x))
 }
