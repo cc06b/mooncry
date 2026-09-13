@@ -1,6 +1,6 @@
 name = "cc06b/mooncry"
 
-version = "0.73.0"
+version = "0.74.0"
 
 readme = "README.md"
 
@@ -69,6 +69,16 @@ keywords = [
   "falcon1024",
   "ntru",
   "lattice-signature",
+  "ml-kem",
+  "ml-dsa",
+  "slh-dsa",
+  "lms",
+  "xmss",
+  "hpke",
+  "x-wing",
+  "sm2",
+  "sm3",
+  "sm4",
 ]
 
 description = "Pure-MoonBit crypto primitives: SHA-1/2 (incl. SHA-512/224/256), SHA-3, Keccak-256, SHAKE/cSHAKE, BLAKE2b/BLAKE2s/BLAKE3 (+keyed), RIPEMD-160, HMAC/Poly1305/CMAC/KMAC/GMAC, AES-CBC/GCM/CTR/CCM/KW/SIV, ChaCha20/XChaCha20 + Salsa20, HKDF/PBKDF2/scrypt/Argon2, RSA (PKCS1-v1.5/OAEP/PSS), ECDSA P-256, Ed25519/Ed25519ctx/Ed25519ph, X25519, HOTP/TOTP (SHA-1/256/512), SipHash, CRC32/CRC32C/CRC-64/Adler-32, Base64/Hex, sealed-box envelope, post-quantum: ML-KEM/ML-DSA/SLH-DSA (FIPS 203/204/205), LMS/HSS, XMSS/XMSS^MT, Falcon-512/1024"

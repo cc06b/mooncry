@@ -9,7 +9,7 @@ verified against official standard vectors.
 - **Correct** — every algorithm is checked against FIPS / NIST / RFC test
   vectors, and cross-validated against reference implementations
   (pycryptodome, cryptography, hashlib, libsodium, zlib) plus randomized
-  differential testing. 1113 tests, run with `moon test --deny-warn`.
+  differential testing. 1128 tests, run with `moon test --deny-warn`.
 - **Broad** — MD5, **SHA-1**, the SHA-2 and SHA-3 families (incl. **SHA-512/224
   and SHA-512/256**), **Keccak-256**,
   SHAKE/**cSHAKE** XOFs, **KMAC128/256**, BLAKE2b, **BLAKE2s**, BLAKE3,
@@ -26,10 +26,24 @@ verified against official standard vectors.
 - **Fast where it matters** — hex / Base64 encoding are O(n); AES MixColumns
   uses precomputed GF(2^8) tables (~5x over bit-sliced math); throughput is
   measured by `moon bench`.
-- **Fail-fast input validation** — AES / ChaCha20 / SHAKE / hex functions abort
-  with a clear message on wrong key / IV / nonce / tag lengths instead of
-  producing garbage. Graceful `Result`-returning variants (`hex_to_bytes_or`,
-  `base64_decode_or`) are provided for callers that prefer to branch on error.
+- **Fail-fast on misuse, graceful on hostile input** — AES / ChaCha20 / SHAKE /
+  hex functions abort with a clear message on wrong key / IV / nonce / tag
+  lengths instead of producing garbage. Where the *content* (not just the
+  length) crosses a trust boundary — a peer's ciphertext, signature, public
+  key, or an encoded blob — every failure is reported as a value instead:
+  `Bool` (verifiers, GCM), `Option` (GCM-SIV, HPKE open, hybrid open), or
+  `Result` (SIV, KW, sealed box, and the `_or` family below). A dedicated
+  [robustness suite](#testing) fuzzes each of those entry points with
+  truncated, extended, bit-flipped and wiped inputs.
+- **Graceful `_or` variants** — `hex_to_bytes_or`, `base64_decode_or`,
+  `chacha20_poly1305_decrypt_or`, `xchacha20_poly1305_decrypt_or`,
+  `aes_ccm_decrypt_or`, `aes_decrypt_cbc_or`, `sm4_cbc_decrypt_or`,
+  `rsa_oaep_decrypt_or` (+ `_with_or` / `_crt_or`),
+  `rsa_pkcs1_v15_decrypt_or` (+ `_crt_or`), `ml_kem_*_encaps_or` /
+  `ml_kem_*_decaps_or`, `xwing_encaps_or` / `xwing_decaps_or`, and the HPKE
+  `*_or` setup/encap/decap family return `Result` so network-facing code never
+  traps on malformed input. The RSA ones return a single uniform error for
+  every padding failure (no Bleichenbacher/Manger oracle through error text).
 - **Single source of truth** — one-shot hash entry points delegate to the
   streaming hashers, so the incremental and one-shot paths share one
   implementation.
@@ -430,6 +444,18 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `bytes_to_hex(data : Bytes) -> String` | Bytes → lowercase hex |
 | `hex_to_bytes(hex : String) -> Bytes` | hex → Bytes (aborts on bad input) |
 | `hex_to_bytes_or(hex : String) -> Result[Bytes, String]` | hex → Bytes, `Err` on bad input |
+| `chacha20_poly1305_decrypt_or(key, nonce, aad, input) -> Result[Bytes, String]` | ChaCha20-Poly1305 decrypt, `Err` instead of aborting on a bad tag |
+| `xchacha20_poly1305_decrypt_or(key, nonce24, aad, input) -> Result[Bytes, String]` | XChaCha20-Poly1305 decrypt, graceful |
+| `aes_ccm_decrypt_or(input, key, nonce, aad, mac_len) -> Result[Bytes, String]` | AES-CCM decrypt, graceful |
+| `aes_decrypt_cbc_or(data, key, iv) -> Result[Bytes, String]` | AES-CBC decrypt with **strict** PKCS#7 (the lenient original cannot tell tampering from plaintext) |
+| `sm4_cbc_decrypt_or(key, iv, data) -> Result[Bytes, String]` | SM4-CBC decrypt, graceful |
+| `rsa_oaep_decrypt_or / _with_or / _crt_or -> Result[Bytes, String]` | RSA-OAEP decrypt, uniform `Err` for every failure cause |
+| `rsa_pkcs1_v15_decrypt_or / _crt_or -> Result[Bytes, String]` | RSA PKCS#1 v1.5 decrypt, uniform `Err` |
+| `ml_kem_512/768/1024_encaps_or(ek, m) -> Result[(Bytes, Bytes), String]` | ML-KEM encapsulation, `Err` on a wrong-length peer `ek` |
+| `ml_kem_512/768/1024_decaps_or(dk, c) -> Result[Bytes, String]` | ML-KEM decapsulation, `Err` on wrong lengths (invalid `c` still gets the implicit-rejection key) |
+| `xwing_encaps_or(pk, eseed) / xwing_decaps_or(ct, sk) -> Result[_, String]` | X-Wing, graceful on wrong-length peer material |
+| `hpke_valid_pk(suite, pk) -> Bool` | Validate a peer HPKE public key / `enc` (length + on-curve for the NIST KEMs) |
+| `hpke_encap_or / auth_encap_or / decap_or / auth_decap_or / setup_s_or / setup_r_or` | HPKE with peer keys validated up front, `Err` instead of aborting |
 | `bytes_equal(a, b : Bytes) -> Bool` | Constant-time comparison |
 
 Streaming hashers (`<algo>_new` / `sha3_update` / `sha3_finalize` /
@@ -474,6 +500,29 @@ cause an `abort` with a descriptive message.
   vs the reference `blake3` Python package up to 5000 bytes).
 - **Inputs are validated, not silently padded.** Wrong key / IV / nonce / tag
   lengths `abort` immediately rather than producing wrong output.
+- **Untrusted input has a two-tier contract.** Parameter *shapes* (a key of the
+  wrong length, a nonce of the wrong size) are caller errors and abort loudly.
+  Values that arrive from a peer — ciphertexts, signatures, public keys,
+  encoded blobs — are never allowed to trap: verifiers return `false`, the
+  Option/Result APIs return `None`/`Err`, and KEM decapsulation falls back to
+  the implicit-rejection key. Every such entry point is covered by the
+  hostile-input fuzz suite (see [Testing](#testing)); where the historical API
+  aborted on an authentication failure, a graceful `_or` twin was added and the
+  original kept for compatibility.
+- **Peer public keys are validated before ECDH.** HPKE's NIST-curve KEMs
+  (P-256/P-384/P-521) check that the peer point is in range and on the curve
+  before the scalar multiply (`hpke_valid_pk`, also enforced inside `hpke_dh`);
+  without it an attacker could send a point on a different, small-order curve
+  and recover the private scalar a few bits per query (invalid-curve attack,
+  RFC 9180 §7.1.3). ECDSA, SM2 sign/verify and SM2 decryption perform the same
+  check. X25519/X448 deliberately accept any input (RFC 7748).
+- **RSA decryption errors are indistinguishable.** `rsa_oaep_decrypt_or` and
+  `rsa_pkcs1_v15_decrypt_or` return one uniform message for a wrong-length
+  ciphertext, a bad first byte, a missing separator and an lHash mismatch, so
+  the error channel cannot be used as a Bleichenbacher/Manger oracle. This does
+  not make the padding side-channel-free — timing still differs, and CBC/PKCS#1
+  v1.5 remain unauthenticated: prefer an AEAD, and never expose the result to a
+  peer without a MAC in front.
 - **No RNG.** The library provides deterministic primitives; obtain keys, IVs,
   and nonces from a secure source.
 
@@ -978,16 +1027,37 @@ sk = 1 ⇒ pubkey = G anchor; low-S BIP-62 via `sigencode_string_canonize`),
 **multi-hash RSA** PKCS1-v1.5/PSS/OAEP
 (pycryptodome, SHA-1/384/512 exact + random-salt/seed interop; OAEP-SHA512
 on a 2048-bit key),
-**sealed-box** round-trip + tamper, and property-based round-trip checks
+**sealed-box** round-trip + property-based round-trip checks
 (deterministic PRNG) for every cipher + streaming-vs-one-shot consistency.
-**555 tests.**
+
+**Hostile-input robustness** (`lib/robust_test.mbt`, 15 tests) is the
+reliability net for everything that parses bytes from a peer. A fixed
+xorshift64* PRNG (same stream on every run and every target) generates
+truncations, head drops, extensions, single-bit flips, byte replacements, byte
+swaps and full wipes of an authentic value, plus random blobs of exactly the
+right length so the parser runs *past* its first length gate. Each mutation is
+fed to the corresponding entry point — ML-DSA / SLH-DSA / Falcon / Ed25519 /
+Ed448 / ECDSA / SM2 / LMS / HSS / XMSS verification, ML-KEM / X-Wing / HPKE key
+agreement, every AEAD and RSA decryption path, the SM2 DER/PEM codecs, the
+Falcon public decoders, and the hex/Base64 decoders — and must satisfy two
+properties: it never traps (reaching the end of the suite *is* the assertion),
+and it never accepts (a mutated value is `false` / `None` / `Err`, and an
+authentic one still round-trips afterwards). The suite is written to have
+teeth: it catches a removed ML-DSA public-key length check with an
+out-of-bounds trap, and a removed HPKE on-curve check with an accepted
+invalid-curve point.
+
+**1128 tests.**
 
 ## Development
 
 The CI (`.github/workflows/moonbit-ci.yml`) installs the latest MoonBit
-toolchain and runs the four required checks — `moon check --deny-warn`,
-`moon fmt --check`, `moon info`, `moon test --deny-warn` — and verifies that
-no build artifacts are tracked. Run them locally:
+toolchain and runs three jobs: **check** (wasm32 — `moon check --deny-warn`,
+`moon fmt --check`, `moon info`, `moon test --deny-warn --release`, plus a
+guard that no build artifacts are tracked), **native64** (`moon test --target
+native --release`, where `Int` is 64-bit instead of 32-bit) and **js** (`moon
+test --target js --release`, the browser/node backend). Width-sensitive
+masking and comparison code has to be correct on all three. Run them locally:
 
 ```bash
 moon check --deny-warn
