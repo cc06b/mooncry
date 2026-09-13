@@ -1234,3 +1234,77 @@ test "robust-hpke" {
     assert_true(hpke_valid_pk(s_4, p) == (p.length() == 56))
   }
 }
+
+// ---------- X25519 / X448: hostile shares and the all-zero output ----------
+
+///|
+test "robust-xdh" {
+  let r = rb_rng(0x5832353531394FUL)
+  let sk_a = rb_bytes(r, 32)
+  let sk_b = rb_bytes(r, 32)
+  let pk_a = x25519_public_key(sk_a)
+  let pk_b = x25519_public_key(sk_b)
+  // an authentic exchange agrees and is not the degenerate output
+  match (x25519_or(sk_a, pk_b), x25519_or(sk_b, pk_a)) {
+    (Ok(s1), Ok(s2)) =>
+      assert_true(
+        rb_eq(s1, s2) && !dh_shared_is_zero(s1),
+        msg="x25519: commutativity / zero output",
+      )
+    _ => assert_true(false, msg="x25519: authentic share rejected")
+  }
+  // hostile peer share: only a wrong length is an error (RFC 7748 accepts any
+  // 32-byte u, low-order points included)
+  for u in rb_cases(r, pk_b, 12) {
+    match x25519_or(sk_a, u) {
+      Ok(s) => assert_true(u.length() == 32 && s.length() == 32)
+      Err(_) => assert_false(u.length() == 32)
+    }
+  }
+  for k in rb_cases(r, sk_a, 8) {
+    match x25519_or(k, pk_b) {
+      Ok(s) => assert_true(k.length() == 32 && s.length() == 32)
+      Err(_) => assert_false(k.length() == 32)
+    }
+  }
+  // RFC 7748 §6.1: a low-order peer point yields an all-zero shared secret and
+  // the ladder still SUCCEEDS — nothing to reject. The caller must check, so
+  // pin the behaviour instead of leaving it to luck.
+  match x25519_or(sk_a, Bytes::make(32, b'\x00')) {
+    Ok(s) =>
+      assert_true(
+        dh_shared_is_zero(s),
+        msg="x25519: u=0 must produce the zero output",
+      )
+    Err(_) => assert_true(false, msg="x25519: u=0 must complete the ladder")
+  }
+  assert_false(dh_shared_is_zero(pk_a))
+  // X448
+  let sk4_a = rb_bytes(r, 56)
+  let sk4_b = rb_bytes(r, 56)
+  let pk4_a = x448_public_key(sk4_a)
+  let pk4_b = x448_public_key(sk4_b)
+  match (x448_or(sk4_a, pk4_b), x448_or(sk4_b, pk4_a)) {
+    (Ok(s1), Ok(s2)) =>
+      assert_true(
+        rb_eq(s1, s2) && !dh_shared_is_zero(s1),
+        msg="x448: commutativity / zero output",
+      )
+    _ => assert_true(false, msg="x448: authentic share rejected")
+  }
+  for u in rb_cases(r, pk4_b, 10) {
+    match x448_or(sk4_a, u) {
+      Ok(s) => assert_true(u.length() == 56 && s.length() == 56)
+      Err(_) => assert_false(u.length() == 56)
+    }
+  }
+  match x448_or(sk4_a, Bytes::make(56, b'\x00')) {
+    Ok(s) =>
+      assert_true(
+        dh_shared_is_zero(s),
+        msg="x448: u=0 must produce the zero output",
+      )
+    Err(_) => assert_true(false, msg="x448: u=0 must complete the ladder")
+  }
+  assert_false(dh_shared_is_zero(pk4_a))
+}

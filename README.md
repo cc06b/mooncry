@@ -9,7 +9,7 @@ verified against official standard vectors.
 - **Correct** — every algorithm is checked against FIPS / NIST / RFC test
   vectors, and cross-validated against reference implementations
   (pycryptodome, cryptography, hashlib, libsodium, zlib) plus randomized
-  differential testing. 1133 tests, run with `moon test --deny-warn`.
+  differential testing. 1134 tests, run with `moon test --deny-warn`.
 - **Broad** — MD5, **SHA-1**, the SHA-2 and SHA-3 families (incl. **SHA-512/224
   and SHA-512/256**), **Keccak-256**,
   SHAKE/**cSHAKE** XOFs, **KMAC128/256**, BLAKE2b, **BLAKE2s**, BLAKE3,
@@ -40,10 +40,11 @@ verified against official standard vectors.
   `aes_ccm_decrypt_or`, `aes_decrypt_cbc_or`, `sm4_cbc_decrypt_or`,
   `rsa_oaep_decrypt_or` (+ `_with_or` / `_crt_or`),
   `rsa_pkcs1_v15_decrypt_or` (+ `_crt_or`), `ml_kem_*_encaps_or` /
-  `ml_kem_*_decaps_or`, `xwing_encaps_or` / `xwing_decaps_or`, and the HPKE
-  `*_or` setup/encap/decap family return `Result` so network-facing code never
-  traps on malformed input. The RSA ones return a single uniform error for
-  every padding failure (no Bleichenbacher/Manger oracle through error text).
+  `ml_kem_*_decaps_or`, `xwing_encaps_or` / `xwing_decaps_or`, `x25519_or` /
+  `x448_or`, and the HPKE `*_or` setup/encap/decap family return `Result` so
+  network-facing code never traps on malformed input. The RSA ones return a
+  single uniform error for every padding failure (no Bleichenbacher/Manger
+  oracle through error text).
 - **Single source of truth** — one-shot hash entry points delegate to the
   streaming hashers, so the incremental and one-shot paths share one
   implementation.
@@ -185,6 +186,12 @@ For byte-at-a-time streams prefer `sha256_update_byte` /
 `sha224_update_byte` over `update(hasher, Bytes::make(1, b))`: no `Bytes`
 allocation and a minimal hot path (~1.3x one-shot cost vs ~3.7x for
 1-byte `update` chunks).
+
+**A hasher is single-use.** `finalize` pads the internal state in place, so
+calling it twice — or calling `update` after it — produces a *wrong digest
+with no error*. Create a new hasher per message. To fork a stream mid-way
+(e.g. to try two suffixes) use `sha256_clone` / `sha512_clone` /
+`sha3_clone` and finalize the copy.
 
 ## Installation
 
@@ -377,6 +384,8 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `ecdsa_secp256k1_sign_low_s(sk, message) -> Bytes` | secp256k1 sign, BIP-62 low-S canonical |
 | `ecdsa_secp256k1_verify(pk, message, sig) -> Bool` | ECDSA secp256k1 verify |
 | `x25519(scalar, u) -> Bytes` | X25519 scalar mult (RFC 7748), DH shared secret |
+| `x25519_or(scalar, u) -> Result[Bytes, String]` | X25519 without aborting on a wrong-length peer share |
+| `dh_shared_is_zero(shared) -> Bool` | True for the all-zero X25519/X448 output a low-order peer point produces (RFC 7748 §6.1) — never use that as a key |
 | `x25519_public_key(private_key) -> Bytes` | Derive X25519 public key (base u=9) |
 | `ed448_public_key(seed) -> Bytes` | Derive 57-byte Ed448 public key |
 | `ed448_sign(seed, message) -> Bytes` | Ed448 sign (RFC 8032), 114-byte sig |
@@ -384,6 +393,7 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `ed448_verify(pk, message, sig) -> Bool` | Ed448 verify (cofactor equation) |
 | `ed448_verify_ctx(pk, message, sig, ctx) -> Bool` | Ed448 verify with context |
 | `x448(scalar, u) -> Bytes` | X448 scalar mult (RFC 7748), DH shared secret |
+| `x448_or(scalar, u) -> Result[Bytes, String]` | X448 without aborting on a wrong-length peer share |
 | `x448_public_key(private_key) -> Bytes` | Derive X448 public key (base u=5) |
 | `ml_kem_512_keygen(d, z) -> (ek, dk)` | ML-KEM-512 keygen (FIPS 203, deterministic in d,z) |
 | `ml_kem_512_encaps(ek, m) -> (K, c)` | ML-KEM-512 encapsulation |
@@ -1039,10 +1049,11 @@ right length so the parser runs *past* its first length gate. Each mutation is
 fed to the corresponding entry point — ML-DSA / SLH-DSA / Falcon / Ed25519 /
 Ed448 / ECDSA / SM2 / LMS / HSS / XMSS verification, ML-KEM / X-Wing / HPKE key
 agreement, every AEAD and RSA decryption path, the SM2 DER/PEM codecs, the
-Falcon public decoders, and the hex/Base64 decoders — and must satisfy two
-properties: it never traps (reaching the end of the suite *is* the assertion),
-and it never accepts (a mutated value is `false` / `None` / `Err`, and an
-authentic one still round-trips afterwards). The suite is written to have
+Falcon public decoders, the hex/Base64 decoders, and X25519/X448 shares — and
+must satisfy two properties: it never traps (reaching the end of the suite *is*
+the assertion), and it never accepts (a mutated value is `false` / `None` /
+`Err`, and an authentic one still round-trips afterwards). The suite is written
+to have
 teeth: it catches a removed ML-DSA public-key length check with an
 out-of-bounds trap, and a removed HPKE on-curve check with an accepted
 invalid-curve point.
@@ -1061,7 +1072,7 @@ keys with 0/1/2 AD entries, AES-KW, AES-CBC (including the PKCS#7 full extra
 padding block on exact multiples of 16) and CTR, SM4-CBC/CTR, the sealed box,
 the ML-KEM hybrid envelope and the SM2 GM/T 0009 envelope.
 
-**1133 tests.**
+**1134 tests.**
 
 ## Development
 

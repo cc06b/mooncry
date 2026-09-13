@@ -24,6 +24,17 @@ pub fn x448(scalar : Bytes, u : Bytes) -> Bytes {
 }
 
 ///|
+/// X448 without aborting: `Err` when the scalar or the peer's `u` is not
+/// 56 bytes, `Ok(shared)` otherwise. See `x25519_or` — including the
+/// low-order-point warning, which `dh_shared_is_zero` covers.
+pub fn x448_or(scalar : Bytes, u : Bytes) -> Result[Bytes, String] {
+  if scalar.length() != 56 || u.length() != 56 {
+    return Err("x448: scalar and u must be 56 bytes")
+  }
+  Ok(x448_ladder_native(scalar, u))
+}
+
+///|
 /// Derive the X448 public key (u = scalar * base point u=5).
 pub fn x448_public_key(private_key : Bytes) -> Bytes {
   let base = Array::make(56, b'\x00')

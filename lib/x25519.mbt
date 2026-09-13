@@ -38,6 +38,36 @@ pub fn x25519(scalar : Bytes, u : Bytes) -> Bytes {
 }
 
 ///|
+/// X25519 without aborting: `Err` when the scalar or the peer's `u` is not
+/// 32 bytes, `Ok(shared)` otherwise. `u` crosses a trust boundary in every
+/// real protocol, so a network-facing caller should prefer this over
+/// `x25519`.
+///
+/// SECURITY: RFC 7748 §6.1 — the ladder *succeeds* on a low-order peer point
+/// and returns 32 zero bytes; there is nothing to reject and no error to
+/// report. Never use the raw output as a key: hash it (as HPKE and X-Wing do)
+/// or check it with `dh_shared_is_zero`.
+pub fn x25519_or(scalar : Bytes, u : Bytes) -> Result[Bytes, String] {
+  if scalar.length() != 32 || u.length() != 32 {
+    return Err("x25519: scalar and u must be 32 bytes")
+  }
+  Ok(x25519_ladder(x25519_clamp(scalar), u))
+}
+
+///|
+/// True when a Diffie-Hellman result is the all-zero output that RFC 7748
+/// §6.1 warns about (the peer sent a low-order point). Such a shared secret
+/// carries no entropy and must never be used as a key. Applies to X25519 and
+/// X448 alike; constant-time in the bytes it inspects.
+pub fn dh_shared_is_zero(shared : Bytes) -> Bool {
+  let mut acc = 0
+  for i in 0..<shared.length() {
+    acc = acc | shared[i].to_int()
+  }
+  acc == 0
+}
+
+///|
 /// Convenience: derive an X25519 public key from a 32-byte private scalar
 /// (base point u = 9).
 pub fn x25519_public_key(private_key : Bytes) -> Bytes {
