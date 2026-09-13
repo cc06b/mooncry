@@ -117,6 +117,11 @@ pub fn sm2_pk_to_spki_der(pk : Bytes) -> Bytes {
 ///|
 /// Read a DER length at `pos`; returns (len, next_pos) or (-1, pos) on
 /// invalid/reserved forms. Indefinite and multi-byte (>2) lengths rejected.
+///
+/// Also rejects a long form that is not the shortest possible encoding
+/// (X.690 §10.1): accepting `81 06` where `06` is legal would make the
+/// encoding malleable — several distinct blobs decoding to one value — and
+/// would break the decode/encode identity the fuzz suite asserts.
 fn sm2_der_read_len(der : Bytes, pos : Int) -> (Int, Int) {
   if pos >= der.length() {
     return (-1, pos)
@@ -133,7 +138,28 @@ fn sm2_der_read_len(der : Bytes, pos : Int) -> (Int, Int) {
   for i in 0..<nbytes {
     v = (v << 8) | der[pos + 1 + i].to_int()
   }
+  if v < 0x80 || (nbytes == 2 && v < 0x100) {
+    return (-1, pos)
+  }
   (v, pos + 1 + nbytes)
+}
+
+///|
+/// Bounds-checked single-byte read: the byte at `pos` as an Int, or -1 when
+/// `pos` is outside the buffer.
+///
+/// RELIABILITY: every hand-written DER parser in this library must read
+/// through this (or through `sm2_der_expect`) instead of indexing `der[pos]`
+/// directly. A hostile blob that is a valid DER *prefix* — e.g. a SPKI whose
+/// content is exactly the AlgorithmIdentifier with nothing after it — leaves
+/// `pos == der.length()` at the next tag check, and a direct index there is a
+/// remotely triggerable out-of-bounds trap.
+fn sm2_der_byte(der : Bytes, pos : Int) -> Int {
+  if pos < 0 || pos >= der.length() {
+    -1
+  } else {
+    der[pos].to_int()
+  }
 }
 
 ///|
@@ -173,14 +199,14 @@ pub fn sm2_pkcs8_der_to_sk(der : Bytes) -> (Bytes, Bool) {
     return fail
   }
   // outer OCTET STRING wrapping the ECPrivateKey SEQUENCE
-  if der[p3] != (4).to_byte() {
+  if sm2_der_byte(der, p3) != 4 {
     return fail
   }
   let (oct_len, p4) = sm2_der_read_len(der, p3 + 1)
   if oct_len < 0 || p4 + oct_len != der.length() {
     return fail
   }
-  if der[p4] != (0x30).to_byte() {
+  if sm2_der_byte(der, p4) != 0x30 {
     return fail
   }
   let (inner_len, p5) = sm2_der_read_len(der, p4 + 1)
@@ -193,7 +219,7 @@ pub fn sm2_pkcs8_der_to_sk(der : Bytes) -> (Bytes, Bool) {
     return fail
   }
   // privateKey OCTET STRING (32)
-  if der[p6] != (4).to_byte() {
+  if sm2_der_byte(der, p6) != 4 {
     return fail
   }
   let (sk_len, p7) = sm2_der_read_len(der, p6 + 1)
@@ -204,21 +230,21 @@ pub fn sm2_pkcs8_der_to_sk(der : Bytes) -> (Bytes, Bool) {
   // optional [1] publicKey — if present, must be BIT STRING(00||04||x||y)
   let p8 = p7 + 32
   if p8 < p5 + inner_len {
-    if der[p8] != (0xA1).to_byte() {
+    if sm2_der_byte(der, p8) != 0xA1 {
       return fail
     }
     let (a1_len, p9) = sm2_der_read_len(der, p8 + 1)
     if a1_len < 0 || p9 + a1_len != p5 + inner_len {
       return fail
     }
-    if der[p9] != (3).to_byte() {
+    if sm2_der_byte(der, p9) != 3 {
       return fail
     }
     let (bs_len, p10) = sm2_der_read_len(der, p9 + 1)
     if bs_len != 66 || p10 + 66 != p9 + a1_len {
       return fail
     }
-    if der[p10] != (0).to_byte() || der[p10 + 1] != (4).to_byte() {
+    if sm2_der_expect(der, p10, [(0).to_byte(), (4).to_byte()]) < 0 {
       return fail
     }
   }
@@ -240,14 +266,14 @@ pub fn sm2_spki_der_to_pk(der : Bytes) -> (Bytes, Bool) {
   if p2 < 0 {
     return fail
   }
-  if der[p2] != (3).to_byte() {
+  if sm2_der_byte(der, p2) != 3 {
     return fail
   }
   let (bs_len, p3) = sm2_der_read_len(der, p2 + 1)
   if bs_len != 66 || p3 + 66 != der.length() {
     return fail
   }
-  if der[p3] != (0).to_byte() || der[p3 + 1] != (4).to_byte() {
+  if sm2_der_expect(der, p3, [(0).to_byte(), (4).to_byte()]) < 0 {
     return fail
   }
   (ec_slice(der, p3 + 1, 65), true)

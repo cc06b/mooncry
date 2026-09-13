@@ -253,6 +253,57 @@ fn sm2_der_int_bytes(v : Bytes) -> Array[Byte] {
 }
 
 ///|
+/// Read a DER `INTEGER` at `pos` into a right-aligned `width`-byte big-endian
+/// value. Returns (value, next_pos), or (b"", -1) on any malformed input.
+///
+/// Strict in the two ways that matter for a parser fed by peers:
+///   * every read is bounds-checked (`sm2_der_byte` / `sm2_der_read_len`), so a
+///     truncated TLV cannot index past the end of the buffer;
+///   * the encoding must be minimal (X.690 DER): a leading 0x00 is accepted
+///     only as the sign pad of a value whose top bit is set. Without that a
+///     peer can offer several distinct encodings of the same integer
+///     (malleability), and re-encoding a decoded value would not round-trip.
+///
+/// INTEGER zero is accepted here (it is minimally encoded as 02 01 00);
+/// whether zero is *meaningful* is the caller's business (sm2_verify rejects
+/// r < 1, sm2_decrypt rejects a point that is not on the curve).
+fn sm2_der_int(der : Bytes, pos : Int, width : Int) -> (Bytes, Int) {
+  let bad = (b"", -1)
+  if sm2_der_byte(der, pos) != 2 {
+    return bad
+  }
+  let (lv, p) = sm2_der_read_len(der, pos + 1)
+  if lv < 1 || lv > width + 1 || p + lv > der.length() {
+    return bad
+  }
+  let vend = p + lv
+  if lv == 1 && sm2_der_byte(der, p) == 0 {
+    return (Bytes::make(width, (0).to_byte()), vend)
+  }
+  let mut vs = p
+  let padded = sm2_der_byte(der, vs) == 0
+  if padded {
+    // a sign pad must be needed by the value that follows it
+    if sm2_der_byte(der, vs + 1) < 0x80 {
+      return bad
+    }
+    vs = vs + 1
+  } else if sm2_der_byte(der, vs) >= 0x80 {
+    // top bit set with no pad: a negative INTEGER, invalid for these fields
+    return bad
+  }
+  let vlen = vend - vs
+  if vlen < 1 || vlen > width {
+    return bad
+  }
+  let out = Array::make(width, (0).to_byte())
+  for i in 0..<vlen {
+    out[width - vlen + i] = der[vs + i]
+  }
+  (Bytes::from_array(out), vend)
+}
+
+///|
 /// Encode a raw C1||C3||C2 ciphertext into the openssl/ASN.1 DER form
 /// SEQUENCE { INTEGER x1, INTEGER y1, OCTET STRING C3, OCTET STRING C2 }.
 pub fn sm2_ct_to_der(ct : Bytes) -> Bytes {
@@ -295,113 +346,39 @@ pub fn sm2_ct_from_der(der : Bytes) -> (Bytes, Bool) {
   if der.length() < 10 || der[0] != (0x30).to_byte() {
     return fail
   }
-  let mut pos = 1
-  // outer length
-  let l0 = der[pos].to_int()
-  pos = pos + 1
-  let total = if l0 < 0x80 {
-    l0
-  } else if l0 == 0x81 {
-    let v = der[pos].to_int()
-    pos = pos + 1
-    v
-  } else if l0 == 0x82 {
-    let v = (der[pos].to_int() << 8) | der[pos + 1].to_int()
-    pos = pos + 2
-    v
-  } else {
-    return fail
-  }
-  if pos + total != der.length() {
+  let (total, pos0) = sm2_der_read_len(der, 1)
+  if total < 0 || pos0 + total != der.length() {
     return fail
   }
   let end = der.length()
-  // INTEGER x1
-  if der[pos] != (2).to_byte() {
+  // INTEGER x1, INTEGER y1
+  let (x1, pos1) = sm2_der_int(der, pos0, 32)
+  if pos1 < 0 {
     return fail
   }
-  pos = pos + 1
-  let lx = der[pos].to_int()
-  pos = pos + 1
-  if lx > 33 || pos + lx > end {
+  let (y1, pos2) = sm2_der_int(der, pos1, 32)
+  if pos2 < 0 {
     return fail
   }
-  let mut xs = pos
-  pos = pos + lx
-  while xs < pos - 1 && der[xs] == (0).to_byte() {
-    xs = xs + 1
-  }
-  let xlen = pos - xs
-  if xlen > 32 {
+  // OCTET STRING C3 (32 bytes)
+  if sm2_der_byte(der, pos2) != 4 {
     return fail
   }
-  let x1 = Array::make(32, (0).to_byte())
-  for i in 0..<xlen {
-    x1[32 - xlen + i] = der[xs + i]
-  }
-  // INTEGER y1
-  if der[pos] != (2).to_byte() {
+  let (l3, pos3) = sm2_der_read_len(der, pos2 + 1)
+  if l3 != 32 || pos3 + 32 > end {
     return fail
   }
-  pos = pos + 1
-  let ly = der[pos].to_int()
-  pos = pos + 1
-  if ly > 33 || pos + ly > end {
+  let c3 = ec_slice(der, pos3, 32)
+  let pos4 = pos3 + 32
+  // OCTET STRING C2 (>= 1 byte, running exactly to the end: no trailing data)
+  if sm2_der_byte(der, pos4) != 4 {
     return fail
   }
-  let mut ys = pos
-  pos = pos + ly
-  while ys < pos - 1 && der[ys] == (0).to_byte() {
-    ys = ys + 1
-  }
-  let ylen = pos - ys
-  if ylen > 32 {
+  let (l2, pos5) = sm2_der_read_len(der, pos4 + 1)
+  if l2 < 1 || pos5 + l2 != end {
     return fail
   }
-  let y1 = Array::make(32, (0).to_byte())
-  for i in 0..<ylen {
-    y1[32 - ylen + i] = der[ys + i]
-  }
-  // OCTET STRING C3
-  if der[pos] != (4).to_byte() {
-    return fail
-  }
-  pos = pos + 1
-  let l3 = der[pos].to_int()
-  pos = pos + 1
-  if l3 != 32 || pos + 32 > end {
-    return fail
-  }
-  let c3 = Array::make(32, (0).to_byte())
-  for i in 0..<32 {
-    c3[i] = der[pos + i]
-  }
-  pos = pos + 32
-  // OCTET STRING C2
-  if der[pos] != (4).to_byte() {
-    return fail
-  }
-  pos = pos + 1
-  let l2b = der[pos].to_int()
-  pos = pos + 1
-  let l2 = if l2b < 0x80 {
-    l2b
-  } else if l2b == 0x81 {
-    let v = der[pos].to_int()
-    pos = pos + 1
-    v
-  } else if l2b == 0x82 {
-    let v = (der[pos].to_int() << 8) | der[pos + 1].to_int()
-    pos = pos + 2
-    v
-  } else {
-    return fail
-  }
-  if pos + l2 != end || l2 < 1 {
-    return fail
-  }
-  let out : Array[Byte] = []
-  out.push((4).to_byte())
+  let out : Array[Byte] = [(4).to_byte()]
   for b in x1 {
     out.push(b)
   }
@@ -412,9 +389,9 @@ pub fn sm2_ct_from_der(der : Bytes) -> (Bytes, Bool) {
     out.push(b)
   }
   for i in 0..<l2 {
-    out.push(der[pos + i])
+    out.push(der[pos5 + i])
   }
-  (Bytes::from_array(out[:]), true)
+  (Bytes::from_array(out), true)
 }
 
 ///|
@@ -444,52 +421,24 @@ pub fn sm2_sig_from_der(der : Bytes) -> (Bytes, Bool) {
   if der.length() < 8 || der[0] != (0x30).to_byte() {
     return fail
   }
-  let mut pos = 1
-  let l0 = der[pos].to_int()
-  pos = pos + 1
-  let total = if l0 < 0x80 {
-    l0
-  } else if l0 == 0x81 {
-    let v = der[pos].to_int()
-    pos = pos + 1
-    v
-  } else {
+  let (total, pos0) = sm2_der_read_len(der, 1)
+  if total < 0 || pos0 + total != der.length() {
     return fail
   }
-  if pos + total != der.length() {
+  let (r, pos1) = sm2_der_int(der, pos0, 32)
+  if pos1 < 0 {
     return fail
   }
-  let out = Array::make(64, (0).to_byte())
-  for half in 0..<2 {
-    if pos >= der.length() || der[pos] != (2).to_byte() {
-      return fail
-    }
-    pos = pos + 1
-    let lv = der[pos].to_int()
-    pos = pos + 1
-    if lv < 1 || lv > 33 || pos + lv > der.length() {
-      return fail
-    }
-    let mut vs = pos
-    let vend = pos + lv
-    pos = vend
-    // strip a single leading zero pad
-    if vs < vend - 1 && der[vs] == (0).to_byte() {
-      vs = vs + 1
-    }
-    let vlen = vend - vs
-    if vlen > 32 {
-      return fail
-    }
-    if der[vs].to_int() >= 0x80 && vlen == lv && lv <= 32 {
-      // high bit set without padding -> negative INTEGER, invalid here
-      return fail
-    }
-    for i in 0..<vlen {
-      out[half * 32 + 32 - vlen + i] = der[vs + i]
-    }
+  let (sv, pos2) = sm2_der_int(der, pos1, 32)
+  if pos2 < 0 {
+    return fail
   }
-  (Bytes::from_array(out[:]), true)
+  // No trailing bytes inside the SEQUENCE: a lax parser would accept several
+  // distinct encodings of one signature (malleability).
+  if pos2 != der.length() {
+    return fail
+  }
+  (concat_bytes(r, sv), true)
 }
 
 // ==================== SM2 sealed envelope (GM/T 0009 style) ====================
