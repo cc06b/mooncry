@@ -62,16 +62,33 @@ fn zuc_l2(x : UInt64) -> UInt64 {
 }
 
 ///|
+/// Widen an S-box to UInt64 once, at module load.
+fn zuc_widen_sbox(t : Array[Byte]) -> Array[UInt64] {
+  let a = Array::make(t.length(), 0UL)
+  for i in 0..<t.length() {
+    a[i] = t[i].to_int().to_uint64()
+  }
+  a
+}
+
+///|
+/// S0 widened to UInt64: F looks up eight table entries per clock and each
+/// `Byte.to_int().to_uint64()` on the way out costs more than the 4 KiB of
+/// extra table.
+let zuc_s0u : Array[UInt64] = zuc_widen_sbox(zuc_s0)
+
+///|
+/// S1 widened to UInt64 (see `zuc_s0u`).
+let zuc_s1u : Array[UInt64] = zuc_widen_sbox(zuc_s1)
+
+///|
 /// Pack four S-box outputs into one 32-bit word: S0|S1|S0|S1.
 fn zuc_sbox_word(v : UInt64) -> UInt64 {
   let b0 = ((v >> 24) & 0xFFUL).to_int()
   let b1 = ((v >> 16) & 0xFFUL).to_int()
   let b2 = ((v >> 8) & 0xFFUL).to_int()
   let b3 = (v & 0xFFUL).to_int()
-  (zuc_s0[b0].to_int().to_uint64() << 24) |
-  (zuc_s1[b1].to_int().to_uint64() << 16) |
-  (zuc_s0[b2].to_int().to_uint64() << 8) |
-  zuc_s1[b3].to_int().to_uint64()
+  (zuc_s0u[b0] << 24) | (zuc_s1u[b1] << 16) | (zuc_s0u[b2] << 8) | zuc_s1u[b3]
 }
 
 ///|
@@ -118,15 +135,35 @@ fn zuc_lfsr_init(st : ZucState, u : UInt64) -> Unit {
   v = zuc_add31(v, zuc_rot31(l[13], 17))
   v = zuc_add31(v, zuc_rot31(l[15], 15))
   v = zuc_add31(v, u)
-  for i in 0..<15 {
-    l[i] = l[i + 1]
-  }
+  // unrolled shift, see zuc_lfsr_work
+  l[0] = l[1]
+  l[1] = l[2]
+  l[2] = l[3]
+  l[3] = l[4]
+  l[4] = l[5]
+  l[5] = l[6]
+  l[6] = l[7]
+  l[7] = l[8]
+  l[8] = l[9]
+  l[9] = l[10]
+  l[10] = l[11]
+  l[11] = l[12]
+  l[12] = l[13]
+  l[13] = l[14]
+  l[14] = l[15]
   l[15] = v
 }
 
 ///|
 /// One LFSR clock in work mode. The reference accumulates the five feedback
 /// terms in 64 bits before folding twice, so the sum is done the same way here.
+///
+/// The one-cell shift is written out as 15 constant-index copies instead of
+/// `for i in 0..<15 { l[i] = l[i + 1] }`: ~5% off the keystream path on an idle
+/// machine and ~20% when the machine is loaded (the loop form is 15 extra
+/// bounds-checked loads and stores per word). Deleting the shift entirely was
+/// no faster than this, so a ring-buffer state has nothing left to win —
+/// which matters, because it would need a new field in the public `ZucState`.
 fn zuc_lfsr_work(st : ZucState) -> Unit {
   let l = st.lfsr
   let mut a = l[0]
@@ -137,9 +174,21 @@ fn zuc_lfsr_work(st : ZucState) -> Unit {
   a = a + (l[15] << 15)
   a = (a & zuc_m31) + (a >> 31)
   let v = (a & zuc_m31) + (a >> 31)
-  for i in 0..<15 {
-    l[i] = l[i + 1]
-  }
+  l[0] = l[1]
+  l[1] = l[2]
+  l[2] = l[3]
+  l[3] = l[4]
+  l[4] = l[5]
+  l[5] = l[6]
+  l[6] = l[7]
+  l[7] = l[8]
+  l[8] = l[9]
+  l[9] = l[10]
+  l[10] = l[11]
+  l[11] = l[12]
+  l[12] = l[13]
+  l[13] = l[14]
+  l[14] = l[15]
   l[15] = v
 }
 
@@ -191,6 +240,55 @@ pub fn zuc_next_word(st : ZucState) -> UInt64 {
 }
 
 ///|
+/// Store one keystream word big-endian at `off`.
+fn zuc_put_word(out : Array[Byte], off : Int, v : UInt64) -> Unit {
+  out[off] = ((v >> 24) & 0xFFUL).to_int().to_byte()
+  out[off + 1] = ((v >> 16) & 0xFFUL).to_int().to_byte()
+  out[off + 2] = ((v >> 8) & 0xFFUL).to_int().to_byte()
+  out[off + 3] = (v & 0xFFUL).to_int().to_byte()
+}
+
+///|
+/// Draw `nwords` words from `st` into `out` (big-endian, 4 bytes each); `out`
+/// must hold exactly 4 * nwords bytes.
+fn zuc_words_into(st : ZucState, out : Array[Byte], nwords : Int) -> Unit {
+  for i in 0..<nwords {
+    let z = zuc_next_word(st)
+    let off = i * 4
+    out[off] = ((z >> 24) & 0xFFUL).to_int().to_byte()
+    out[off + 1] = ((z >> 16) & 0xFFUL).to_int().to_byte()
+    out[off + 2] = ((z >> 8) & 0xFFUL).to_int().to_byte()
+    out[off + 3] = (z & 0xFFUL).to_int().to_byte()
+  }
+}
+
+///|
+/// XOR the keystream of `st` into the first `n` bytes of `data`, writing to
+/// `out` (which must be at least `n` bytes). One word at a time, so no
+/// keystream buffer is materialised: half the allocation of generating the
+/// keystream up front, and one pass over the data instead of two. The final
+/// partial word is applied only as far as the data reaches, so `n` need not be
+/// a multiple of four.
+///
+/// An unrolled variant with four constant shifts and an explicit tail measured
+/// within noise of this loop, so the compact form stays.
+fn zuc_xor_into(
+  st : ZucState,
+  data : Bytes,
+  out : Array[Byte],
+  n : Int,
+) -> Unit {
+  for i = 0; i < n; i = i + 4 {
+    let z = zuc_next_word(st)
+    let take = if n - i < 4 { n - i } else { 4 }
+    for j in 0..<take {
+      let s = ((z >> (24 - j * 8)) & 0xFFUL).to_int()
+      out[i + j] = (data[i + j].to_int() ^ s).to_byte()
+    }
+  }
+}
+
+///|
 /// `nwords` keystream words as a big-endian byte string (4 * nwords bytes).
 /// This is the raw ZUC keystream: 128-EEA3 is its XOR against the plaintext,
 /// and the words are also what the EIA3 MAC consumes.
@@ -198,13 +296,7 @@ pub fn zuc_keystream(key : Bytes, iv : Bytes, nwords : Int) -> Bytes {
   guard nwords >= 0 else { abort("zuc_keystream: nwords must be non-negative") }
   let st = zuc_init(key, iv)
   let out = Array::make(nwords * 4, (0).to_byte())
-  for i in 0..<nwords {
-    let z = zuc_next_word(st)
-    out[i * 4] = ((z >> 24) & 0xFFUL).to_int().to_byte()
-    out[i * 4 + 1] = ((z >> 16) & 0xFFUL).to_int().to_byte()
-    out[i * 4 + 2] = ((z >> 8) & 0xFFUL).to_int().to_byte()
-    out[i * 4 + 3] = (z & 0xFFUL).to_int().to_byte()
-  }
+  zuc_words_into(st, out, nwords)
   Bytes::from_array(out)
 }
 
@@ -219,11 +311,8 @@ pub fn zuc_keystream(key : Bytes, iv : Bytes, nwords : Int) -> Bytes {
 /// for the 3GPP confidentiality algorithm.
 pub fn zuc_xor(key : Bytes, iv : Bytes, data : Bytes) -> Bytes {
   let n = data.length()
-  let nwords = (n + 3) / 4
-  let ks = zuc_keystream(key, iv, nwords)
+  let st = zuc_init(key, iv)
   let out = Array::make(n, (0).to_byte())
-  for i in 0..<n {
-    out[i] = (data[i].to_int() ^ ks[i].to_int()).to_byte()
-  }
+  zuc_xor_into(st, data, out, n)
   Bytes::from_array(out)
 }

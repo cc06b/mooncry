@@ -1368,3 +1368,107 @@ test "robust-falcon-degenerate" {
   }
   let _ = r
 }
+
+///|
+test "robust-zuc" {
+  let r = rb_rng(0x5A3C2562EEA3UL)
+  let key16 = rb_bytes(r, 16)
+  let key32 = rb_bytes(r, 32)
+  let iv16 = rb_bytes(r, 16)
+  let iv23 = rb_bytes(r, 23)
+  let count = 0x9E3779B9U
+  // 67 bytes = 536 bits: not a keystream-word multiple, so the tail paths run
+  let msg = rb_bytes(r, 67)
+  let nbits = msg.length() * 8
+  // ---- 128-EIA3: hostile message, hostile tag, hostile key --------------
+  // In a real stack the message and the MAC-I both come off the air interface,
+  // while COUNT/BEARER/DIRECTION are validated integers and the key is local.
+  // LENGTH is a shape contract (data must hold exactly ceil(nbits/8) bytes),
+  // so every mutated buffer is paired with the nbits derived from its own
+  // length: verify must never trap, and must accept only the authentic pair.
+  let mac4 = zuc_eia3_mac(key16, count, 3, 1, nbits, msg)
+  for m in rb_cases(r, msg, 10) {
+    let nb = m.length() * 8
+    for t in rb_cases(r, mac4, 4) {
+      assert_true(
+        zuc_eia3_verify(key16, count, 3, 1, nb, m, t) ==
+        (nb == nbits && rb_eq(m, msg) && rb_eq(t, mac4)),
+        msg="eia3: forged (message, tag) accepted",
+      )
+    }
+  }
+  // key length is contract, so mutate content only
+  for k in rb_flips(r, key16, 6) {
+    assert_true(
+      zuc_eia3_verify(k, count, 3, 1, nbits, msg, mac4) == rb_eq(k, key16),
+      msg="eia3: wrong key accepted",
+    )
+  }
+  // ---- ZUC-256 MAC: all three tag sizes ---------------------------------
+  for macbits in [32, 64, 128] {
+    let tag = zuc256_mac(key32, iv23, macbits, nbits, msg)
+    assert_true(
+      tag.length() == macbits / 8,
+      msg="zuc256 mac: tag length at macbits=" + macbits.to_string(),
+    )
+    for m in rb_cases(r, msg, 8) {
+      let nb = m.length() * 8
+      for t in rb_cases(r, tag, 4) {
+        assert_true(
+          zuc256_mac_verify(key32, iv23, macbits, nb, m, t) ==
+          (nb == nbits && rb_eq(m, msg) && rb_eq(t, tag)),
+          msg="zuc256 mac: forged (message, tag) accepted",
+        )
+      }
+    }
+    for v in rb_flips(r, iv23, 4) {
+      assert_true(
+        zuc256_mac_verify(key32, v, macbits, nbits, msg, tag) == rb_eq(v, iv23),
+        msg="zuc256 mac: wrong iv accepted",
+      )
+    }
+    for k in rb_flips(r, key32, 4) {
+      assert_true(
+        zuc256_mac_verify(k, iv23, macbits, nbits, msg, tag) == rb_eq(k, key32),
+        msg="zuc256 mac: wrong key accepted",
+      )
+    }
+  }
+  // ---- stream paths: no trap, involutive, and length-preserving ---------
+  for d in rb_cases(r, msg, 10) {
+    let ct = zuc_xor(key16, iv16, d)
+    assert_true(ct.length() == d.length(), msg="zuc_xor: length changed")
+    assert_true(
+      rb_eq(zuc_xor(key16, iv16, ct), d),
+      msg="zuc_xor: not involutive",
+    )
+    let ct2 = zuc256_xor(key32, iv23, d)
+    assert_true(ct2.length() == d.length(), msg="zuc256_xor: length changed")
+    assert_true(
+      rb_eq(zuc256_xor(key32, iv23, ct2), d),
+      msg="zuc256_xor: not involutive",
+    )
+    // a byte-multiple LENGTH means 128-EEA3 masks nothing, so the round trip
+    // must recover the buffer exactly
+    let nb = d.length() * 8
+    let c3 = zuc_eea3_encrypt(key16, count, 3, 1, nb, d)
+    assert_true(c3.length() == d.length(), msg="eea3: length changed")
+    assert_true(
+      rb_eq(zuc_eea3_decrypt(key16, count, 3, 1, nb, c3), d),
+      msg="eea3: round trip",
+    )
+    // and the ciphertext really depends on the key: no key may reproduce
+    // another key's ciphertext. (Skipped for the empty buffer — with nothing to
+    // encrypt every key gives the empty ciphertext, so the property is vacuous
+    // there rather than violated.)
+    if d.length() > 0 {
+      for k in rb_flips(r, key16, 2) {
+        assert_true(
+          rb_eq(zuc_eea3_encrypt(k, count, 3, 1, nb, d), c3) == rb_eq(k, key16),
+          msg="eea3: wrong key gave the same ciphertext",
+        )
+      }
+    }
+  }
+  let _ = r
+}

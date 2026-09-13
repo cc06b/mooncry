@@ -108,13 +108,7 @@ pub fn zuc256_keystream(key : Bytes, iv : Bytes, nwords : Int) -> Bytes {
   }
   let st = zuc256_init(key, iv)
   let out = Array::make(nwords * 4, (0).to_byte())
-  for i in 0..<nwords {
-    let z = zuc_next_word(st)
-    out[i * 4] = ((z >> 24) & 0xFFUL).to_int().to_byte()
-    out[i * 4 + 1] = ((z >> 16) & 0xFFUL).to_int().to_byte()
-    out[i * 4 + 2] = ((z >> 8) & 0xFFUL).to_int().to_byte()
-    out[i * 4 + 3] = (z & 0xFFUL).to_int().to_byte()
-  }
+  zuc_words_into(st, out, nwords)
   Bytes::from_array(out)
 }
 
@@ -124,42 +118,114 @@ pub fn zuc256_keystream(key : Bytes, iv : Bytes, nwords : Int) -> Bytes {
 /// not a 3GPP mode.
 pub fn zuc256_xor(key : Bytes, iv : Bytes, data : Bytes) -> Bytes {
   let n = data.length()
-  let ks = zuc256_keystream(key, iv, (n + 3) / 4)
+  let st = zuc256_init(key, iv)
   let out = Array::make(n, (0).to_byte())
-  for i in 0..<n {
-    out[i] = (data[i].to_int() ^ ks[i].to_int()).to_byte()
-  }
+  zuc_xor_into(st, data, out, n)
   Bytes::from_array(out)
 }
 
 ///|
-/// One ZUC-256 MAC round over `n` message bits: for every set message bit the
-/// whole n-word accumulator is XORed with the n-word key register, and the key
-/// register slides left by one bit per message bit with the fresh keystream
-/// word K1 feeding its tail.
-fn zuc256_mac_round(
-  t : Array[UInt64],
-  k0 : Array[UInt64],
-  m0 : UInt64,
-  nbits : Int,
-  k1_0 : UInt64,
-) -> Unit {
-  let n = t.length()
-  let mut m = m0
-  let mut k1 = k1_0
-  for _i = 0; _i < nbits; _i = _i + 1 {
-    if (m & 0x80000000UL) != 0UL {
-      for j in 0..<n {
-        t[j] = t[j] ^ k0[j]
-      }
+/// ZUC-256 MAC body for a 32-bit tag: one accumulator word and a two-word key
+/// register (the key word `r0` plus the fresh keystream word `r1` that feeds
+/// its tail).
+///
+/// All three tag sizes keep the accumulator and the key register in locals
+/// rather than arrays. The register slides one bit per message bit, so over
+/// 8192 bits an array-based register pays a bounds-checked load *and* store per
+/// word per bit — several times the cost of the shifts and XORs themselves
+/// (measured: 480 µs per 1 KiB with an array register, 122 µs with locals).
+/// The conditional XOR is a masked AND rather than a branch: the two measured
+/// the same, and this way the round's cost does not depend on the message bits
+/// at all. `nwords` full 32-bit words are consumed, then one `rem`-bit
+/// word when rem > 0 (bits past `rem` in it are never read: `zuc_word_at`
+/// zero-pads and the inner loop stops at `rem`).
+fn zuc256_mac32(st : ZucState, data : Bytes, nwords : Int, rem : Int) -> UInt64 {
+  let mut t0 = zuc_next_word(st)
+  let mut r0 = zuc_next_word(st)
+  let rounds = nwords + (if rem > 0 { 1 } else { 0 })
+  for w in 0..<rounds {
+    let mut r1 = zuc_next_word(st)
+    let mut m = zuc_word_at(data, w * 4)
+    let nb = if w < nwords { 32 } else { rem }
+    for _i in 0..<nb {
+      let mask = ((m >> 31) & 1UL) * zuc_m32
+      t0 = t0 ^ (r0 & mask)
+      r0 = ((r0 << 1) | (r1 >> 31)) & zuc_m32
+      r1 = (r1 << 1) & zuc_m32
+      m = (m << 1) & zuc_m32
     }
-    m = (m << 1) & zuc_m32
-    for j = 0; j < n - 1; j = j + 1 {
-      k0[j] = ((k0[j] << 1) | (k0[j + 1] >> 31)) & zuc_m32
-    }
-    k0[n - 1] = ((k0[n - 1] << 1) | (k1 >> 31)) & zuc_m32
-    k1 = (k1 << 1) & zuc_m32
   }
+  t0 ^ r0
+}
+
+///|
+/// ZUC-256 MAC body for a 64-bit tag: two accumulator words and a three-word
+/// key register. See `zuc256_mac32` for the shape of the loop.
+fn zuc256_mac64(
+  st : ZucState,
+  data : Bytes,
+  nwords : Int,
+  rem : Int,
+) -> (UInt64, UInt64) {
+  let mut t0 = zuc_next_word(st)
+  let mut t1 = zuc_next_word(st)
+  let mut r0 = zuc_next_word(st)
+  let mut r1 = zuc_next_word(st)
+  let rounds = nwords + (if rem > 0 { 1 } else { 0 })
+  for w in 0..<rounds {
+    let mut r2 = zuc_next_word(st)
+    let mut m = zuc_word_at(data, w * 4)
+    let nb = if w < nwords { 32 } else { rem }
+    for _i in 0..<nb {
+      let mask = ((m >> 31) & 1UL) * zuc_m32
+      t0 = t0 ^ (r0 & mask)
+      t1 = t1 ^ (r1 & mask)
+      r0 = ((r0 << 1) | (r1 >> 31)) & zuc_m32
+      r1 = ((r1 << 1) | (r2 >> 31)) & zuc_m32
+      r2 = (r2 << 1) & zuc_m32
+      m = (m << 1) & zuc_m32
+    }
+  }
+  (t0 ^ r0, t1 ^ r1)
+}
+
+///|
+/// ZUC-256 MAC body for a 128-bit tag: four accumulator words and a five-word
+/// key register. See `zuc256_mac32` for the shape of the loop.
+fn zuc256_mac128(
+  st : ZucState,
+  data : Bytes,
+  nwords : Int,
+  rem : Int,
+) -> (UInt64, UInt64, UInt64, UInt64) {
+  let mut t0 = zuc_next_word(st)
+  let mut t1 = zuc_next_word(st)
+  let mut t2 = zuc_next_word(st)
+  let mut t3 = zuc_next_word(st)
+  let mut r0 = zuc_next_word(st)
+  let mut r1 = zuc_next_word(st)
+  let mut r2 = zuc_next_word(st)
+  let mut r3 = zuc_next_word(st)
+  let rounds = nwords + (if rem > 0 { 1 } else { 0 })
+  for w in 0..<rounds {
+    let mut r4 = zuc_next_word(st)
+    let mut m = zuc_word_at(data, w * 4)
+    let nb = if w < nwords { 32 } else { rem }
+    for _i in 0..<nb {
+      let mask = ((m >> 31) & 1UL) * zuc_m32
+      t0 = t0 ^ (r0 & mask)
+      t1 = t1 ^ (r1 & mask)
+      t2 = t2 ^ (r2 & mask)
+      t3 = t3 ^ (r3 & mask)
+      r0 = ((r0 << 1) | (r1 >> 31)) & zuc_m32
+      r1 = ((r1 << 1) | (r2 >> 31)) & zuc_m32
+      r2 = ((r2 << 1) | (r3 >> 31)) & zuc_m32
+      r3 = ((r3 << 1) | (r4 >> 31)) & zuc_m32
+      r4 = (r4 << 1) & zuc_m32
+      m = (m << 1) & zuc_m32
+    }
+  }
+  (t0 ^ r0, t1 ^ r1, t2 ^ r2, t3 ^ r3)
 }
 
 ///|
@@ -185,34 +251,24 @@ pub fn zuc256_mac(
   guard data.length() == (nbits + 7) / 8 else {
     abort("zuc256_mac: data must hold exactly ceil(nbits/8) bytes")
   }
-  let n = macbits / 32
   let st = zuc256_init_row(key, iv, row)
-  let t = Array::make(n, 0UL)
-  let k0 = Array::make(n, 0UL)
-  // T and K0 are each filled with n keystream words before the message
-  for j in 0..<n {
-    t[j] = zuc_next_word(st)
-  }
-  for j in 0..<n {
-    k0[j] = zuc_next_word(st)
-  }
   let nwords = nbits / 32
-  for w in 0..<nwords {
-    let k1 = zuc_next_word(st)
-    zuc256_mac_round(t, k0, zuc_word_at(data, w * 4), 32, k1)
-  }
   let rem = nbits % 32
-  if rem > 0 {
-    let k1 = zuc_next_word(st)
-    zuc256_mac_round(t, k0, zuc_word_at(data, nwords * 4), rem, k1)
-  }
   let out = Array::make(macbits / 8, (0).to_byte())
-  for j in 0..<n {
-    let v = t[j] ^ k0[j]
-    out[j * 4] = ((v >> 24) & 0xFFUL).to_int().to_byte()
-    out[j * 4 + 1] = ((v >> 16) & 0xFFUL).to_int().to_byte()
-    out[j * 4 + 2] = ((v >> 8) & 0xFFUL).to_int().to_byte()
-    out[j * 4 + 3] = (v & 0xFFUL).to_int().to_byte()
+  match macbits {
+    32 => zuc_put_word(out, 0, zuc256_mac32(st, data, nwords, rem))
+    64 => {
+      let (t0, t1) = zuc256_mac64(st, data, nwords, rem)
+      zuc_put_word(out, 0, t0)
+      zuc_put_word(out, 4, t1)
+    }
+    _ => {
+      let (t0, t1, t2, t3) = zuc256_mac128(st, data, nwords, rem)
+      zuc_put_word(out, 0, t0)
+      zuc_put_word(out, 4, t1)
+      zuc_put_word(out, 8, t2)
+      zuc_put_word(out, 12, t3)
+    }
   }
   Bytes::from_array(out)
 }

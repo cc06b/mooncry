@@ -393,3 +393,80 @@ test "robust-stream-aead" {
     }
   }
 }
+
+///|
+/// Append one keystream word to a byte buffer, big-endian.
+fn rb_zuc_word(a : Array[Byte], v : UInt64) -> Unit {
+  a.push(((v >> 24) & 0xFFUL).to_int().to_byte())
+  a.push(((v >> 16) & 0xFFUL).to_int().to_byte())
+  a.push(((v >> 8) & 0xFFUL).to_int().to_byte())
+  a.push((v & 0xFFUL).to_int().to_byte())
+}
+
+///|
+test "robust-zuc-state" {
+  // ZucState is mutable and handed to the caller, who drives it one word at a
+  // time, so two live states must not share anything. The engine reads two
+  // module-level S-box tables (widened to UInt64 once at load) and writes only
+  // its own state's LFSR cells and R1/R2 — interleave two states word by word
+  // and require each to reproduce its own one-shot keystream.
+  let r = rb_rng(0x5A3C53544154UL)
+  let k1 = rb_bytes(r, 16)
+  let v1 = rb_bytes(r, 16)
+  let k2 = rb_bytes(r, 16)
+  let v2 = rb_bytes(r, 16)
+  let a = zuc_init(k1, v1)
+  let b = zuc_init(k2, v2)
+  let wa : Array[Byte] = []
+  let wb : Array[Byte] = []
+  for _i in 0..<40 {
+    rb_zuc_word(wa, zuc_next_word(a))
+    rb_zuc_word(wb, zuc_next_word(b))
+  }
+  assert_true(
+    rb_eq(Bytes::from_array(wa), zuc_keystream(k1, v1, 40)),
+    msg="zuc: state a drifted when interleaved with state b",
+  )
+  assert_true(
+    rb_eq(Bytes::from_array(wb), zuc_keystream(k2, v2, 40)),
+    msg="zuc: state b drifted when interleaved with state a",
+  )
+  // the same for ZUC-256: a different key schedule, the same engine
+  let k3 = rb_bytes(r, 32)
+  let v3 = rb_bytes(r, 23)
+  let k4 = rb_bytes(r, 32)
+  let v4 = rb_bytes(r, 23)
+  let c = zuc256_init(k3, v3)
+  let d = zuc256_init(k4, v4)
+  let wc : Array[Byte] = []
+  let wd : Array[Byte] = []
+  for _i in 0..<40 {
+    rb_zuc_word(wd, zuc_next_word(d))
+    rb_zuc_word(wc, zuc_next_word(c))
+  }
+  assert_true(
+    rb_eq(Bytes::from_array(wc), zuc256_keystream(k3, v3, 40)),
+    msg="zuc256: state c drifted when interleaved",
+  )
+  assert_true(
+    rb_eq(Bytes::from_array(wd), zuc256_keystream(k4, v4, 40)),
+    msg="zuc256: state d drifted when interleaved",
+  )
+  // and a mixed pair must not cross-contaminate either
+  let e = zuc_init(k1, v1)
+  let f = zuc256_init(k3, v3)
+  let we : Array[Byte] = []
+  let wf : Array[Byte] = []
+  for _i in 0..<16 {
+    rb_zuc_word(we, zuc_next_word(e))
+    rb_zuc_word(wf, zuc_next_word(f))
+  }
+  assert_true(
+    rb_eq(Bytes::from_array(we), zuc_keystream(k1, v1, 16)),
+    msg="zuc: 128-bit state drifted against a 256-bit state",
+  )
+  assert_true(
+    rb_eq(Bytes::from_array(wf), zuc256_keystream(k3, v3, 16)),
+    msg="zuc256: 256-bit state drifted against a 128-bit state",
+  )
+}

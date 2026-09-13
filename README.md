@@ -9,7 +9,7 @@ verified against official standard vectors.
 - **Correct** — every algorithm is checked against FIPS / NIST / RFC test
   vectors, and cross-validated against reference implementations
   (pycryptodome, cryptography, hashlib, libsodium, zlib) plus randomized
-  differential testing. 1155 tests, run with `moon test --deny-warn`.
+  differential testing. 1159 tests, run with `moon test --deny-warn`.
 - **Broad** — MD5, **SHA-1**, the SHA-2 and SHA-3 families (incl. **SHA-512/224
   and SHA-512/256**), **Keccak-256**,
   SHAKE/**cSHAKE** XOFs, **KMAC128/256**, BLAKE2b, **BLAKE2s**, BLAKE3,
@@ -134,8 +134,8 @@ git push gitlink master
   (`f8`): COUNT/BEARER/DIRECTION build the IV, and the output is masked to an
   exact **bit** length
 - **128-EIA3** (3GPP TS 35.223) — the ZUC integrity algorithm (`f9`):
-  bit-oriented MAC-I over the message, with a constant-time
-  `zuc_eia3_verify`. Neither mode authenticates on its own; pair EEA3 with
+  bit-oriented MAC-I over the message, with a constant-time *tag check*
+  (`zuc_eia3_verify`). Neither mode authenticates on its own; pair EEA3 with
   EIA3 the way PDCP does
 - **ZUC-256** (GM/T 0001.2 / TS 35.221 v17+) — the 256-bit-key variant: a
   32-byte key and a 23-byte IV carrying eight 6-bit frame parameters, packed
@@ -532,6 +532,17 @@ cause an `abort` with a descriptive message.
   longer bit-sliced and is likewise **not side-channel-safe**; the GCM
   *tag comparison* and CBC PKCS#7 *verification* remain constant-time
   (no early exit on mismatch).
+- **ZUC is not constant-time.** The F function looks up S0/S1 with indices
+  derived from the key and IV, so keystream generation leaks through the CPU
+  cache exactly the way AES's tables do (since v0.79.0 the two tables are
+  widened to `UInt64` at load — 4 KiB instead of 512 B — because the
+  `Byte`→`Int`→`UInt64` conversion on every lookup cost more than the extra
+  cache footprint: ~1.4x on the stream paths). What *is* constant-time: the MAC
+  rounds do not branch on message bits (the conditional XOR is a masked AND),
+  and the tag comparisons (`zuc_eia3_verify`, `zuc256_mac_verify`) use
+  `bytes_equal` and return `false` — never a trap — on a wrong-length tag. The
+  keystream and MAC computations themselves are **not side-channel-safe**
+  against a local attacker.
 - **Falcon keygen/sign are not constant-time.** The port favours clarity and
   cross-platform bit-exactness over the C reference's constant-time discipline:
   the NTRU solver's bignum comparisons, conditional reductions, and rejection
@@ -624,6 +635,11 @@ moon bench
 | AES-256-SIV encrypt 1KiB | ~311 µs (S2V + AES-CTR) |
 | AES-128-KW wrap 32B | ~56 µs |
 | ChaCha20 | ~37 µs |
+| ZUC-128 stream (raw XOR) | ~18 µs (v0.79) |
+| ZUC-256 stream (raw XOR) | ~19 µs (v0.79) |
+| 128-EEA3 encrypt | ~19 µs (v0.79) |
+| 128-EIA3 MAC (32-bit tag) | ~27 µs (v0.79) |
+| ZUC-256 MAC (128-bit tag) | ~38 µs (v0.79) |
 | AES-256-CBC | ~97 µs (T-table, v0.44) |
 | AES-256-GCM | ~116 µs (T-table + GHASH 4-bit tables) |
 | Base64 encode | ~9.1 µs |
@@ -1050,6 +1066,39 @@ windows + Shamir verify: **P-256 sign 12.4 → 10.2 ms, verify 22.7 →
 message schedule): **64 → 20 µs/KiB (3.2x), now faster than BLAKE2b**.
 New benchmarks for Ed25519/X25519.
 
+**v0.79.0 perf pass (ZUC).** Every figure here is an *alternating same-session*
+A/B against v0.78.0 (HEAD stashed, benched, restored, benched, twice). That
+method was not optional: background load on the host swung absolute numbers by
+3x while this work was running, and two conclusions drawn from cross-session
+comparisons — "branchless is 2.3x slower", "the compact byte loop is 2x slower"
+— both evaporated under a proper A/B and are not in the code.
+
+* The ZUC-256 MAC held its accumulator and key register in `Array[UInt64]`,
+  which costs a bounds-checked load *and* store per register word per **message
+  bit**. Specialising the three tag sizes into local-variable registers: 1 KiB
+  with a 128-bit tag **168 µs → 37.6 µs (4.5x)**, the same ratio in both rounds
+  and under both load conditions.
+* 128-EIA3's (K0, K1) pair packs into one `UInt64`, so sliding the register is a
+  single 64-bit shift instead of two 32-bit shifts plus a merge (**~1.15x** on
+  the MAC, and less code).
+* S0/S1 widened from `Array[Byte]` to `Array[UInt64]` once at load, dropping a
+  `Byte`→`Int`→`UInt64` conversion from each of the eight lookups per clock:
+  **1.35-1.45x** on the stream paths for 4 KiB of table.
+* The LFSR's 15-cell shift unrolled into constant-index copies: ~5% on an idle
+  host, ~20% under load. Deleting the shift *entirely* measured no faster than
+  the unrolled form, so the state stays a plain 16-cell array instead of
+  becoming a ring buffer — which would have needed a new field in the public
+  `ZucState` for nothing.
+* Keystream XOR now runs word by word into the output buffer instead of
+  materialising the whole keystream first: half the allocation, one pass.
+
+Overall, against v0.78.0: stream paths **1.2-1.3x**, 128-EIA3 **1.3x**,
+ZUC-256 MAC **4.5x**. Two candidates measured *within noise* and were not kept
+as speed claims: unrolled constant shifts vs a compact loop with a computed
+shift in the XOR path (the compact loop stayed), and a masked AND vs a branch
+for the message-bit conditional (the mask stayed — same cost, and it removes
+message-dependent branching).
+
 Hashes, ChaCha20, and hex/Base64 are throughput-bound by the algorithm; AES
 trades constant-time property for ~5x speed via lookup tables (see
 [Security & performance boundaries](#security--performance-boundaries)).
@@ -1132,6 +1181,31 @@ tag sizes must be domain-separated. Both ports matched every vector on the
 first run; perturbing one S-box entry fails 5 tests and one ZUC-256 key-schedule
 field fails 2, so the vectors are genuinely exercised.
 
+`lib/zuc_edge_test.mbt` (2 tests) closes the two gaps those sweeps leave. First,
+every ZUC-256 MAC vector above is a whole number of bytes, because the reference
+CLI feeds GmSSL's `zuc256_mac_update` by byte count — but `zuc256_mac_finish`
+also takes a 1..7-bit tail, so a second oracle command (`mac256b`, added in
+`Temp/zuc-oracle/oracle_bit.c`) yields 51 bit-granular tags: lengths 0, 1, 7, 9,
+31, 33, 63, 65 and 508 bits across all three tag sizes, half of them with the
+tail byte's unused low bits forced to 1. The reference gives the identical tag
+for both forms, so "bits beyond LENGTH are not part of the message" is a
+*differential* assertion against the compiled reference rather than a
+self-referential one. Second, nbits=0 was covered for 128-EEA3 only; it is now
+pinned for 128-EIA3 (3 parameter sets, with `zuc_eia3_verify` accepting its own
+MAC) and for all three ZUC-256 tag sizes.
+
+The hostile-input suite covers ZUC as well. `robust-zuc` drives forged
+(message, tag) pairs through both verifiers at every buffer length the fuzzer
+produces, plus mutated keys/IVs and involutive stream round-trips; the LENGTH
+contract is respected by deriving nbits from each mutated buffer, so a wrong
+shape never masks a wrong answer. `robust-zuc-state` interleaves two live
+`ZucState`s word by word and requires each to reproduce its own one-shot
+keystream — the aliasing bug class a caller-held mutable state invites (and
+which the module-level widened S-box tables would make easy to reintroduce).
+Both were teeth-checked: a `zuc_eia3_verify` that ignores the message turns
+`robust-zuc` red, and making every state share one LFSR array turns
+`robust-zuc-state` red.
+
 **Structure-aware DER/PEM fuzzing** (`lib/robust_der_test.mbt`, 4 tests) targets
 the hand-written ASN.1 parsers, where byte-flip fuzzing is nearly useless: a
 mutated blob almost always dies at the first tag or length check, so the deep
@@ -1169,7 +1243,7 @@ keys with 0/1/2 AD entries, AES-KW, AES-CBC (including the PKCS#7 full extra
 padding block on exact multiples of 16) and CTR, SM4-CBC/CTR, the sealed box,
 the ML-KEM hybrid envelope and the SM2 GM/T 0009 envelope.
 
-**1155 tests.**
+**1159 tests.**
 
 ## Development
 

@@ -125,12 +125,10 @@ pub fn zuc_eea3_encrypt(
   zuc_mode_check("zuc_eea3_encrypt", key, bearer, direction, nbits, data)
   let iv = zuc_eea3_iv(count, bearer, direction)
   let nbytes = (nbits + 7) / 8
-  let nwords = (nbits + 31) / 32
-  let ks = zuc_keystream(key, iv, nwords)
+  // ceil(nbytes/4) == ceil(nbits/32): exactly the keystream the mode specifies
+  let st = zuc_init(key, iv)
   let out = Array::make(nbytes, (0).to_byte())
-  for i in 0..<nbytes {
-    out[i] = (data[i].to_int() ^ ks[i].to_int()).to_byte()
-  }
+  zuc_xor_into(st, data, out, nbytes)
   // mask the bits beyond LENGTH in the final byte
   let rem = nbits % 8
   if rem != 0 && nbytes > 0 {
@@ -154,31 +152,35 @@ pub fn zuc_eea3_decrypt(
 }
 
 ///|
-/// One MAC round: consume `n` bits of the big-endian word `m`, shifting the
-/// (k0, k1) pair along and XORing k0 into the accumulator wherever a message
-/// bit is set. This is the TS 35.223 §4 core loop. Returns the updated
-/// (accumulator, k0, k1): after a full 32-bit round k0 has slid into what was
-/// k1 and k1 is exhausted, which is exactly how the next word continues.
+/// One MAC round: consume `nb` bits of the big-endian word `m`, sliding the key
+/// register one bit per message bit and XORing its head word into the
+/// accumulator wherever a message bit is set. This is the TS 35.223 Ç4 core
+/// loop.
+///
+/// The register is the (K0, K1) pair packed into a single UInt64 with K0 in the
+/// high half, so sliding it is one 64-bit shift instead of two 32-bit shifts
+/// plus a merge, and the head word is simply `reg >> 32`. Returns the updated
+/// (accumulator, register) with the spent low half cleared, ready for the next
+/// round's fresh K1 to be ORed in.
+///
+/// The conditional XOR is a masked AND rather than a branch. The two measured
+/// the same, so this keeps the round's cost independent of the message bits.
 fn zuc_eia3_round(
   t : UInt64,
   m0 : UInt64,
-  n : Int,
-  k0 : UInt64,
-  k1 : UInt64,
-) -> (UInt64, UInt64, UInt64) {
+  nb : Int,
+  reg : UInt64,
+) -> (UInt64, UInt64) {
   let mut m = m0
   let mut acc = t
-  let mut a = k0
-  let mut b = k1
-  for _i = 0; _i < n; _i = _i + 1 {
-    if (m & 0x80000000UL) != 0UL {
-      acc = acc ^ a
-    }
+  let mut r = reg
+  for _i in 0..<nb {
+    let mask = ((m >> 31) & 1UL) * zuc_m32
+    acc = acc ^ ((r >> 32) & mask)
+    r = r << 1
     m = (m << 1) & zuc_m32
-    a = ((a << 1) | (b >> 31)) & zuc_m32
-    b = (b << 1) & zuc_m32
   }
-  (acc, a, b)
+  (acc, r & 0xFFFFFFFF00000000UL)
 }
 
 ///|
@@ -215,37 +217,37 @@ pub fn zuc_eia3_mac(
   let iv = zuc_eia3_iv(count, bearer, direction)
   let st = zuc_init(key, iv)
   let mut acc = 0UL
-  let mut k0 = zuc_next_word(st)
-  // full 32-bit words
+  // K0 is the first keystream word, parked in the high half of the register
+  let mut reg = zuc_next_word(st) << 32
+  // full 32-bit words, each fed by a fresh K1 in the low half
   let nwords = nbits / 32
   for w in 0..<nwords {
-    let k1 = zuc_next_word(st)
-    let (t, a, _) = zuc_eia3_round(acc, zuc_word_at(data, w * 4), 32, k0, k1)
+    let (t, r) = zuc_eia3_round(
+      acc,
+      zuc_word_at(data, w * 4),
+      32,
+      reg | zuc_next_word(st),
+    )
     acc = t
-    k0 = a
+    reg = r
   }
   // the remaining 1..31 bits live in the top of the next word
   let rem = nbits % 32
   if rem > 0 {
-    let k1 = zuc_next_word(st)
-    let (t, a, _) = zuc_eia3_round(
+    let (t, r) = zuc_eia3_round(
       acc,
       zuc_word_at(data, nwords * 4),
       rem,
-      k0,
-      k1,
+      reg | zuc_next_word(st),
     )
     acc = t
-    k0 = a
+    reg = r
   }
   // finalisation: T ^= K0, then T ^= the next keystream word
-  let mut mac = acc ^ k0
+  let mut mac = acc ^ (reg >> 32)
   mac = mac ^ zuc_next_word(st)
   let out = Array::make(4, (0).to_byte())
-  out[0] = ((mac >> 24) & 0xFFUL).to_int().to_byte()
-  out[1] = ((mac >> 16) & 0xFFUL).to_int().to_byte()
-  out[2] = ((mac >> 8) & 0xFFUL).to_int().to_byte()
-  out[3] = (mac & 0xFFUL).to_int().to_byte()
+  zuc_put_word(out, 0, mac)
   Bytes::from_array(out)
 }
 
