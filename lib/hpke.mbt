@@ -481,10 +481,80 @@ pub fn hpke_derive_key_pair(s : HpkeSuite, ikm : Bytes) -> (Bytes, Bytes) {
 }
 
 ///|
+
+///|
+/// On-curve check for a deserialized NIST point: 0 <= x,y < p and
+/// y^2 == x^3 + a*x + b (mod p) (a = -3 for P-256/P-384/P-521).
+///
+/// SECURITY: RFC 9180 §7.1.3 requires the peer's public key to be validated.
+/// Without this check an attacker can send a point that lies on a different
+/// (invalid / twisted) curve of small order; the resulting scalar mult leaks
+/// the private scalar a few bits per query — the classic invalid-curve
+/// attack. X25519/X448 need no rejection: RFC 7748 defines them on any
+/// 32/56-byte input (low-order points included), the cofactor is folded into
+/// the ladder, and HPKE hashes the DH output before use.
+fn hpke_ec_on_curve(
+  c : EcCurve,
+  x : @bigint.BigInt,
+  y : @bigint.BigInt,
+) -> Bool {
+  if x < ec_zero || x >= c.p || y < ec_zero || y >= c.p {
+    return false
+  }
+  let lhs = ec_mul(c, y, y)
+  let x2 = ec_mul(c, x, x)
+  let x3 = ec_mul(c, x2, x)
+  let rhs = if c.a_minus3 {
+    ec_add(c, ec_sub(c, x3, ec_add(c, ec_add(c, x, x), x)), c.b)
+  } else {
+    ec_add(c, x3, c.b)
+  }
+  lhs == rhs
+}
+
+///|
+/// Validate a peer-supplied HPKE public key (`pk_r`, `pk_s`, or the `enc`
+/// value carried in a message) for the suite's KEM: correct length, and for
+/// the NIST curves an uncompressed 0x04 point that is in range and on the
+/// curve. Returns false rather than aborting, so callers can reject a
+/// malformed peer key without a trap.
+pub fn hpke_valid_pk(s : HpkeSuite, pk : Bytes) -> Bool {
+  match s.kem_id {
+    0x10 =>
+      if pk.length() != 65 || pk[0] != b'\x04' {
+        false
+      } else {
+        let (x, y) = hpke_p256_point_deserialize(pk)
+        hpke_ec_on_curve(p256_curve, x, y)
+      }
+    0x11 =>
+      if pk.length() != 97 || pk[0] != b'\x04' {
+        false
+      } else {
+        let (x, y) = hpke_p384_point_deserialize(pk)
+        hpke_ec_on_curve(hpke_p384_curve, x, y)
+      }
+    0x12 =>
+      if pk.length() != 133 || pk[0] != b'\x04' {
+        false
+      } else {
+        let (x, y) = hpke_p521_point_deserialize(pk)
+        hpke_ec_on_curve(hpke_p521_curve, x, y)
+      }
+    0x20 => pk.length() == 32
+    0x21 => pk.length() == 56
+    _ => false
+  }
+}
+
+///|
 fn hpke_dh(s : HpkeSuite, scalar : Bytes, point : Bytes) -> Bytes {
   match s.kem_id {
     0x11 => {
       let (px, py) = hpke_p384_point_deserialize(point)
+      if !hpke_ec_on_curve(hpke_p384_curve, px, py) {
+        abort("hpke: peer public key is not a valid curve point")
+      }
       let pt = ec_scalar_mult(hpke_p384_curve, rsa_os2ip(scalar), EcPoint::{
         x: px,
         y: py,
@@ -494,6 +564,9 @@ fn hpke_dh(s : HpkeSuite, scalar : Bytes, point : Bytes) -> Bytes {
     }
     0x12 => {
       let (px, py) = hpke_p521_point_deserialize(point)
+      if !hpke_ec_on_curve(hpke_p521_curve, px, py) {
+        abort("hpke: peer public key is not a valid curve point")
+      }
       let pt = ec_scalar_mult(hpke_p521_curve, rsa_os2ip(scalar), EcPoint::{
         x: px,
         y: py,
@@ -503,6 +576,9 @@ fn hpke_dh(s : HpkeSuite, scalar : Bytes, point : Bytes) -> Bytes {
     }
     0x10 => {
       let (px, py) = hpke_p256_point_deserialize(point)
+      if !hpke_ec_on_curve(p256_curve, px, py) {
+        abort("hpke: peer public key is not a valid curve point")
+      }
       let pt = ec_scalar_mult(p256_curve, rsa_os2ip(scalar), EcPoint::{
         x: px,
         y: py,
@@ -697,6 +773,117 @@ pub fn hpke_setup_r(
     hpke_decap(s, enc, sk_r, pk_r)
   }
   hpke_key_schedule(s, mode, shared_secret, info, psk, psk_id)
+}
+
+// ==================== graceful (Result-returning) variants ====================
+// Every value validated below comes from a peer: `pk_r`/`pk_s` from a
+// certificate or key agreement message, `enc` from the front of a ciphertext.
+// The one-shot functions above abort on a malformed key (fail-fast contract);
+// these `_or` variants return `Err` instead, which is what a network-facing
+// receiver needs — an abort on hostile input is a denial of service.
+
+///|
+/// HPKE Encap without aborting: `Err` if the recipient's `pk_r` is not a
+/// valid public key for the suite's KEM.
+pub fn hpke_encap_or(
+  s : HpkeSuite,
+  pk_r : Bytes,
+  ikm_e : Bytes,
+) -> Result[(Bytes, Bytes), String] {
+  if !hpke_valid_pk(s, pk_r) {
+    return Err("hpke: invalid peer public key (pk_r)")
+  }
+  Ok(hpke_encap(s, pk_r, ikm_e))
+}
+
+///|
+/// HPKE AuthEncap without aborting. See `hpke_encap_or`.
+pub fn hpke_auth_encap_or(
+  s : HpkeSuite,
+  pk_r : Bytes,
+  sk_s : Bytes,
+  ikm_e : Bytes,
+) -> Result[(Bytes, Bytes), String] {
+  if !hpke_valid_pk(s, pk_r) {
+    return Err("hpke: invalid peer public key (pk_r)")
+  }
+  Ok(hpke_auth_encap(s, pk_r, sk_s, ikm_e))
+}
+
+///|
+/// HPKE Decap without aborting: `Err` if the peer's `enc` is not a valid
+/// public key for the suite's KEM (this is the invalid-curve check).
+pub fn hpke_decap_or(
+  s : HpkeSuite,
+  enc : Bytes,
+  sk_r : Bytes,
+  pk_r : Bytes,
+) -> Result[Bytes, String] {
+  if !hpke_valid_pk(s, enc) {
+    return Err("hpke: invalid peer public key (enc)")
+  }
+  Ok(hpke_decap(s, enc, sk_r, pk_r))
+}
+
+///|
+/// HPKE AuthDecap without aborting: validates both peer values, `enc` and the
+/// sender's `pk_s`.
+pub fn hpke_auth_decap_or(
+  s : HpkeSuite,
+  enc : Bytes,
+  sk_r : Bytes,
+  pk_r : Bytes,
+  pk_s : Bytes,
+) -> Result[Bytes, String] {
+  if !hpke_valid_pk(s, enc) {
+    return Err("hpke: invalid peer public key (enc)")
+  }
+  if !hpke_valid_pk(s, pk_s) {
+    return Err("hpke: invalid peer public key (pk_s)")
+  }
+  Ok(hpke_auth_decap(s, enc, sk_r, pk_r, pk_s))
+}
+
+///|
+/// HPKE sender SetupBaseS/SetupAuthS without aborting: `Err` on an invalid
+/// peer `pk_r`.
+pub fn hpke_setup_s_or(
+  s : HpkeSuite,
+  mode : Int,
+  pk_r : Bytes,
+  ikm_e : Bytes,
+  info : Bytes,
+  psk : Bytes,
+  psk_id : Bytes,
+  sk_s : Bytes,
+) -> Result[(Bytes, HpkeContext), String] {
+  if !hpke_valid_pk(s, pk_r) {
+    return Err("hpke: invalid peer public key (pk_r)")
+  }
+  Ok(hpke_setup_s(s, mode, pk_r, ikm_e, info, psk, psk_id, sk_s))
+}
+
+///|
+/// HPKE receiver SetupBaseR/SetupAuthR without aborting: `Err` on an invalid
+/// peer `enc`, or (auth modes) an invalid `pk_s`.
+pub fn hpke_setup_r_or(
+  s : HpkeSuite,
+  mode : Int,
+  sk_r : Bytes,
+  pk_r : Bytes,
+  enc : Bytes,
+  info : Bytes,
+  psk : Bytes,
+  psk_id : Bytes,
+  pk_s : Bytes,
+) -> Result[HpkeContext, String] {
+  if !hpke_valid_pk(s, enc) {
+    return Err("hpke: invalid peer public key (enc)")
+  }
+  if (mode == 2 || mode == 3) && !hpke_valid_pk(s, pk_s) {
+    return Err("hpke: invalid peer public key (pk_s)")
+  }
+  Ok(hpke_setup_r(s, mode, sk_r, pk_r, enc, info, psk, psk_id, pk_s))
 }
 
 // ==================== AEAD context operations ====================
