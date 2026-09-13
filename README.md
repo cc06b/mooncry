@@ -9,7 +9,7 @@ verified against official standard vectors.
 - **Correct** — every algorithm is checked against FIPS / NIST / RFC test
   vectors, and cross-validated against reference implementations
   (pycryptodome, cryptography, hashlib, libsodium, zlib) plus randomized
-  differential testing. 1141 tests, run with `moon test --deny-warn`.
+  differential testing. 1142 tests, run with `moon test --deny-warn`.
 - **Broad** — MD5, **SHA-1**, the SHA-2 and SHA-3 families (incl. **SHA-512/224
   and SHA-512/256**), **Keccak-256**,
   SHAKE/**cSHAKE** XOFs, **KMAC128/256**, BLAKE2b, **BLAKE2s**, BLAKE3,
@@ -550,6 +550,17 @@ cause an `abort` with a descriptive message.
   peer without a MAC in front.
 - **No RNG.** The library provides deterministic primitives; obtain keys, IVs,
   and nonces from a secure source.
+- **No unbounded loops.** Every rejection-sampling loop that consumes
+  caller-supplied randomness has an explicit attempt bound: Falcon signing
+  (1000 attempts, then the empty-signature "cannot sign" signal), Falcon's
+  discrete Gaussian sampler (10000, falling back to a sample the norm check
+  rejects), and Falcon keygen's `(f,g)` / parity / range samplers (10000, then
+  an abort, since the seed is local). ML-DSA signing (1000), ECDSA RFC 6979
+  (100), SM2 nonce draws (100) and HPKE's DeriveKeyPair (255, the width RFC
+  9180 gives the counter) were already bounded. With a working RNG none of
+  these bounds is approached — Falcon signs in one or two attempts — but an
+  unbounded loop over external input is a hang, and a hang is worse than an
+  error: no message, no progress, and on wasm no way to interrupt it.
 
 ## Performance
 
@@ -1055,7 +1066,7 @@ on a 2048-bit key),
 **sealed-box** round-trip + property-based round-trip checks
 (deterministic PRNG) for every cipher + streaming-vs-one-shot consistency.
 
-**Hostile-input robustness** (`lib/robust_test.mbt`, 15 tests) is the
+**Hostile-input robustness** (`lib/robust_test.mbt`, 17 tests) is the
 reliability net for everything that parses bytes from a peer. A fixed
 xorshift64* PRNG (same stream on every run and every target) generates
 truncations, head drops, extensions, single-bit flips, byte replacements, byte
@@ -1067,11 +1078,14 @@ agreement, every AEAD and RSA decryption path, the SM2 DER/PEM codecs, the
 Falcon public decoders, the hex/Base64 decoders, and X25519/X448 shares — and
 must satisfy two properties: it never traps (reaching the end of the suite *is*
 the assertion), and it never accepts (a mutated value is `false` / `None` /
-`Err`, and an authentic one still round-trips afterwards). The suite is written
-to have
-teeth: it catches a removed ML-DSA public-key length check with an
-out-of-bounds trap, and a removed HPKE on-curve check with an accepted
-invalid-curve point.
+`Err`, and an authentic one still round-trips afterwards). It also covers
+degenerate Falcon secret keys (an all-zero body, a flipped coefficient byte) and
+a broken caller-supplied RNG, which must terminate rather than hang.
+
+The suite is written to have teeth: it catches a removed ML-DSA public-key
+length check with an out-of-bounds trap, a removed HPKE on-curve check with an
+accepted invalid-curve point, and a removed X25519 length check with a trap
+inside the ladder.
 
 **Structure-aware DER/PEM fuzzing** (`lib/robust_der_test.mbt`, 4 tests) targets
 the hand-written ASN.1 parsers, where byte-flip fuzzing is nearly useless: a
@@ -1110,7 +1124,7 @@ keys with 0/1/2 AD entries, AES-KW, AES-CBC (including the PKCS#7 full extra
 padding block on exact multiples of 16) and CTR, SM4-CBC/CTR, the sealed box,
 the ML-KEM hybrid envelope and the SM2 GM/T 0009 envelope.
 
-**1141 tests.**
+**1142 tests.**
 
 ## Development
 

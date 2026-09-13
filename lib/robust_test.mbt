@@ -1308,3 +1308,63 @@ test "robust-xdh" {
   }
   assert_false(dh_shared_is_zero(pk4_a))
 }
+
+// ---------- Falcon: degenerate keys and a broken caller RNG ----------
+
+///|
+test "robust-falcon-degenerate" {
+  let r = rb_rng(0x46414C434447UL)
+  let kr = falcon_test_rng_init()
+  let krand = fn(k : Int) -> Bytes { falcon_test_rng_bytes(kr, k) }
+  let seed = falcon_test_rng_bytes(kr, 48)
+  let (pk, sk) = falcon512_keypair_from_seed(seed)
+  let msg = b"robustness"
+  // the happy path still works after the rejection loops were bounded
+  let good = falcon512_sign(sk, msg, krand)
+  assert_true(good.length() > 0, msg="falcon: signing a real key failed")
+  assert_true(falcon512_verify(pk, good, msg), msg="falcon: good sig rejected")
+  // a structurally valid sk with an all-zero body (right header, right length)
+  let zero_sk = Array::make(falcon512_sk_bytes, (0).to_byte())
+  zero_sk[0] = (0x59).to_byte()
+  assert_true(
+    falcon512_sign(Bytes::from_array(zero_sk), msg, krand).length() == 0,
+    msg="falcon: degenerate sk produced a signature",
+  )
+  // one flipped byte deep in the trimmed f/g/F body must be rejected, not
+  // silently sign with a corrupted key
+  for pos in [1, 100, 700, 1000, falcon512_sk_bytes - 1] {
+    let bad = sk.to_array()
+    bad[pos] = (bad[pos].to_int() ^ 0x5A).to_byte()
+    let out = falcon512_sign(Bytes::from_array(bad), msg, krand)
+    if out.length() > 0 {
+      // if a corrupted key does still sign, the signature must at least be
+      // rejected under the real public key
+      assert_false(falcon512_verify(pk, out, msg))
+    }
+  }
+  // a broken caller RNG (always all-zero bytes) must still TERMINATE: the
+  // sign loop is bounded, and whatever comes back is either the empty
+  // "cannot sign" signal or a signature that actually verifies
+  let zrand = fn(k : Int) -> Bytes { Bytes::make(k, (0).to_byte()) }
+  let zsig = falcon512_sign(sk, msg, zrand)
+  if zsig.length() > 0 {
+    assert_true(
+      falcon512_verify(pk, zsig, msg),
+      msg="falcon: zero-nonce signature does not verify",
+    )
+  }
+  // keygen from a spread of seeds (the bounded (f,g) loop must not change the
+  // happy path): every key signs and verifies
+  for i in 0..<4 {
+    let s2 = falcon_test_rng_bytes(kr, 48)
+    let _ = i
+    let (pk2, sk2) = falcon512_keypair_from_seed(s2)
+    let sig2 = falcon512_sign(sk2, msg, krand)
+    assert_true(sig2.length() > 0, msg="falcon: keygen/sign happy path broke")
+    assert_true(
+      falcon512_verify(pk2, sig2, msg),
+      msg="falcon: fresh key rejected",
+    )
+  }
+  let _ = r
+}

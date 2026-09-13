@@ -53,22 +53,42 @@ fn falcon_poly_small_mkgauss(
   let n = 1 << logn
   let mut mod2 = 0
   for u = 0; u < n; u = u + 1 {
-    let mut s = falcon_mkgauss(rng, logn)
-    while s < -127 || s > 127 {
-      s = falcon_mkgauss(rng, logn)
-    }
+    let mut s = falcon_mkgauss_ranged(rng, logn)
     if u == n - 1 {
+      // the last coefficient is resampled until the sum's parity is odd; the
+      // bound keeps a pathological XOF from spinning forever
+      let mut tries = 0
       while (mod2 ^ (s & 1)) == 0 {
-        s = falcon_mkgauss(rng, logn)
-        while s < -127 || s > 127 {
-          s = falcon_mkgauss(rng, logn)
+        tries = tries + 1
+        if tries > 10000 {
+          abort("falcon keygen: parity resampling did not converge")
         }
+        s = falcon_mkgauss_ranged(rng, logn)
       }
     } else {
       mod2 = mod2 ^ (s & 1)
     }
     f[u] = s
   }
+}
+
+///|
+/// `falcon_mkgauss` constrained to [-127, 127]. The reference resamples until
+/// the draw is in range; with a working XOF that is the first or second draw.
+/// The bound turns a never-converging sampler into a loud failure instead of an
+/// unbounded loop (keygen takes a caller-supplied seed, so this is a caller-side
+/// contract violation, not hostile input).
+fn falcon_mkgauss_ranged(rng : FalconXof, logn : Int) -> Int {
+  let mut s = falcon_mkgauss(rng, logn)
+  let mut tries = 0
+  while s < -127 || s > 127 {
+    tries = tries + 1
+    if tries > 10000 {
+      abort("falcon keygen: Gaussian sampler did not converge")
+    }
+    s = falcon_mkgauss(rng, logn)
+  }
+  s
 }
 
 ///|

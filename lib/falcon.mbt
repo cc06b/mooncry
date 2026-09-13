@@ -208,7 +208,18 @@ pub fn falcon_sign(
   falcon_xof_inject(sc, seed)
   let s2 = Array::make(n, 0)
   let mut ok = false
+  // The reference loops until the norm check passes (acceptance ~50% per draw
+  // with a working PRNG). The bound is unreachable in practice; it exists
+  // because `rand` is caller-supplied, and an unbounded loop driven by external
+  // input is a hang — the worst failure mode there is. On exhaustion we return
+  // the empty signature, the same "cannot sign" signal the malformed-key paths
+  // above already use.
+  let mut attempts = 0
   while ok == false {
+    attempts = attempts + 1
+    if attempts > 1000 {
+      return b""
+    }
     let p = falcon_prng_init(sc)
     let ctx = falcon_sampler_ctx_make(
       p,

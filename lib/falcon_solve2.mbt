@@ -230,7 +230,15 @@ fn falcon_keygen(
   let big_f = Array::make(n, 0)
   let big_g = Array::make(n, 0)
   let h = Array::make(n, 0)
+  // (f,g) rejection sampling: a few attempts with a working XOF. Bounded for
+  // the same reason as the other sampler loops — an unbounded loop over
+  // externally seeded randomness is a hang, not an error.
+  let mut attempts = 0
   while true {
+    attempts = attempts + 1
+    if attempts > 10000 {
+      abort("falcon keygen: (f,g) sampling did not converge — check the seed")
+    }
     falcon_poly_small_mkgauss(rng, f, logn)
     falcon_poly_small_mkgauss(rng, g, logn)
     let lim = 1 << (falcon_max_fg_bits[logn] - 1)

@@ -350,7 +350,17 @@ pub fn falcon_sampler(
   let ccs = isigma * ctx.sigma_min
   let mut out = 0
   let mut done = false
+  // Rejection sampling: bounded for the same reason as the sign loop. Falling
+  // back to the mean's floor yields a sample the caller's norm check will
+  // reject, so a pathological PRNG degrades into "no signature" rather than a
+  // hang.
+  let mut tries = 0
   while done == false {
+    tries = tries + 1
+    if tries > 10000 {
+      out = s
+      break
+    }
     let z0 = falcon_gaussian0_sampler(ctx.p)
     let b = prng_get_u8(ctx.p) & 1
     let z = b + ((b << 1) - 1) * z0
