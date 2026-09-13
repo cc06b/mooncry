@@ -105,6 +105,27 @@ pub fn sm3_new() -> Sm3Hasher {
 }
 
 ///|
+/// Deep-copy an SM3 hasher so the copy can be updated/finalized without
+/// disturbing the original (hashing many messages that share a prefix).
+/// Mirrors `sha256_clone`: every array is copied element by element and never
+/// shared — a shared buffer would silently corrupt both hashers.
+pub fn sm3_clone(h : Sm3Hasher) -> Sm3Hasher {
+  let state = Array::make(8, 0U)
+  for i in 0..<8 {
+    state[i] = h.state[i]
+  }
+  let buffer = Array::make(64, (0).to_byte())
+  for i in 0..<64 {
+    buffer[i] = h.buffer[i]
+  }
+  let w = Array::make(68, 0U)
+  for i in 0..<68 {
+    w[i] = h.w[i]
+  }
+  { state, buffer, w, buf_len: h.buf_len, total_len: h.total_len, }
+}
+
+///|
 /// Feed data into the hasher.
 pub fn sm3_update(h : Sm3Hasher, data : Bytes) -> Unit {
   h.total_len = h.total_len + data.length().to_uint64()
