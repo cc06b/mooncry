@@ -9,7 +9,7 @@ verified against official standard vectors.
 - **Correct** — every algorithm is checked against FIPS / NIST / RFC test
   vectors, and cross-validated against reference implementations
   (pycryptodome, cryptography, hashlib, libsodium, zlib) plus randomized
-  differential testing. 1128 tests, run with `moon test --deny-warn`.
+  differential testing. 1133 tests, run with `moon test --deny-warn`.
 - **Broad** — MD5, **SHA-1**, the SHA-2 and SHA-3 families (incl. **SHA-512/224
   and SHA-512/256**), **Keccak-256**,
   SHAKE/**cSHAKE** XOFs, **KMAC128/256**, BLAKE2b, **BLAKE2s**, BLAKE3,
@@ -1047,7 +1047,21 @@ teeth: it catches a removed ML-DSA public-key length check with an
 out-of-bounds trap, and a removed HPKE on-curve check with an accepted
 invalid-curve point.
 
-**1128 tests.**
+**Boundary-length sweeps** (`lib/robust_boundary_test.mbt`, 5 tests) complement
+the randomized property tests by pinning the sizes that block-oriented code
+actually cares about: `0, 1, 2, 15, 16, 17, 31, 32, 33, 63, 64, 65, 127, 128,
+129, 255, 256, 257` for the plaintext and `0, 1, 15, 16, 17` for the AAD (both
+have their own padding path in GHASH / Poly1305 / CCM / S2V). Each combination
+asserts the exact output length the format specifies, an exact round trip, and
+that a single flipped bit anywhere in the sealed blob is rejected. Coverage:
+ChaCha20-Poly1305 and XChaCha20-Poly1305, AES-GCM at 128/192/256-bit keys,
+SM4-GCM, AES-GCM-SIV at both key sizes, AES-CCM across nonce 7/11/13 (all three
+`q = 15 - nonce_len` length-field widths) x mac 4/8/16, AES-SIV at 32/48/64-byte
+keys with 0/1/2 AD entries, AES-KW, AES-CBC (including the PKCS#7 full extra
+padding block on exact multiples of 16) and CTR, SM4-CBC/CTR, the sealed box,
+the ML-KEM hybrid envelope and the SM2 GM/T 0009 envelope.
+
+**1133 tests.**
 
 ## Development
 
