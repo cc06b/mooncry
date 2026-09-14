@@ -235,6 +235,12 @@ fn zuc256_mac128(
 /// `data` must hold exactly ceil(nbits/8) bytes; bits beyond `nbits` are never
 /// read. The key (32 bytes), IV (23 bytes) and `macbits` are caller-supplied
 /// contract, so a violation aborts; the message itself is data, not structure.
+///
+/// `nbits` sits in between: it is a shape, so a disagreement with the buffer
+/// aborts, but in a 3GPP stack LENGTH is peer-derived. Check
+/// `data.length() == (nbits + 7) / 8` yourself if the packet could have been
+/// truncated, rather than letting a peer trigger the abort (see `zuc_mode_check`
+/// for the same caveat on the 128-bit modes).
 pub fn zuc256_mac(
   key : Bytes,
   iv : Bytes,

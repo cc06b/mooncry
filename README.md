@@ -571,6 +571,16 @@ cause an `abort` with a descriptive message.
   hostile-input fuzz suite (see [Testing](#testing)); where the historical API
   aborted on an authentication failure, a graceful `_or` twin was added and the
   original kept for compatibility.
+- **Some *shape* parameters are peer-derived.** The tier above assumes a shape
+  is the caller's business, which holds for a key or nonce length. It does not
+  hold for a length field that a protocol puts on the wire: ZUC's LENGTH (the
+  `nbits` argument of `zuc_eea3_*`, `zuc_eia3_*` and `zuc256_mac*`) comes from
+  the PDCP/RRC header. A LENGTH that disagrees with the buffer it arrived in
+  still aborts — silently MACing or encrypting a different message than the one
+  received would be worse — so if your input can be truncated, check
+  `data.length() == (nbits + 7) / 8` before calling. Otherwise a peer can
+  trigger the abort, and an abort in a long-lived process is a denial of
+  service.
 - **Peer public keys are validated before ECDH.** HPKE's NIST-curve KEMs
   (P-256/P-384/P-521) check that the peer point is in range and on the curve
   before the scalar multiply (`hpke_valid_pk`, also enforced inside `hpke_dh`);

@@ -85,6 +85,15 @@ fn zuc_eia3_iv(count : UInt, bearer : Int, direction : Int) -> Bytes {
 ///|
 /// Validate the shared parameter contract of both modes. LENGTH is in bits and
 /// `data` must hold exactly ceil(nbits/8) bytes.
+///
+/// Note *which* of these cross a trust boundary. In a real PDCP/RRC stack
+/// LENGTH arrives off the wire, while the key is local and COUNT/BEARER/
+/// DIRECTION are either local or already validated. A LENGTH that disagrees with
+/// the buffer it arrived in is therefore a parsing bug in the caller, and it
+/// aborts here by the library's shape contract — but an abort in a long-lived
+/// process is a denial of service, so if the packet could have been truncated,
+/// check `data.length() == (nbits + 7) / 8` before calling rather than letting
+/// the peer trigger the abort.
 fn zuc_mode_check(
   what : String,
   key : Bytes,
@@ -113,7 +122,9 @@ fn zuc_mode_check(
 ///
 /// `data` must hold exactly ceil(nbits/8) bytes. Returns a buffer of the same
 /// length. Decryption is the same call — `zuc_eea3_decrypt` is provided for
-/// readability.
+/// readability. A LENGTH that disagrees with the buffer aborts, and in PDCP
+/// LENGTH is peer-derived — see `zuc_mode_check` before feeding it a packet
+/// that could be truncated.
 pub fn zuc_eea3_encrypt(
   key : Bytes,
   count : UInt,
@@ -204,7 +215,8 @@ fn zuc_word_at(data : Bytes, off : Int) -> UInt64 {
 /// (4 bytes), matching the network order the RRC/PDCP layers expect.
 ///
 /// `data` must hold exactly ceil(nbits/8) bytes; bits beyond `nbits` are never
-/// read.
+/// read. A LENGTH that disagrees with the buffer aborts, and in PDCP LENGTH is
+/// peer-derived — see `zuc_mode_check`.
 pub fn zuc_eia3_mac(
   key : Bytes,
   count : UInt,
