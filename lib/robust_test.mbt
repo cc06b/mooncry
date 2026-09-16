@@ -1472,3 +1472,502 @@ test "robust-zuc" {
   }
   let _ = r
 }
+
+///|
+test "robust-rsa-encrypt" {
+  let r = rb_rng(0x525341454E43UL)
+  let n = rsa_test_n
+  let d = rsa_test_d
+  let e = rsa_test_e
+  let msg = b"robust encrypt"
+  let seed = rb_bytes(r, 32)
+  // ---- authentic parameters: the _or twin encrypts and round-trips --------
+  let ct = match rsa_oaep_encrypt_or(msg, n, e, seed, b"") {
+    Ok(c) => c
+    Err(m) => {
+      assert_true(false, msg="oaep_or rejected valid input: " + m)
+      b""
+    }
+  }
+  assert_true(ct.length() == n.length(), msg="oaep_or: ct length")
+  match rsa_oaep_decrypt_or(ct, n, d, b"") {
+    Ok(got) => assert_true(rb_eq(got, msg), msg="oaep_or: round trip")
+    Err(_) => assert_true(false, msg="oaep_or: own ct did not decrypt")
+  }
+  // OAEP with a fixed seed is deterministic, so the aborting twin must agree
+  assert_true(
+    rb_eq(rsa_oaep_encrypt(msg, n, e, seed, b""), ct),
+    msg="oaep and oaep_or disagree",
+  )
+  // ---- the shapes that trapped before: a degenerate peer modulus ----------
+  // A 1024-bit-sized modulus that happens to be 0 (or 1) reaches BigInt.pow
+  // with modulus 0 unless the entry point checks first; n comes from a
+  // certificate, so this is peer-controlled.
+  //
+  // n = 0 and n = 1 at a realistic width, plus the one-byte and empty forms.
+  // Note `Bytes::make(128, b'\x01')` is NOT n=1 — it fills every byte, which
+  // is a perfectly legal large modulus that the encrypt path must accept.
+  let n_zero = Bytes::make(128, b'\x00')
+  let n_one = rb_cat(Bytes::make(127, b'\x00'), b"\x01")
+  for bad in [n_zero, n_one, b"\x00", b"\x01", b""] {
+    match rsa_oaep_encrypt_or(msg, bad, e, seed, b"") {
+      Ok(_) => assert_true(false, msg="oaep_or accepted a degenerate modulus")
+      Err(m) =>
+        assert_true(
+          m == "rsa: modulus must be at least 2",
+          msg="oaep_or: unexpected message " + m,
+        )
+    }
+    match rsa_oaep_encrypt_with_or(msg, bad, e, seed, b"", rsa_hash_sha256) {
+      Ok(_) =>
+        assert_true(false, msg="oaep_with_or accepted a degenerate modulus")
+      Err(_) => ()
+    }
+    match rsa_pkcs1_v15_encrypt_or(msg, bad, e, rb_bytes(r, 8)) {
+      Ok(_) => assert_true(false, msg="v15_or accepted a degenerate modulus")
+      Err(m) =>
+        assert_true(
+          m == "rsa: modulus must be at least 2",
+          msg="v15_or: unexpected message " + m,
+        )
+    }
+  }
+  // ---- a message too long for the peer's modulus is a value, not a trap ---
+  let big = rb_bytes(r, n.length())
+  match rsa_oaep_encrypt_or(big, n, e, seed, b"") {
+    Ok(_) => assert_true(false, msg="oaep_or accepted an over-long message")
+    Err(m) =>
+      assert_true(
+        m == "rsa_oaep encrypt: message too long for modulus",
+        msg="oaep_or: unexpected message " + m,
+      )
+  }
+  match rsa_pkcs1_v15_encrypt_or(big, n, e, rb_bytes(r, 8)) {
+    Ok(_) => assert_true(false, msg="v15_or accepted an over-long message")
+    Err(_) => ()
+  }
+  // SHA-512 needs k >= 2*hLen + 2 + |M|: the same modulus that fits SHA-256
+  // must reject a long message under SHA-512 rather than trap
+  let seed64 = rb_bytes(r, 64)
+  match rsa_oaep_encrypt_with_or(big, n, e, seed64, b"", rsa_hash_sha512) {
+    Ok(_) => assert_true(false, msg="oaep sha512 accepted an over-long message")
+    Err(_) => ()
+  }
+  match rsa_oaep_encrypt_with_or(msg, n, e, seed64, b"", rsa_hash_sha512) {
+    // the 1024-bit fixture cannot hold OAEP-SHA-512 at all (k >= 2*hLen+2+|M|
+    // needs >= 144 bytes), so the positive case uses the 2048-bit key from the
+    // multi-hash suite
+    Err(m) =>
+      assert_true(
+        m == "rsa_oaep encrypt: message too long for modulus",
+        msg="oaep sha512 on a 1024-bit modulus: " + m,
+      )
+    Ok(_) => assert_true(false, msg="oaep sha512 fit a 1024-bit modulus?")
+  }
+  match
+    rsa_oaep_encrypt_with_or(msg, om_n2048, e, seed64, b"", rsa_hash_sha512) {
+    Ok(ct512) => {
+      assert_true(
+        ct512.length() == om_n2048.length(),
+        msg="oaep sha512: ct length",
+      )
+      match
+        rsa_oaep_decrypt_with_or(
+          ct512, om_n2048, om_d2048, b"", rsa_hash_sha512,
+        ) {
+        Ok(got) => assert_true(rb_eq(got, msg), msg="oaep sha512: round trip")
+        Err(_) => assert_true(false, msg="oaep sha512: own ct did not decrypt")
+      }
+      // and the aborting twin agrees on valid input
+      assert_true(
+        rb_eq(
+          rsa_oaep_encrypt_with(msg, om_n2048, e, seed64, b"", rsa_hash_sha512),
+          ct512,
+        ),
+        msg="oaep_with and oaep_with_or disagree",
+      )
+    }
+    Err(m) => assert_true(false, msg="oaep sha512 rejected valid input: " + m)
+  }
+  // ---- hostile public parameters must never trap -------------------------
+  for nn in rb_cases(r, n, 6) {
+    match rsa_oaep_encrypt_or(msg, nn, e, seed, b"") {
+      Ok(c) => assert_true(c.length() == nn.length(), msg="oaep_or: ct length")
+      Err(_) => ()
+    }
+    match rsa_pkcs1_v15_encrypt_or(msg, nn, e, rb_bytes(r, 16)) {
+      Ok(_) => ()
+      Err(_) => ()
+    }
+  }
+  for ee in rb_cases(r, e, 6) {
+    match rsa_oaep_encrypt_or(msg, n, ee, seed, b"") {
+      Ok(_) => ()
+      Err(_) => ()
+    }
+  }
+  // ---- v1.5: the aborting twin and the _or twin agree on valid input -----
+  // RFC 8017 §7.2.1 step 3 wants *nonzero* PS octets, so the fixture must not
+  // contain a zero byte — a random one does roughly a third of the time at this
+  // length, and the unpad scans for the first 0x00 separator, so it would stop
+  // early and the round trip would legitimately fail.
+  let ps_len = n.length() - msg.length() - 3
+  let ps_arr = rb_bytes(r, ps_len).to_array()
+  for i in 0..<ps_len {
+    if ps_arr[i] == b'\x00' {
+      ps_arr[i] = b'\x2a'
+    }
+  }
+  let ps = Bytes::from_array(ps_arr)
+  match rsa_pkcs1_v15_encrypt_or(msg, n, e, ps) {
+    Ok(ct2) => {
+      assert_true(
+        rb_eq(rsa_pkcs1_v15_encrypt(msg, n, e, ps), ct2),
+        msg="v15 and v15_or disagree",
+      )
+      match rsa_pkcs1_v15_decrypt_or(ct2, n, d) {
+        Ok(got) => assert_true(rb_eq(got, msg), msg="v15_or: round trip")
+        Err(_) => assert_true(false, msg="v15_or: own ct did not decrypt")
+      }
+    }
+    Err(m) => assert_true(false, msg="v15_or rejected valid input: " + m)
+  }
+  // a zero byte inside PS is reported rather than silently producing a
+  // ciphertext the recipient unpads to a truncated message
+  let ps0 = ps_arr.copy()
+  ps0[0] = b'\x00'
+  match rsa_pkcs1_v15_encrypt_or(msg, n, e, Bytes::from_array(ps0)) {
+    Ok(_) => assert_true(false, msg="v15_or accepted a zero byte in rand_ps")
+    Err(m) =>
+      assert_true(
+        m == "rsa_pkcs1_v15_encrypt: rand_ps must be nonzero (RFC 8017 7.2.1)",
+        msg="v15_or zero-PS message: " + m,
+      )
+  }
+  // house rule for the _or family: it never aborts, so a wrong-length seed is
+  // an Err here and an abort only in the twin above
+  match rsa_oaep_encrypt_or(msg, n, e, rb_bytes(r, 31), b"") {
+    Ok(_) => assert_true(false, msg="oaep_or accepted a 31-byte seed")
+    Err(_) => ()
+  }
+  match rsa_oaep_encrypt_with_or(msg, n, e, seed, b"", rsa_hash_sha384) {
+    Ok(_) =>
+      assert_true(false, msg="oaep_with_or accepted a 32-byte SHA-384 seed")
+    Err(_) => ()
+  }
+}
+
+///|
+test "robust-kem-seal" {
+  // The seal side of the hybrid construction takes the *recipient's* ek, which
+  // in every real protocol is parsed out of something a peer sent. Before the
+  // `_or` twins existed this path called the aborting `ml_kem_*_encaps`, so a
+  // wrong-length ek trapped the process even though `hybrid_open` and
+  // `xwing_encaps` were already graceful.
+  let r = rb_rng(0x4B454D5345414CUL)
+  let (ek512, dk512) = ml_kem_512_keygen(rb_bytes(r, 32), rb_bytes(r, 32))
+  let (ek768, _) = ml_kem_768_keygen(rb_bytes(r, 32), rb_bytes(r, 32))
+  let (ek1024, _) = ml_kem_1024_keygen(rb_bytes(r, 32), rb_bytes(r, 32))
+  let m = rb_bytes(r, 32)
+  let aad = b"aad"
+  let msg = rb_bytes(r, 77)
+  // ---- authentic input: _or seals, the plain twin agrees, and it opens ----
+  let blob = match ml_kem_512_hybrid_seal_or(ek512, m, aad, msg) {
+    Ok(b) => b
+    Err(e) => {
+      assert_true(false, msg="seal_or rejected valid input: " + e)
+      b""
+    }
+  }
+  assert_true(
+    rb_eq(ml_kem_512_hybrid_seal(ek512, m, aad, msg), blob),
+    msg="hybrid_seal and hybrid_seal_or disagree",
+  )
+  match ml_kem_512_hybrid_open(dk512, blob, aad) {
+    Some(got) => assert_true(rb_eq(got, msg), msg="seal_or blob did not open")
+    None => assert_true(false, msg="seal_or blob rejected by open")
+  }
+  // ---- hostile ek: Err exactly when the length is wrong, never a trap -----
+  for ek in rb_cases(r, ek512, 8) {
+    match ml_kem_512_hybrid_seal_or(ek, m, aad, msg) {
+      Ok(_) =>
+        assert_true(ek.length() == ek512.length(), msg="seal_or: bad ek length")
+      Err(_) =>
+        assert_true(
+          ek.length() != ek512.length(),
+          msg="seal_or: good ek rejected",
+        )
+    }
+  }
+  for ek in rb_flips(r, ek768, 6) {
+    match ml_kem_768_hybrid_seal_or(ek, m, aad, msg) {
+      Ok(_) => ()
+      Err(_) => assert_true(false, msg="768 seal_or rejected a same-length ek")
+    }
+  }
+  for ek in rb_cases(r, ek1024, 6) {
+    match ml_kem_1024_hybrid_seal_or(ek, m, aad, msg) {
+      Ok(_) =>
+        assert_true(ek.length() == ek1024.length(), msg="1024 seal_or: bad ek")
+      Err(_) =>
+        assert_true(ek.length() != ek1024.length(), msg="1024 seal_or: good ek")
+    }
+  }
+  // ---- hostile m (the encapsulation randomness) --------------------------
+  for mm in rb_cases(r, m, 6) {
+    match ml_kem_768_hybrid_seal_or(ek768, mm, aad, msg) {
+      Ok(_) =>
+        assert_true(mm.length() == 32, msg="seal_or: bad m length accepted")
+      Err(_) => assert_true(mm.length() != 32, msg="seal_or: good m rejected")
+    }
+  }
+  // ---- the streaming entry point has the same contract -------------------
+  match ml_kem_512_hybrid_seal_init_or(ek512, m, aad) {
+    Ok((c, st)) => {
+      assert_true(c.length() == 768, msg="seal_init_or: c length")
+      let streamed = rb_cat(
+        c,
+        rb_cat(
+          ml_kem_hybrid_stream_update(st, msg),
+          ml_kem_hybrid_stream_final(st),
+        ),
+      )
+      assert_true(
+        rb_eq(streamed, blob),
+        msg="seal_init_or disagrees with seal_or",
+      )
+    }
+    Err(e) => assert_true(false, msg="seal_init_or rejected valid input: " + e)
+  }
+  for ek in rb_cases(r, ek512, 6) {
+    match ml_kem_512_hybrid_seal_init_or(ek, m, aad) {
+      Ok(_) =>
+        assert_true(ek.length() == ek512.length(), msg="seal_init_or: bad ek")
+      Err(_) =>
+        assert_true(ek.length() != ek512.length(), msg="seal_init_or: good ek")
+    }
+  }
+  for ek in rb_cases(r, ek1024, 4) {
+    match ml_kem_1024_hybrid_seal_init_or(ek, m, aad) {
+      Ok(_) =>
+        assert_true(ek.length() == ek1024.length(), msg="1024 init_or: bad ek")
+      Err(_) =>
+        assert_true(ek.length() != ek1024.length(), msg="1024 init_or: good ek")
+    }
+  }
+}
+
+///|
+test "robust-sm2-encrypt-pk" {
+  // The recipient's public key is peer-supplied (a certificate, a key-agreement
+  // message). sm2_parse_point used to abort on both a malformed point and an
+  // off-curve one, so the *encrypt* side trapped on hostile input while
+  // sm2_decrypt and sm2_verify were already graceful.
+  let r = rb_rng(0x534D32504B524FUL)
+  let sk = rb_bytes(r, 32)
+  let pk = sm2_public_key(sk)
+  let rand = fn(k : Int) -> Bytes { rb_bytes(r, k) }
+  let msg = b"robust payload"
+  // ---- authentic key: the twins agree and the ciphertext decrypts ---------
+  let ct = match sm2_encrypt_or(pk, msg, rand) {
+    Ok(c) => c
+    Err(e) => {
+      assert_true(false, msg="sm2_encrypt_or rejected a valid pk: " + e)
+      b""
+    }
+  }
+  let (got, ok) = sm2_decrypt(sk, ct)
+  assert_true(ok, msg="sm2_encrypt_or: ct did not decrypt")
+  assert_true(rb_eq(got, msg), msg="sm2_encrypt_or: round trip")
+  // ---- hostile pk: never a trap, and the real key still works -------------
+  for p in rb_cases(r, pk, 12) {
+    match sm2_encrypt_or(p, msg, rand) {
+      // a mutated uncompressed point is off-curve with overwhelming
+      // probability, so Ok essentially only happens for the authentic key;
+      // don't assert that as a fact, just check the round trip when it holds
+      Ok(c) =>
+        if rb_eq(p, pk) {
+          let (g, o) = sm2_decrypt(sk, c)
+          assert_true(o && rb_eq(g, msg), msg="sm2: authentic pk gave a bad ct")
+        }
+      Err(_) =>
+        assert_false(rb_eq(p, pk), msg="sm2_encrypt_or rejected the real pk")
+    }
+  }
+  // ---- the explicit-nonce twin: same contract, plus its own k checks -----
+  let k = rb_bytes(r, 32)
+  match sm2_encrypt_with_k_or(pk, msg, k) {
+    Ok(c) => {
+      let (g, o) = sm2_decrypt(sk, c)
+      assert_true(o && rb_eq(g, msg), msg="with_k_or: round trip")
+      assert_true(
+        rb_eq(sm2_encrypt_with_k(pk, msg, k), c),
+        msg="sm2_encrypt_with_k and its _or twin disagree",
+      )
+    }
+    Err(e) => assert_true(false, msg="with_k_or rejected valid input: " + e)
+  }
+  for p in rb_cases(r, pk, 8) {
+    match sm2_encrypt_with_k_or(p, msg, k) {
+      Ok(_) => ()
+      Err(_) => assert_false(rb_eq(p, pk), msg="with_k_or rejected the real pk")
+    }
+  }
+  // k = 0 is outside [1, n-1] and used to abort deep in the scalar multiply
+  match sm2_encrypt_with_k_or(pk, msg, Bytes::make(32, b'\x00')) {
+    Ok(_) => assert_true(false, msg="with_k_or accepted k = 0")
+    Err(m) =>
+      assert_true(
+        m == "sm2_encrypt_with_k: k out of range [1, n-1]",
+        msg="with_k_or k=0 message: " + m,
+      )
+  }
+  // a well-formed but off-curve point must be rejected: take the real x and
+  // zero out y, which is off the curve for this x (y^2 = x^3 + ax + b has no
+  // solution at y = 0 unless x^3 + ax + b == 0). This is the invalid-curve
+  // attack surface, and it is deterministic rather than fuzz-probabilistic.
+  let offcurve = rb_cat(rb_slice(pk, 0, 33), Bytes::make(32, b'\x00'))
+  match sm2_encrypt_with_k_or(offcurve, msg, k) {
+    Ok(_) => assert_true(false, msg="with_k_or accepted an off-curve point")
+    Err(m) =>
+      assert_true(
+        m == "sm2 encryption: public key off curve",
+        msg="with_k_or off-curve message: " + m,
+      )
+  }
+  match sm2_encrypt_or(offcurve, msg, rand) {
+    Ok(_) => assert_true(false, msg="encrypt_or accepted an off-curve point")
+    Err(_) => ()
+  }
+  match sm2_seal_or(offcurve, msg, rand) {
+    Ok(_) => assert_true(false, msg="seal_or accepted an off-curve point")
+    Err(_) => ()
+  }
+  // an empty message is an Err on both twins (it was an abort)
+  match sm2_encrypt_with_k_or(pk, b"", k) {
+    Ok(_) => assert_true(false, msg="with_k_or accepted an empty message")
+    Err(_) => ()
+  }
+  match sm2_encrypt_or(pk, b"", rand) {
+    Ok(_) => assert_true(false, msg="encrypt_or accepted an empty message")
+    Err(_) => ()
+  }
+  // ---- the GM/T 0009 envelope ------------------------------------------
+  match sm2_seal_or(pk, msg, rand) {
+    Ok(env) => {
+      let (g2, ok2) = sm2_open(sk, env)
+      assert_true(ok2, msg="sm2_seal_or: envelope did not open")
+      assert_true(rb_eq(g2, msg), msg="sm2_seal_or: round trip")
+    }
+    Err(e) => assert_true(false, msg="sm2_seal_or rejected a valid pk: " + e)
+  }
+  for p in rb_cases(r, pk, 8) {
+    match sm2_seal_or(p, msg, rand) {
+      Ok(env) =>
+        if rb_eq(p, pk) {
+          let (g3, ok3) = sm2_open(sk, env)
+          assert_true(ok3 && rb_eq(g3, msg), msg="sm2_seal_or: bad envelope")
+        }
+      Err(_) =>
+        assert_false(rb_eq(p, pk), msg="sm2_seal_or rejected the real pk")
+    }
+  }
+}
+
+///|
+test "robust-sm2-encoders" {
+  // Re-encoding something a peer sent is a normal thing to do: store a raw
+  // ciphertext as DER, put a raw signature into an ASN.1 structure, build a
+  // certificate around a raw public key. All three encoders used to abort on a
+  // malformed value; the `_or` twins report it instead, and both encoders of a
+  // pair share one shape check so their conditions cannot drift apart.
+  let r = rb_rng(0x534D324445524FUL)
+  let sk = rb_bytes(r, 32)
+  let pk = sm2_public_key(sk)
+  let rand = fn(k : Int) -> Bytes { rb_bytes(r, k) }
+  let msg = b"encode me"
+  let ct = sm2_encrypt(pk, msg, rand)
+  let sig = sm2_sign(sk, msg, b"1234567812345678", rand)
+  // ---- authentic values encode, and the DER/PEM round-trips back ---------
+  let ctder = match sm2_ct_to_der_or(ct) {
+    Ok(d) => d
+    Err(e) => {
+      assert_true(false, msg="ct_to_der_or rejected a real ct: " + e)
+      b""
+    }
+  }
+  let (craw, cok) = sm2_ct_from_der(ctder)
+  assert_true(cok, msg="ct DER did not parse back")
+  assert_true(rb_eq(craw, ct), msg="ct DER round trip")
+  assert_true(rb_eq(sm2_ct_to_der(ct), ctder), msg="ct encoder twins disagree")
+  let sigder = match sm2_sig_to_der_or(sig) {
+    Ok(d) => d
+    Err(e) => {
+      assert_true(false, msg="sig_to_der_or rejected a real sig: " + e)
+      b""
+    }
+  }
+  let (sraw, sok) = sm2_sig_from_der(sigder)
+  assert_true(sok, msg="sig DER did not parse back")
+  assert_true(rb_eq(sraw, sig), msg="sig DER round trip")
+  assert_true(
+    rb_eq(sm2_sig_to_der(sig), sigder),
+    msg="sig encoder twins disagree",
+  )
+  let spki = match sm2_pk_to_spki_der_or(pk) {
+    Ok(d) => d
+    Err(e) => {
+      assert_true(false, msg="spki_or rejected a real pk: " + e)
+      b""
+    }
+  }
+  let (praw, pok) = sm2_spki_der_to_pk(spki)
+  assert_true(pok && rb_eq(praw, pk), msg="spki round trip")
+  assert_true(rb_eq(sm2_pk_to_spki_der(pk), spki), msg="spki twins disagree")
+  let pem = match sm2_pk_to_pem_or(pk) {
+    Ok(s) => s
+    Err(e) => {
+      assert_true(false, msg="pem_or rejected a real pk: " + e)
+      ""
+    }
+  }
+  let (ppk, ppok) = sm2_pk_from_pem(pem)
+  assert_true(ppok && rb_eq(ppk, pk), msg="pem round trip")
+  assert_true(pem == sm2_pk_to_pem(pk), msg="pem twins disagree")
+  // ---- hostile values: Err exactly when the shape is wrong ---------------
+  for c in rb_cases(r, ct, 10) {
+    match sm2_ct_to_der_or(c) {
+      Ok(_) =>
+        assert_true(
+          c.length() >= 98 && c[0] == b'\x04',
+          msg="ct_to_der_or accepted a malformed ciphertext",
+        )
+      Err(_) =>
+        assert_true(
+          c.length() < 98 || c[0] != b'\x04',
+          msg="ct_to_der_or rejected an encodable ciphertext",
+        )
+    }
+  }
+  for s in rb_cases(r, sig, 10) {
+    match sm2_sig_to_der_or(s) {
+      Ok(_) => assert_true(s.length() == 64, msg="sig_to_der_or accepted junk")
+      Err(_) =>
+        assert_true(s.length() != 64, msg="sig_to_der_or rejected 64 bytes")
+    }
+  }
+  for p in rb_cases(r, pk, 10) {
+    let well_formed = p.length() == 65 && p[0] == b'\x04'
+    match sm2_pk_to_spki_der_or(p) {
+      Ok(_) =>
+        assert_true(well_formed, msg="spki_or accepted a malformed point")
+      Err(_) =>
+        assert_false(well_formed, msg="spki_or rejected a well-formed point")
+    }
+    match sm2_pk_to_pem_or(p) {
+      Ok(_) => assert_true(well_formed, msg="pem_or accepted a malformed point")
+      Err(_) =>
+        assert_false(well_formed, msg="pem_or rejected a well-formed point")
+    }
+  }
+}

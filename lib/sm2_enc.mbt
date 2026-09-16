@@ -46,32 +46,59 @@ fn sm2_all_zero(b : Bytes) -> Bool {
 }
 
 ///|
-fn sm2_parse_point(pk : Bytes) -> (@bigint.BigInt, @bigint.BigInt) {
-  guard pk.length() == 65 && pk[0] == (4).to_byte() else {
-    abort("sm2 encryption: public key must be uncompressed 0x04||x||y")
+/// Parse and validate a recipient public key. The key is peer-supplied (it
+/// comes out of a certificate or a key-agreement message), so both failures are
+/// values: an uncompressed-point format error and an off-curve point.
+fn sm2_parse_point_or(
+  pk : Bytes,
+) -> Result[(@bigint.BigInt, @bigint.BigInt), String] {
+  if pk.length() != 65 || pk[0] != (4).to_byte() {
+    return Err("sm2 encryption: public key must be uncompressed 0x04||x||y")
   }
   let x = ec_be_to_int(ec_slice(pk, 1, 32))
   let y = ec_be_to_int(ec_slice(pk, 33, 32))
-  guard sm2_on_curve(x, y) else {
-    abort("sm2 encryption: public key off curve")
+  if !sm2_on_curve(x, y) {
+    return Err("sm2 encryption: public key off curve")
   }
-  (x, y)
+  Ok((x, y))
 }
 
 ///|
 /// Encrypt with an explicit nonce k (32-byte big-endian, 1 <= k <= n-1).
 /// Returns raw C1||C3||C2. Aborts on degenerate k (all-zero KDF output).
 pub fn sm2_encrypt_with_k(pk : Bytes, msg : Bytes, k : Bytes) -> Bytes {
-  guard k.length() == 32 else {
-    abort("sm2_encrypt_with_k: k must be 32 bytes")
+  match sm2_encrypt_with_k_or(pk, msg, k) {
+    Ok(ct) => ct
+    Err(e) => abort(e)
   }
-  guard msg.length() > 0 else { abort("sm2_encrypt_with_k: empty message") }
+}
+
+///|
+/// Encrypt with an explicit nonce k, without aborting. `pk` is the recipient's
+/// key and therefore peer-supplied: a malformed or off-curve point is an `Err`.
+/// So are the caller-side mistakes (an empty message, a k of the wrong length
+/// or outside [1, n-1], a k whose KDF output is all zero) — like every other
+/// `_or` entry point in this library, this one never traps.
+pub fn sm2_encrypt_with_k_or(
+  pk : Bytes,
+  msg : Bytes,
+  k : Bytes,
+) -> Result[Bytes, String] {
+  if k.length() != 32 {
+    return Err("sm2_encrypt_with_k: k must be 32 bytes")
+  }
+  if msg.length() == 0 {
+    return Err("sm2_encrypt_with_k: empty message")
+  }
   let kx = ec_be_to_int(k)
   let one = @bigint.BigInt::from_int(1)
-  guard kx >= one && kx <= sm2_curve.n - one else {
-    abort("sm2_encrypt_with_k: k out of range [1, n-1]")
+  if kx < one || kx > sm2_curve.n - one {
+    return Err("sm2_encrypt_with_k: k out of range [1, n-1]")
   }
-  let (px, py) = sm2_parse_point(pk)
+  let (px, py) = match sm2_parse_point_or(pk) {
+    Ok(pair) => pair
+    Err(e) => return Err(e)
+  }
   let c1pt = ec_scalar_mult(sm2_curve, kx, ec_g_point(sm2_curve))
   let shared = ec_scalar_mult(sm2_curve, kx, EcPoint::{
     x: px,
@@ -82,8 +109,8 @@ pub fn sm2_encrypt_with_k(pk : Bytes, msg : Bytes, k : Bytes) -> Bytes {
   let y2 = ec_int_to_be(shared.y, 32)
   let z = concat_bytes(x2, y2)
   let t = sm2_kdf(z, msg.length())
-  guard !sm2_all_zero(t) else {
-    abort("sm2_encrypt_with_k: degenerate k (KDF output all zero)")
+  if sm2_all_zero(t) {
+    return Err("sm2_encrypt_with_k: degenerate k (KDF output all zero)")
   }
   let c2 = Array::make(msg.length(), (0).to_byte())
   for i in 0..<msg.length() {
@@ -104,7 +131,7 @@ pub fn sm2_encrypt_with_k(pk : Bytes, msg : Bytes, k : Bytes) -> Bytes {
   let mut out = Bytes::from_array(c1[:])
   out = concat_bytes(out, c3)
   out = concat_bytes(out, Bytes::from_array(c2[:]))
-  out
+  Ok(out)
 }
 
 ///|
@@ -112,14 +139,37 @@ pub fn sm2_encrypt_with_k(pk : Bytes, msg : Bytes, k : Bytes) -> Bytes {
 /// SECURITY: k must be unique per ciphertext under the same recipient key —
 /// KDF-stream reuse turns C2 into a two-time pad. Degenerate draws retry.
 pub fn sm2_encrypt(pk : Bytes, msg : Bytes, rand : (Int) -> Bytes) -> Bytes {
-  guard msg.length() > 0 else { abort("sm2_encrypt: empty message") }
+  match sm2_encrypt_or(pk, msg, rand) {
+    Ok(ct) => ct
+    Err(e) => abort(e)
+  }
+}
+
+///|
+/// Encrypt with fresh randomness, without aborting: a malformed or off-curve
+/// recipient `pk` is an `Err`, and so is an exhausted rejection loop (the
+/// `rand` callback is caller-supplied, so a rand that only ever produces
+/// degenerate k is a caller bug — reported, not trapped).
+pub fn sm2_encrypt_or(
+  pk : Bytes,
+  msg : Bytes,
+  rand : (Int) -> Bytes,
+) -> Result[Bytes, String] {
+  if msg.length() == 0 {
+    return Err("sm2_encrypt: empty message")
+  }
   let one = @bigint.BigInt::from_int(1)
-  let (px, py) = sm2_parse_point(pk)
+  let (px, py) = match sm2_parse_point_or(pk) {
+    Ok(pair) => pair
+    Err(e) => return Err(e)
+  }
   let mut tries = 0
   let mut done = false
   let mut result = b""
   while !done {
-    guard tries < 100 else { abort("sm2_encrypt: too many degenerate k draws") }
+    if tries >= 100 {
+      return Err("sm2_encrypt: too many degenerate k draws")
+    }
     tries = tries + 1
     let kx = ec_be_to_int(rand(32))
     if kx >= one && kx <= sm2_curve.n - one {
@@ -157,7 +207,7 @@ pub fn sm2_encrypt(pk : Bytes, msg : Bytes, rand : (Int) -> Bytes) -> Bytes {
       }
     }
   }
-  result
+  Ok(result)
 }
 
 ///|
@@ -304,11 +354,27 @@ fn sm2_der_int(der : Bytes, pos : Int, width : Int) -> (Bytes, Int) {
 }
 
 ///|
+/// The shape a raw C1||C3||C2 ciphertext must have to be encodable, and the
+/// one message for every way it can fail to have it. Both the aborting encoder
+/// and its `_or` twin go through here, so the condition cannot drift apart.
+fn sm2_ct_shape(ct : Bytes) -> Result[Unit, String] {
+  if ct.length() >= 98 && ct[0] == (4).to_byte() {
+    Ok(())
+  } else {
+    Err("sm2_ct_to_der: not a raw C1||C3||C2 ciphertext")
+  }
+}
+
+///|
 /// Encode a raw C1||C3||C2 ciphertext into the openssl/ASN.1 DER form
 /// SEQUENCE { INTEGER x1, INTEGER y1, OCTET STRING C3, OCTET STRING C2 }.
+///
+/// Aborts on a malformed ciphertext; use `sm2_ct_to_der_or` when the bytes came
+/// from a peer and a truncated value must not take the process down.
 pub fn sm2_ct_to_der(ct : Bytes) -> Bytes {
-  guard ct.length() >= 98 && ct[0] == (4).to_byte() else {
-    abort("sm2_ct_to_der: not a raw C1||C3||C2 ciphertext")
+  match sm2_ct_shape(ct) {
+    Ok(_) => ()
+    Err(m) => abort(m)
   }
   let x1 = ec_slice(ct, 1, 32)
   let y1 = ec_slice(ct, 33, 32)
@@ -395,11 +461,26 @@ pub fn sm2_ct_from_der(der : Bytes) -> (Bytes, Bool) {
 }
 
 ///|
+/// Shape check for a raw r||s signature, shared by both encoders (see
+/// `sm2_ct_shape`).
+fn sm2_sig_shape(sig : Bytes) -> Result[Unit, String] {
+  if sig.length() == 64 {
+    Ok(())
+  } else {
+    Err("sm2_sig_to_der: raw signature must be 64 bytes")
+  }
+}
+
+///|
 /// Encode a raw r||s signature (64 bytes) into DER
 /// SEQUENCE { INTEGER r, INTEGER s } (the openssl/ASN.1 signature form).
+///
+/// Aborts on a wrong-length signature; use `sm2_sig_to_der_or` when re-encoding
+/// something a peer sent.
 pub fn sm2_sig_to_der(sig : Bytes) -> Bytes {
-  guard sig.length() == 64 else {
-    abort("sm2_sig_to_der: raw signature must be 64 bytes")
+  match sm2_sig_shape(sig) {
+    Ok(_) => ()
+    Err(m) => abort(m)
   }
   let r = ec_slice(sig, 0, 32)
   let s = ec_slice(sig, 32, 32)
@@ -451,17 +532,36 @@ pub fn sm2_sig_from_der(der : Bytes) -> (Bytes, Bool) {
 /// `rand` supplies 16 bytes for the SM4 key, then 12 for the IV, then 32
 /// for each SM2 nonce k draw — all must be cryptographically fresh.
 pub fn sm2_seal(pk : Bytes, msg : Bytes, rand : (Int) -> Bytes) -> Bytes {
+  match sm2_seal_or(pk, msg, rand) {
+    Ok(blob) => blob
+    Err(e) => abort(e)
+  }
+}
+
+///|
+/// SM2 sealed envelope without aborting: `Err` when the recipient's `pk` is
+/// malformed or off-curve, or when the message is empty (the wrapped payload is
+/// then empty too). The SM4 key and IV come from the same `rand` callback and
+/// are always the right length, so the payload cipher cannot fail here.
+pub fn sm2_seal_or(
+  pk : Bytes,
+  msg : Bytes,
+  rand : (Int) -> Bytes,
+) -> Result[Bytes, String] {
   let sm4_key = rand(16)
   let iv = rand(12)
   let mut payload = sm4_key
   payload = concat_bytes(payload, iv)
-  let enc_key = sm2_encrypt(pk, payload, rand)
+  let enc_key = match sm2_encrypt_or(pk, payload, rand) {
+    Ok(ct) => ct
+    Err(e) => return Err(e)
+  }
   let (ct, tag) = sm4_gcm_encrypt(msg, sm4_key, iv, b"")
   let mut out = enc_key
   out = concat_bytes(out, iv)
   out = concat_bytes(out, ct)
   out = concat_bytes(out, tag)
-  out
+  Ok(out)
 }
 
 ///|
@@ -487,4 +587,26 @@ pub fn sm2_open(sk : Bytes, envelope : Bytes) -> (Bytes, Bool) {
     return (b"", false)
   }
   (pt, true)
+}
+
+///|
+/// `sm2_ct_to_der` without aborting: `Err` when the bytes are not a raw
+/// C1||C3||C2 ciphertext (too short, or not starting with the 0x04 uncompressed
+/// point tag). A truncated ciphertext straight off the wire is a normal event,
+/// not a caller bug.
+pub fn sm2_ct_to_der_or(ct : Bytes) -> Result[Bytes, String] {
+  match sm2_ct_shape(ct) {
+    Err(m) => Err(m)
+    Ok(_) => Ok(sm2_ct_to_der(ct))
+  }
+}
+
+///|
+/// `sm2_sig_to_der` without aborting: `Err` when the raw signature is not
+/// exactly 64 bytes.
+pub fn sm2_sig_to_der_or(sig : Bytes) -> Result[Bytes, String] {
+  match sm2_sig_shape(sig) {
+    Err(m) => Err(m)
+    Ok(_) => Ok(sm2_sig_to_der(sig))
+  }
 }

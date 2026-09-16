@@ -119,18 +119,44 @@ pub fn ml_kem_hybrid_stream_final(st : MlKemHybridStream) -> Bytes {
 /// ML-KEM-512 hybrid seal: returns `c || ct || tag`. `m` is the 32-byte
 /// encapsulation randomness; `aad` is associated data (authenticated but
 /// not encrypted). v0.33.0.
+///
+/// Aborts on a wrong-length peer `ek`; prefer `ml_kem_512_hybrid_seal_or` when `ek` is not yours.
 pub fn ml_kem_512_hybrid_seal(
   ek : Bytes,
   m : Bytes,
   aad : Bytes,
   msg : Bytes,
 ) -> Bytes {
-  let (k, c) = ml_kem_512_encaps(ek, m)
+  match ml_kem_512_hybrid_seal_or(ek, m, aad, msg) {
+    Ok(blob) => blob
+    Err(e) => abort(e)
+  }
+}
+
+///|
+/// ML-KEM-512 hybrid seal without aborting.
+///
+/// `ek` is the recipient's encapsulation key — a peer value, typically parsed
+/// out of a certificate or a key-agreement message — so a wrong-length `ek`
+/// (or a wrong-length `m`) is an `Err` rather than a trap. This is the same
+/// split the library uses everywhere else across a trust boundary: the plain
+/// name keeps its signature and aborts with the very same message, the `_or`
+/// twin reports it as a value.
+pub fn ml_kem_512_hybrid_seal_or(
+  ek : Bytes,
+  m : Bytes,
+  aad : Bytes,
+  msg : Bytes,
+) -> Result[Bytes, String] {
+  let (k, c) = match ml_kem_512_encaps_or(ek, m) {
+    Ok(pair) => pair
+    Err(e) => return Err(e)
+  }
   let (key, nonce) = ml_kem_hybrid_derive(c, k)
   let st = ml_kem_hybrid_init(key, nonce, aad)
   let ct = ml_kem_hybrid_stream_update(st, msg)
   let tail = ml_kem_hybrid_stream_final(st)
-  concat_all([c, ct, tail])
+  Ok(concat_all([c, ct, tail]))
 }
 
 ///|
@@ -166,30 +192,75 @@ pub fn ml_kem_512_hybrid_open(dk : Bytes, blob : Bytes, aad : Bytes) -> Bytes? {
 /// returns `(c, stream)`. Feed the message through the stream with
 /// `ml_kem_hybrid_stream_update` / `ml_kem_hybrid_stream_final`, then
 /// concatenate `c` with the stream outputs. v0.33.0.
+///
+/// Aborts on a wrong-length peer `ek`; prefer `ml_kem_512_hybrid_seal_init_or` when `ek` is not yours.
 pub fn ml_kem_512_hybrid_seal_init(
   ek : Bytes,
   m : Bytes,
   aad : Bytes,
 ) -> (Bytes, MlKemHybridStream) {
-  let (k, c) = ml_kem_512_encaps(ek, m)
+  match ml_kem_512_hybrid_seal_init_or(ek, m, aad) {
+    Ok(pair) => pair
+    Err(e) => abort(e)
+  }
+}
+
+///|
+/// Streaming variant of `ml_kem_512_hybrid_seal_or`: `Err` instead of a trap
+/// when the peer's `ek` has the wrong length.
+pub fn ml_kem_512_hybrid_seal_init_or(
+  ek : Bytes,
+  m : Bytes,
+  aad : Bytes,
+) -> Result[(Bytes, MlKemHybridStream), String] {
+  let (k, c) = match ml_kem_512_encaps_or(ek, m) {
+    Ok(pair) => pair
+    Err(e) => return Err(e)
+  }
   let (key, nonce) = ml_kem_hybrid_derive(c, k)
-  (c, ml_kem_hybrid_init(key, nonce, aad))
+  Ok((c, ml_kem_hybrid_init(key, nonce, aad)))
 }
 
 ///|
 /// ML-KEM-768 hybrid seal. See `ml_kem_512_hybrid_seal`. v0.33.0.
+///
+/// Aborts on a wrong-length peer `ek`; prefer `ml_kem_768_hybrid_seal_or` when `ek` is not yours.
 pub fn ml_kem_768_hybrid_seal(
   ek : Bytes,
   m : Bytes,
   aad : Bytes,
   msg : Bytes,
 ) -> Bytes {
-  let (k, c) = ml_kem_768_encaps(ek, m)
+  match ml_kem_768_hybrid_seal_or(ek, m, aad, msg) {
+    Ok(blob) => blob
+    Err(e) => abort(e)
+  }
+}
+
+///|
+/// ML-KEM-768 hybrid seal without aborting.
+///
+/// `ek` is the recipient's encapsulation key — a peer value, typically parsed
+/// out of a certificate or a key-agreement message — so a wrong-length `ek`
+/// (or a wrong-length `m`) is an `Err` rather than a trap. This is the same
+/// split the library uses everywhere else across a trust boundary: the plain
+/// name keeps its signature and aborts with the very same message, the `_or`
+/// twin reports it as a value.
+pub fn ml_kem_768_hybrid_seal_or(
+  ek : Bytes,
+  m : Bytes,
+  aad : Bytes,
+  msg : Bytes,
+) -> Result[Bytes, String] {
+  let (k, c) = match ml_kem_768_encaps_or(ek, m) {
+    Ok(pair) => pair
+    Err(e) => return Err(e)
+  }
   let (key, nonce) = ml_kem_hybrid_derive(c, k)
   let st = ml_kem_hybrid_init(key, nonce, aad)
   let ct = ml_kem_hybrid_stream_update(st, msg)
   let tail = ml_kem_hybrid_stream_final(st)
-  concat_all([c, ct, tail])
+  Ok(concat_all([c, ct, tail]))
 }
 
 ///|
@@ -222,30 +293,75 @@ pub fn ml_kem_768_hybrid_open(dk : Bytes, blob : Bytes, aad : Bytes) -> Bytes? {
 ///|
 /// ML-KEM-768 streaming hybrid seal start. See
 /// `ml_kem_512_hybrid_seal_init`. v0.33.0.
+///
+/// Aborts on a wrong-length peer `ek`; prefer `ml_kem_768_hybrid_seal_init_or` when `ek` is not yours.
 pub fn ml_kem_768_hybrid_seal_init(
   ek : Bytes,
   m : Bytes,
   aad : Bytes,
 ) -> (Bytes, MlKemHybridStream) {
-  let (k, c) = ml_kem_768_encaps(ek, m)
+  match ml_kem_768_hybrid_seal_init_or(ek, m, aad) {
+    Ok(pair) => pair
+    Err(e) => abort(e)
+  }
+}
+
+///|
+/// Streaming variant of `ml_kem_768_hybrid_seal_or`: `Err` instead of a trap
+/// when the peer's `ek` has the wrong length.
+pub fn ml_kem_768_hybrid_seal_init_or(
+  ek : Bytes,
+  m : Bytes,
+  aad : Bytes,
+) -> Result[(Bytes, MlKemHybridStream), String] {
+  let (k, c) = match ml_kem_768_encaps_or(ek, m) {
+    Ok(pair) => pair
+    Err(e) => return Err(e)
+  }
   let (key, nonce) = ml_kem_hybrid_derive(c, k)
-  (c, ml_kem_hybrid_init(key, nonce, aad))
+  Ok((c, ml_kem_hybrid_init(key, nonce, aad)))
 }
 
 ///|
 /// ML-KEM-1024 hybrid seal. See `ml_kem_512_hybrid_seal`. v0.33.0.
+///
+/// Aborts on a wrong-length peer `ek`; prefer `ml_kem_1024_hybrid_seal_or` when `ek` is not yours.
 pub fn ml_kem_1024_hybrid_seal(
   ek : Bytes,
   m : Bytes,
   aad : Bytes,
   msg : Bytes,
 ) -> Bytes {
-  let (k, c) = ml_kem_1024_encaps(ek, m)
+  match ml_kem_1024_hybrid_seal_or(ek, m, aad, msg) {
+    Ok(blob) => blob
+    Err(e) => abort(e)
+  }
+}
+
+///|
+/// ML-KEM-1024 hybrid seal without aborting.
+///
+/// `ek` is the recipient's encapsulation key — a peer value, typically parsed
+/// out of a certificate or a key-agreement message — so a wrong-length `ek`
+/// (or a wrong-length `m`) is an `Err` rather than a trap. This is the same
+/// split the library uses everywhere else across a trust boundary: the plain
+/// name keeps its signature and aborts with the very same message, the `_or`
+/// twin reports it as a value.
+pub fn ml_kem_1024_hybrid_seal_or(
+  ek : Bytes,
+  m : Bytes,
+  aad : Bytes,
+  msg : Bytes,
+) -> Result[Bytes, String] {
+  let (k, c) = match ml_kem_1024_encaps_or(ek, m) {
+    Ok(pair) => pair
+    Err(e) => return Err(e)
+  }
   let (key, nonce) = ml_kem_hybrid_derive(c, k)
   let st = ml_kem_hybrid_init(key, nonce, aad)
   let ct = ml_kem_hybrid_stream_update(st, msg)
   let tail = ml_kem_hybrid_stream_final(st)
-  concat_all([c, ct, tail])
+  Ok(concat_all([c, ct, tail]))
 }
 
 ///|
@@ -278,12 +394,31 @@ pub fn ml_kem_1024_hybrid_open(dk : Bytes, blob : Bytes, aad : Bytes) -> Bytes? 
 ///|
 /// ML-KEM-1024 streaming hybrid seal start. See
 /// `ml_kem_512_hybrid_seal_init`. v0.33.0.
+///
+/// Aborts on a wrong-length peer `ek`; prefer `ml_kem_1024_hybrid_seal_init_or` when `ek` is not yours.
 pub fn ml_kem_1024_hybrid_seal_init(
   ek : Bytes,
   m : Bytes,
   aad : Bytes,
 ) -> (Bytes, MlKemHybridStream) {
-  let (k, c) = ml_kem_1024_encaps(ek, m)
+  match ml_kem_1024_hybrid_seal_init_or(ek, m, aad) {
+    Ok(pair) => pair
+    Err(e) => abort(e)
+  }
+}
+
+///|
+/// Streaming variant of `ml_kem_1024_hybrid_seal_or`: `Err` instead of a trap
+/// when the peer's `ek` has the wrong length.
+pub fn ml_kem_1024_hybrid_seal_init_or(
+  ek : Bytes,
+  m : Bytes,
+  aad : Bytes,
+) -> Result[(Bytes, MlKemHybridStream), String] {
+  let (k, c) = match ml_kem_1024_encaps_or(ek, m) {
+    Ok(pair) => pair
+    Err(e) => return Err(e)
+  }
   let (key, nonce) = ml_kem_hybrid_derive(c, k)
-  (c, ml_kem_hybrid_init(key, nonce, aad))
+  Ok((c, ml_kem_hybrid_init(key, nonce, aad)))
 }

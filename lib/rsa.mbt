@@ -227,17 +227,58 @@ fn rsa_xor_bytes(a : Array[Byte], b : Bytes, a_off : Int, len : Int) -> Unit {
 /// RSAES-PKCS1-v1.5 encrypt. `rand_ps` must be `k - message.length() - 3`
 /// nonzero random bytes (caller's CSPRNG output). Returns the k-byte
 /// ciphertext.
+///
+/// Aborts when the peer's modulus is degenerate or `rand_ps` does not match
+/// `k - msglen - 3`; prefer `rsa_pkcs1_v15_encrypt_or` when `n` came from a
+/// certificate you do not control.
 pub fn rsa_pkcs1_v15_encrypt(
   message : Bytes,
   n : Bytes,
   e : Bytes,
   rand_ps : Bytes,
 ) -> Bytes {
+  match rsa_pkcs1_v15_encrypt_or(message, n, e, rand_ps) {
+    Ok(ct) => ct
+    Err(msg) => abort(msg)
+  }
+}
+
+///|
+/// RSAES-PKCS1-v1.5 encrypt without aborting.
+///
+/// `n` and `e` come from a certificate, i.e. from a peer, so the two ways they
+/// can be wrong are values rather than traps: a degenerate modulus (n < 2,
+/// which would otherwise reach `BigInt.pow` with modulus 0) and a `rand_ps`
+/// whose length does not match `k - msglen - 3` — including the case where the
+/// message is simply too long for the peer's modulus. A zero byte inside
+/// `rand_ps` is also reported: RFC 8017 §7.2.1 requires nonzero octets, and
+/// accepting one would silently produce a ciphertext the recipient unpads to a
+/// truncated message.
+pub fn rsa_pkcs1_v15_encrypt_or(
+  message : Bytes,
+  n : Bytes,
+  e : Bytes,
+  rand_ps : Bytes,
+) -> Result[Bytes, String] {
   let nn = rsa_os2ip(n)
-  let ee = rsa_os2ip(e)
+  if !rsa_modulus_ok(nn) {
+    return Err("rsa: modulus must be at least 2")
+  }
   let k = n.length()
   if rand_ps.length() != k - message.length() - 3 {
-    abort("rsa_pkcs1_v15_encrypt: rand_ps length must be k - msglen - 3")
+    return Err("rsa_pkcs1_v15_encrypt: rand_ps length must be k - msglen - 3")
+  }
+  // RFC 8017 §7.2.1 step 3: PS must consist of *nonzero* octets. A zero byte
+  // there is not harmless — the unpad scans for the first 0x00 separator, so a
+  // zero inside PS makes the recipient recover a truncated message (or fail).
+  // Silently emitting such a ciphertext is the same bug class as a padding
+  // stripper that hands back the input it could not parse, so it is reported.
+  for i in 0..<rand_ps.length() {
+    if rand_ps[i] == b'\x00' {
+      return Err(
+        "rsa_pkcs1_v15_encrypt: rand_ps must be nonzero (RFC 8017 7.2.1)",
+      )
+    }
   }
   // EM = 0x00 || 0x02 || PS || 0x00 || M
   let em = Array::make(k, b'\x00')
@@ -251,8 +292,8 @@ pub fn rsa_pkcs1_v15_encrypt(
     em[3 + rand_ps.length() + i] = message[i]
   }
   let m = rsa_os2ip(Bytes::from_array(em[:]))
-  let c = rsa_ep(m, nn, ee)
-  rsa_i2osp(c, k)
+  let c = rsa_ep(m, nn, rsa_os2ip(e))
+  Ok(rsa_i2osp(c, k))
 }
 
 ///|
@@ -518,17 +559,18 @@ pub fn rsa_pkcs1_v15_verify_with(
 
 ///|
 /// Build the OAEP encoded message EM = 0x00 || maskedSeed || maskedDB with
-/// a caller-chosen hash (also used for MGF1).
-fn rsa_oaep_encrypt_em(
+/// a caller-chosen hash (also used for MGF1). `k` is derived from the peer's
+/// modulus, so "message too long" is reported as a value.
+fn rsa_oaep_encrypt_em_or(
   message : Bytes,
   k : Int,
   seed : Bytes,
   label : Bytes,
   hash : RsaHash,
-) -> Bytes {
+) -> Result[Bytes, String] {
   let h_len = rsa_hash_len(hash)
   if k < message.length() + 2 * h_len + 2 {
-    abort("rsa_oaep encrypt: message too long for modulus")
+    return Err("rsa_oaep encrypt: message too long for modulus")
   }
   let l_hash = rsa_hash_apply(hash, label)
   // DB = lHash || PS(0x00...) || 0x01 || M
@@ -561,13 +603,16 @@ fn rsa_oaep_encrypt_em(
   for i in 0..<db_len {
     em[1 + h_len + i] = masked_db[i]
   }
-  Bytes::from_array(em[:])
+  Ok(Bytes::from_array(em[:]))
 }
 
 ///|
 /// RSAES-OAEP encrypt (SHA-256, MGF1-SHA256). `seed` must be 32 random bytes
 /// (caller's CSPRNG). `label` is hashed into lHash (use b"" for the common
 /// case). Returns the k-byte ciphertext.
+///
+/// Aborts when the peer's modulus is degenerate or the message does not fit it;
+/// prefer `rsa_oaep_encrypt_or` when `n` came from a certificate.
 pub fn rsa_oaep_encrypt(
   message : Bytes,
   n : Bytes,
@@ -575,16 +620,28 @@ pub fn rsa_oaep_encrypt(
   seed : Bytes,
   label : Bytes,
 ) -> Bytes {
-  if seed.length() != 32 {
-    abort("rsa_oaep_encrypt: seed must be 32 bytes (SHA-256)")
+  match rsa_oaep_encrypt_or(message, n, e, seed, label) {
+    Ok(ct) => ct
+    Err(msg) => abort(msg)
   }
-  let nn = rsa_os2ip(n)
-  let ee = rsa_os2ip(e)
-  let k = n.length()
-  let em = rsa_oaep_encrypt_em(message, k, seed, label, RsaHash::Sha256)
-  let m = rsa_os2ip(em)
-  let c = rsa_ep(m, nn, ee)
-  rsa_i2osp(c, k)
+}
+
+///|
+/// RSAES-OAEP encrypt without aborting (SHA-256, MGF1-SHA256).
+///
+/// `n` and `e` are peer-supplied (a certificate), so a degenerate modulus and a
+/// message too long for it are `Err` values rather than traps. So is a `seed` of
+/// the wrong length: like every other `_or` entry point in this library, this
+/// one never aborts — the aborting twin above turns the same message into a
+/// trap for callers who would rather not handle a Result.
+pub fn rsa_oaep_encrypt_or(
+  message : Bytes,
+  n : Bytes,
+  e : Bytes,
+  seed : Bytes,
+  label : Bytes,
+) -> Result[Bytes, String] {
+  rsa_oaep_encrypt_with_or(message, n, e, seed, label, RsaHash::Sha256)
 }
 
 ///|
@@ -592,6 +649,8 @@ pub fn rsa_oaep_encrypt(
 /// SHA-384 or SHA-512) for both lHash and MGF1. `seed` must be exactly
 /// `rsa_hash_len(hash)` random bytes from the caller's CSPRNG. Note:
 /// SHA-512 needs a modulus of at least 2048 bits (k >= 2*hLen + 2 + |M|).
+///
+/// Aborts like `rsa_oaep_encrypt`; see `rsa_oaep_encrypt_with_or`.
 pub fn rsa_oaep_encrypt_with(
   message : Bytes,
   n : Bytes,
@@ -600,16 +659,38 @@ pub fn rsa_oaep_encrypt_with(
   label : Bytes,
   hash : RsaHash,
 ) -> Bytes {
+  match rsa_oaep_encrypt_with_or(message, n, e, seed, label, hash) {
+    Ok(ct) => ct
+    Err(msg) => abort(msg)
+  }
+}
+
+///|
+/// Caller-chosen-hash variant of `rsa_oaep_encrypt_or`. A message that does not
+/// fit the peer's modulus for the chosen hash (SHA-512 needs k >= 2*hLen+2+|M|)
+/// is an `Err`, and so is a `seed` whose length does not match the hash.
+pub fn rsa_oaep_encrypt_with_or(
+  message : Bytes,
+  n : Bytes,
+  e : Bytes,
+  seed : Bytes,
+  label : Bytes,
+  hash : RsaHash,
+) -> Result[Bytes, String] {
   if seed.length() != rsa_hash_len(hash) {
-    abort("rsa_oaep_encrypt_with: seed length must match the hash output size")
+    return Err(
+      "rsa_oaep_encrypt_with: seed length must match the hash output size",
+    )
   }
   let nn = rsa_os2ip(n)
-  let ee = rsa_os2ip(e)
+  if !rsa_modulus_ok(nn) {
+    return Err("rsa: modulus must be at least 2")
+  }
   let k = n.length()
-  let em = rsa_oaep_encrypt_em(message, k, seed, label, hash)
-  let m = rsa_os2ip(em)
-  let c = rsa_ep(m, nn, ee)
-  rsa_i2osp(c, k)
+  match rsa_oaep_encrypt_em_or(message, k, seed, label, hash) {
+    Err(msg) => Err(msg)
+    Ok(em) => Ok(rsa_i2osp(rsa_ep(rsa_os2ip(em), nn, rsa_os2ip(e)), k))
+  }
 }
 
 ///|

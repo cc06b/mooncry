@@ -9,7 +9,7 @@ verified against official standard vectors.
 - **Correct** — every algorithm is checked against FIPS / NIST / RFC test
   vectors, and cross-validated against reference implementations
   (pycryptodome, cryptography, hashlib, libsodium, zlib) plus randomized
-  differential testing. 1159 tests, run with `moon test --deny-warn`.
+  differential testing. 1163 tests, run with `moon test --deny-warn`.
 - **Broad** — MD5, **SHA-1**, the SHA-2 and SHA-3 families (incl. **SHA-512/224
   and SHA-512/256**), **Keccak-256**,
   SHAKE/**cSHAKE** XOFs, **KMAC128/256**, BLAKE2b, **BLAKE2s**, BLAKE3,
@@ -40,11 +40,16 @@ verified against official standard vectors.
   `aes_ccm_decrypt_or`, `aes_decrypt_cbc_or`, `sm4_cbc_decrypt_or`,
   `rsa_oaep_decrypt_or` (+ `_with_or` / `_crt_or`),
   `rsa_pkcs1_v15_decrypt_or` (+ `_crt_or`), `ml_kem_*_encaps_or` /
-  `ml_kem_*_decaps_or`, `xwing_encaps_or` / `xwing_decaps_or`, `x25519_or` /
+  `ml_kem_*_decaps_or`, `ml_kem_*_hybrid_seal_or` (+ `_seal_init_or`),
+  `rsa_oaep_encrypt_or` (+ `_with_or`) / `rsa_pkcs1_v15_encrypt_or`,
+  `sm2_encrypt_or` / `sm2_encrypt_with_k_or` / `sm2_seal_or`,
+  `sm2_ct_to_der_or` / `sm2_sig_to_der_or` / `sm2_pk_to_spki_der_or` /
+  `sm2_pk_to_pem_or`,
+  `xwing_encaps_or` / `xwing_decaps_or`, `x25519_or` /
   `x448_or`, and the HPKE `*_or` setup/encap/decap family return `Result` so
-  network-facing code never traps on malformed input. The RSA ones return a
-  single uniform error for every padding failure (no Bleichenbacher/Manger
-  oracle through error text).
+  network-facing code never traps on malformed input. The RSA decryption ones
+  return a single uniform error for every padding failure (no
+  Bleichenbacher/Manger oracle through error text).
 - **Single source of truth** — one-shot hash entry points delegate to the
   streaming hashers, so the incremental and one-shot paths share one
   implementation.
@@ -329,15 +334,15 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `zuc256_mac(key, iv, macbits, nbits, data) -> Bytes` | ZUC-256 MAC with a 32/64/128-bit tag over an exact bit length |
 | `zuc256_mac_verify(key, iv, macbits, nbits, data, mac) -> Bool` | Constant-time check; false (not a trap) on a wrong-length tag |
 | `hmac_sm3(key, msg) -> Bytes` | HMAC-SM3 (RFC 2104, 64-byte block, 32-byte MAC) |
-| `sm2_encrypt(pk, msg, rand) / sm2_encrypt_with_k(pk, msg, k)` | SM2 encryption (GB/T 32918.4), raw C1\|\|C3\|\|C2 |
+| `sm2_encrypt(pk, msg, rand) / sm2_encrypt_with_k(pk, msg, k)` | SM2 encryption (GB/T 32918.4), raw C1\|\|C3\|\|C2; `sm2_encrypt_or` / `sm2_encrypt_with_k_or` for a peer-supplied `pk` |
 | `sm2_decrypt(sk, ct) -> (Bytes, Bool)` | SM2 decryption (false on tamper/wrong key, GCM convention) |
-| `sm2_ct_to_der(ct) / sm2_ct_from_der(der)` | openssl-compatible ASN.1 DER ciphertext conversion; the decoder is strict DER (see below) |
-| `sm2_sig_to_der(sig) / sm2_sig_from_der(der)` | SM2 signature raw r\|\|s <-> DER SEQUENCE{r,s}; the decoder is strict DER (see below) |
+| `sm2_ct_to_der(ct) / sm2_ct_from_der(der)` | openssl-compatible ASN.1 DER ciphertext conversion; the decoder is strict DER (see below), and `sm2_ct_to_der_or` reports a malformed *raw* ciphertext instead of aborting |
+| `sm2_sig_to_der(sig) / sm2_sig_from_der(der)` | SM2 signature raw r\|\|s <-> DER SEQUENCE{r,s}; the decoder is strict DER (see below), `sm2_sig_to_der_or` never traps |
 | `hkdf_sm3(ikm, salt, info, out_len)` / `hkdf_sm3_extract` / `hkdf_sm3_expand` | HKDF-SM3 (RFC 5869) |
 | `pbkdf2_sm3(password, salt, iterations, dk_len)` | PBKDF2-HMAC-SM3 (RFC 2898) |
-| `sm2_sk_to_pem / sm2_sk_from_pem / sm2_pk_to_pem / sm2_pk_from_pem` | SM2 key PEM (PKCS#8 / SPKI, openssl-identical) |
-| `sm2_sk_to_pkcs8_der / sm2_pkcs8_der_to_sk / sm2_pk_to_spki_der / sm2_spki_der_to_pk` | SM2 key DER forms |
-| `sm2_seal(pk, msg, rand) / sm2_open(sk, env)` | SM2 sealed envelope: enc_key(125)\|\|iv(12)\|\|SM4-GCM ct\|\|tag(16) |
+| `sm2_sk_to_pem / sm2_sk_from_pem / sm2_pk_to_pem / sm2_pk_from_pem` | SM2 key PEM (PKCS#8 / SPKI, openssl-identical); `sm2_pk_to_pem_or` for a peer-supplied point |
+| `sm2_sk_to_pkcs8_der / sm2_pkcs8_der_to_sk / sm2_pk_to_spki_der / sm2_spki_der_to_pk` | SM2 key DER forms; `sm2_pk_to_spki_der_or` never traps on a malformed point |
+| `sm2_seal(pk, msg, rand) / sm2_open(sk, env)` | SM2 sealed envelope: enc_key(125)\|\|iv(12)\|\|SM4-GCM ct\|\|tag(16); `sm2_seal_or` never traps on a bad `pk` |
 | `hmac_sha256 / hmac_sha512(key, msg : Bytes) -> Bytes` | HMAC (RFC 2104) |
 | `hmac_sha3_256 / hmac_sha3_512(key, msg : Bytes) -> Bytes` | HMAC over SHA-3 (RFC 2104 + FIPS 202) |
 | `hmac_sha3_224 / hmac_sha3_384(key, msg : Bytes) -> Bytes` | HMAC over SHA3-224/384 (RFC 2104 + FIPS 202) |
@@ -379,13 +384,15 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `hkdf_sha3_256(salt, ikm, info, len) -> Bytes` | HKDF-SHA3-256 (RFC 5869 over FIPS 202) |
 | `pbkdf2_hmac_sha3_256(password, salt, iterations, len) -> Bytes` | PBKDF2-HMAC-SHA3-256 (RFC 8018 over FIPS 202) |
 | `scrypt(password, salt, n, r, p, dklen) -> Bytes` | scrypt memory-hard KDF (RFC 7914), `n` power of two |
-| `rsa_pkcs1_v15_encrypt(msg, n, e, rand_ps) -> Bytes` | RSAES-PKCS1-v1.5 encrypt (RFC 8017 §7.2) |
+| `rsa_pkcs1_v15_encrypt(msg, n, e, rand_ps) -> Bytes` | RSAES-PKCS1-v1.5 encrypt (RFC 8017 §7.2); `rand_ps` must be k−msglen−3 **nonzero** bytes |
+| `rsa_pkcs1_v15_encrypt_or(msg, n, e, rand_ps) -> Result[Bytes, String]` | same, reporting a degenerate peer modulus / a zero byte in `rand_ps` as `Err` |
 | `rsa_pkcs1_v15_decrypt(ct, n, d) -> Bytes` | RSAES-PKCS1-v1.5 decrypt |
 | `rsa_pkcs1_v15_sign(msg, n, d) -> Bytes` | RSASSA-PKCS1-v1.5 sign (SHA-256) |
 | `rsa_pkcs1_v15_verify(msg, sig, n, e) -> Bool` | RSASSA-PKCS1-v1.5 verify |
 | `rsa_oaep_encrypt(msg, n, e, seed, label) -> Bytes` | RSAES-OAEP encrypt (SHA-256) |
 | `rsa_oaep_decrypt(ct, n, d, label) -> Bytes` | RSAES-OAEP decrypt |
 | `rsa_oaep_encrypt_with(msg, n, e, seed, label, hash) -> Bytes` | OAEP encrypt, chosen hash + MGF1 |
+| `rsa_oaep_encrypt_or / rsa_oaep_encrypt_with_or` | the two above as `Result`: a peer modulus < 2 or a message too long for it is an `Err`, not a trap |
 | `rsa_oaep_decrypt_with(ct, n, d, label, hash) -> Bytes` | OAEP decrypt, chosen hash |
 | `rsa_pss_sign(msg, n, d, salt) -> Bytes` | RSASSA-PSS sign (SHA-256) |
 | `rsa_pss_verify(msg, sig, n, e, salt_len) -> Bool` | RSASSA-PSS verify |
@@ -430,6 +437,7 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `ml_kem_768_hybrid_seal(ek, m, aad, msg)` | ML-KEM-768 hybrid encryption (HKDF + ChaCha20-Poly1305) |
 | `ml_kem_768_hybrid_open(dk, blob, aad) -> Option[Bytes]` | hybrid decryption; `None` on any failure |
 | `ml_kem_768_hybrid_seal_init + ml_kem_hybrid_stream_update/final` | streaming hybrid seal |
+| `ml_kem_{512,768,1024}_hybrid_seal_or / _hybrid_seal_init_or` | the seal path as `Result` — `ek` is the recipient's key, i.e. peer-supplied |
 | `poly1305_new / poly1305_update / poly1305_finalize` | incremental Poly1305 |
 | `aes_gcm_siv_encrypt(key, nonce, aad, pt)` | AES-GCM-SIV (RFC 8452, nonce-misuse-resistant) |
 | `aes_gcm_siv_decrypt(key, nonce, aad, ct) -> Option[Bytes]` | AES-GCM-SIV decryption |
@@ -571,6 +579,21 @@ cause an `abort` with a descriptive message.
   hostile-input fuzz suite (see [Testing](#testing)); where the historical API
   aborted on an authentication failure, a graceful `_or` twin was added and the
   original kept for compatibility.
+- **Encrypting to a peer key crosses the same boundary as verifying one.**
+  Sealing and encrypting consume a *recipient* public key that came off the
+  wire, so those entry points have `_or` twins too:
+  `ml_kem_*_hybrid_seal_or`, `rsa_oaep_encrypt_or` / `rsa_pkcs1_v15_encrypt_or`
+  and `sm2_encrypt_or` / `sm2_seal_or` report a degenerate modulus, a
+  wrong-length encapsulation key, or a malformed / off-curve SM2 point as `Err`
+  instead of trapping (an off-curve point is the invalid-curve attack surface).
+  So does *re-encoding* what a peer sent: `sm2_ct_to_der_or`,
+  `sm2_sig_to_der_or`, `sm2_pk_to_spki_der_or` and `sm2_pk_to_pem_or` take a raw
+  ciphertext / signature / public key that may well have been truncated in
+  transit. Each pair shares one shape check, so the aborting encoder and its
+  twin cannot disagree about what counts as well-formed.
+  `rsa_pkcs1_v15_encrypt_or` also rejects a zero byte inside `rand_ps`: RFC 8017
+  §7.2.1 requires nonzero octets, and accepting one would silently emit a
+  ciphertext the recipient unpads to a truncated message.
 - **Some *shape* parameters are peer-derived.** The tier above assumes a shape
   is the caller's business, which holds for a key or nonce length. It does not
   hold for a length field that a protocol puts on the wire: ZUC's LENGTH (the
@@ -1169,8 +1192,13 @@ a broken caller-supplied RNG, which must terminate rather than hang.
 
 The suite is written to have teeth: it catches a removed ML-DSA public-key
 length check with an out-of-bounds trap, a removed HPKE on-curve check with an
-accepted invalid-curve point, and a removed X25519 length check with a trap
-inside the ladder.
+accepted invalid-curve point, a removed X25519 length check with a trap
+inside the ladder, a removed ML-KEM `ek` length check with a trap on the seal
+path, a removed RSA modulus check with a trap inside the modexp, a removed
+nonzero-`rand_ps` scan with an accepted zero byte, a removed SM2 on-curve
+check with an accepted off-curve point (that one has a deterministic witness:
+the real x with y zeroed), and a neutered SM2 encoder shape check with an
+out-of-bounds trap.
 
 **ZUC** (`lib/zuc_test.mbt`, 13 tests) is vector-verified twice over: the
 official GM/T 0001.1-2012 keystream vectors, the 3GPP TS 35.222 EEA3 vectors
@@ -1253,7 +1281,7 @@ keys with 0/1/2 AD entries, AES-KW, AES-CBC (including the PKCS#7 full extra
 padding block on exact multiples of 16) and CTR, SM4-CBC/CTR, the sealed box,
 the ML-KEM hybrid envelope and the SM2 GM/T 0009 envelope.
 
-**1159 tests.**
+**1163 tests.**
 
 ## Development
 

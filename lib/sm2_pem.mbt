@@ -95,9 +95,27 @@ pub fn sm2_sk_to_pkcs8_der(sk : Bytes) -> Bytes {
 
 ///|
 /// Encode the 65-byte uncompressed public key as SPKI DER.
+
+///|
+/// Shape check for a raw SM2 public key, shared by the aborting encoder and its
+/// `_or` twin.
+fn sm2_pk_shape(pk : Bytes) -> Result[Unit, String] {
+  if pk.length() == 65 && pk[0] == (4).to_byte() {
+    Ok(())
+  } else {
+    Err("sm2_pk_to_spki_der: pk must be uncompressed 0x04||x||y")
+  }
+}
+
+///|
+/// Encode a raw public key as SPKI DER. Aborts on a malformed point; use
+/// `sm2_pk_to_spki_der_or` when the key came from a peer. (This encoder only
+/// wraps bytes — it does not check curve membership; validate a received key
+/// with `sm2_verify` or by decrypting with it.)
 pub fn sm2_pk_to_spki_der(pk : Bytes) -> Bytes {
-  guard pk.length() == 65 && pk[0] == (4).to_byte() else {
-    abort("sm2_pk_to_spki_der: pk must be uncompressed 0x04||x||y")
+  match sm2_pk_shape(pk) {
+    Ok(_) => ()
+    Err(m) => abort(m)
   }
   let bits : Array[Byte] = []
   bits.push((0).to_byte())
@@ -393,6 +411,25 @@ pub fn sm2_sk_from_pem(pem : String) -> (Bytes, Bool) {
 /// PEM-encode a public key (SPKI, "PUBLIC KEY", 64-char lines).
 pub fn sm2_pk_to_pem(pk : Bytes) -> String {
   sm2_pem_wrap(base64_encode(sm2_pk_to_spki_der(pk)), "PUBLIC KEY")
+}
+
+///|
+/// `sm2_pk_to_spki_der` without aborting: `Err` when `pk` is not an
+/// uncompressed 0x04||x||y point.
+pub fn sm2_pk_to_spki_der_or(pk : Bytes) -> Result[Bytes, String] {
+  match sm2_pk_shape(pk) {
+    Err(m) => Err(m)
+    Ok(_) => Ok(sm2_pk_to_spki_der(pk))
+  }
+}
+
+///|
+/// `sm2_pk_to_pem` without aborting.
+pub fn sm2_pk_to_pem_or(pk : Bytes) -> Result[String, String] {
+  match sm2_pk_to_spki_der_or(pk) {
+    Err(m) => Err(m)
+    Ok(der) => Ok(sm2_pem_wrap(base64_encode(der), "PUBLIC KEY"))
+  }
 }
 
 ///|
