@@ -78,18 +78,40 @@ jobs:
       - name: moon test (native, 64-bit Int)
         run: moon test --target native --release
 
-  # The JS target is a first-class MoonBit backend (browser/node consumers),
-  # and the slow one: measured locally, the two SLH-DSA vector files alone run
-  # past 15 minutes on js (two tests that cost 88 s on wasm take 236 s here),
-  # which made a single js job the ~19 minute critical path of every push while
-  # check and native64 finished in a few minutes.
+  # The JS target is a first-class MoonBit backend (browser/node consumers) and
+  # the slow one. Measured after the first split (commit 18579d2): slh_shake
+  # 9.7 min, everything else 8.6 min, slh_sha2 1.4 min -- about 19 min of test
+  # time in total, which is what the single js job used to cost.
   #
-  # So it is split by file, and the "everything else" list is derived at run
-  # time rather than written out: a newly added lib/*_test.mbt lands in js-rest
-  # automatically. Splitting by an explicit list would fail in the dangerous
-  # direction -- a new file silently never tested on js.
-  js-slh-sha2:
+  # So the work is sharded two ways, both self-maintaining:
+  #   * every other test file is partitioned by `awk NR % 2 == shard`, so a
+  #     newly added lib/*_test.mbt lands in a shard automatically. A written-out
+  #     file list would fail in the dangerous direction: a new file silently
+  #     never tested on js.
+  #   * lib/slh_shake_test.mbt is too slow as one unit (9.7 min) and cannot be
+  #     split by file, so it is split by test index. `-i` is left-inclusive and
+  #     right-exclusive, and an upper bound past the last test is not an error
+  #     (verified: `-i 5-99999` on a 7-test file runs the last 2), so the second
+  #     range keeps covering tests added later.
+  #
+  # The boundary is measured, not guessed. Profiling all 30 tests individually
+  # on wasm (40.8 s total) shows the cost is concentrated in the sigGen block --
+  # indices 10, 16, 11 and 17 cost 5.7-6.6 s each while a sigVer test costs
+  # ~0.06 s -- so a naive halfway split at 15 would have put almost all of the
+  # expensive tests in one job. The contiguous split that minimises the slower
+  # half is 0-12 / 12-30, both ~20.8 s of wasm work.
+  #
+  # Two CI data points also pin down where the js time goes: js-slh-sha2 (84 s)
+  # and js-slh-shake (582 s) pay identical setup and compilation, so the 498 s
+  # difference is pure execution -- about 14x the wasm cost for this workload,
+  # with setup+compile only ~20 s. Sharding therefore helps; it would not if
+  # compilation dominated, since every shard would pay it again.
+  js:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1]
     steps:
       - uses: actions/checkout@v4
 
@@ -101,11 +123,18 @@ jobs:
       - name: Node version
         run: node --version
 
-      - name: moon test (js, SLH-DSA-SHA2 vectors)
-        run: moon test --target js --release lib/slh_sha2_test.mbt
+      - name: moon test (js, shard ${{ matrix.shard }})
+        run: |
+          FILES=$(ls lib/*_test.mbt | grep -v 'slh_shake_test\.mbt' | awk -v s=${{ matrix.shard }} 'NR % 2 == s')
+          echo "shard ${{ matrix.shard }}: $(echo "$FILES" | wc -l) files"
+          moon test --target js --release $FILES
 
   js-slh-shake:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        range: ["0-12", "12-99999"]
     steps:
       - uses: actions/checkout@v4
 
@@ -114,21 +143,5 @@ jobs:
           curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
           echo "$HOME/.moon/bin" >> $GITHUB_PATH
 
-      - name: moon test (js, SLH-DSA-SHAKE vectors)
-        run: moon test --target js --release lib/slh_shake_test.mbt
-
-  js-rest:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install MoonBit
-        run: |
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
-          echo "$HOME/.moon/bin" >> $GITHUB_PATH
-
-      - name: moon test (js, every other test file)
-        run: |
-          FILES=$(ls lib/*_test.mbt | grep -vE 'slh_(sha2|shake)_test\.mbt')
-          echo "files: $(echo "$FILES" | wc -l)"
-          moon test --target js --release $FILES
+      - name: moon test (js, SLH-DSA-SHAKE vectors, indices ${{ matrix.range }})
+        run: moon test --target js --release -i ${{ matrix.range }} lib/slh_shake_test.mbt
