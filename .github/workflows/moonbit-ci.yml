@@ -78,9 +78,17 @@ jobs:
       - name: moon test (native, 64-bit Int)
         run: moon test --target native --release
 
-  # The JS target is a first-class MoonBit backend (browser/node consumers).
-  # Locally verified: full suite green on node v24 (~24 min release).
-  js:
+  # The JS target is a first-class MoonBit backend (browser/node consumers),
+  # and the slow one: measured locally, the two SLH-DSA vector files alone run
+  # past 15 minutes on js (two tests that cost 88 s on wasm take 236 s here),
+  # which made a single js job the ~19 minute critical path of every push while
+  # check and native64 finished in a few minutes.
+  #
+  # So it is split by file, and the "everything else" list is derived at run
+  # time rather than written out: a newly added lib/*_test.mbt lands in js-rest
+  # automatically. Splitting by an explicit list would fail in the dangerous
+  # direction -- a new file silently never tested on js.
+  js-slh-sha2:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -93,5 +101,34 @@ jobs:
       - name: Node version
         run: node --version
 
-      - name: moon test (js target)
-        run: moon test --target js --release
+      - name: moon test (js, SLH-DSA-SHA2 vectors)
+        run: moon test --target js --release lib/slh_sha2_test.mbt
+
+  js-slh-shake:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> $GITHUB_PATH
+
+      - name: moon test (js, SLH-DSA-SHAKE vectors)
+        run: moon test --target js --release lib/slh_shake_test.mbt
+
+  js-rest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> $GITHUB_PATH
+
+      - name: moon test (js, every other test file)
+        run: |
+          FILES=$(ls lib/*_test.mbt | grep -vE 'slh_(sha2|shake)_test\.mbt')
+          echo "files: $(echo "$FILES" | wc -l)"
+          moon test --target js --release $FILES
