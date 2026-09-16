@@ -130,6 +130,15 @@ pub fn falcon_test_rng_bytes(r : FalconTestRng, n : Int) -> Bytes {
 /// SHAKE256 exactly as PQClean's crypto_sign_keypair does with the
 /// output of randombytes).
 pub fn falcon512_keypair_from_seed(seed : Bytes) -> (Bytes, Bytes) {
+  // a shorter seed is silently absorbed as-is, which yields full-length but
+  // non-standard keys: no other implementation derives the same pair from it
+  if seed.length() != 48 {
+    abort(
+      "falcon512_keypair_from_seed: seed must be 48 bytes (got " +
+      seed.length().to_string() +
+      ")",
+    )
+  }
   let x = falcon_xof_init()
   falcon_xof_inject(x, seed)
   let _ = falcon_xof_extract(x, 0) // flip
@@ -280,6 +289,13 @@ pub fn falcon1024_sign(sk : Bytes, msg : Bytes, rand : (Int) -> Bytes) -> Bytes 
 ///|
 /// Falcon-1024 keypair from an explicit 48-byte seed.
 pub fn falcon1024_keypair_from_seed(seed : Bytes) -> (Bytes, Bytes) {
+  if seed.length() != 48 {
+    abort(
+      "falcon1024_keypair_from_seed: seed must be 48 bytes (got " +
+      seed.length().to_string() +
+      ")",
+    )
+  }
   let x = falcon_xof_init()
   falcon_xof_inject(x, seed)
   let _ = falcon_xof_extract(x, 0)

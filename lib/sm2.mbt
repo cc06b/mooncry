@@ -80,6 +80,7 @@ fn sm2_on_curve(qx : @bigint.BigInt, qy : @bigint.BigInt) -> Bool {
 /// Returns r||s (64 bytes). Aborts if k is degenerate (r == 0 or r+k == n) —
 /// callers using random k should retry with a fresh k via sm2_sign.
 pub fn sm2_sign_with_k(sk : Bytes, msg : Bytes, id : Bytes, k : Bytes) -> Bytes {
+  guard sk.length() == 32 else { abort("sm2_sign_with_k: sk must be 32 bytes") }
   guard k.length() == 32 else { abort("sm2_sign_with_k: k must be 32 bytes") }
   let d = ec_be_to_int(sk)
   let kx = ec_be_to_int(k)
@@ -125,6 +126,10 @@ pub fn sm2_sign(
   id : Bytes,
   rand : (Int) -> Bytes,
 ) -> Bytes {
+  // same contract as sm2_decrypt: a shorter sk is still a usable scalar, so
+  // without this the call succeeds and produces a signature nobody else can
+  // reproduce from the key the caller thinks they hold
+  guard sk.length() == 32 else { abort("sm2_sign: sk must be 32 bytes") }
   let d = ec_be_to_int(sk)
   let q = ec_scalar_mult(sm2_curve, d, ec_g_point(sm2_curve))
   let za = sm2_za(q.x, q.y, id)

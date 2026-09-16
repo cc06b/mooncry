@@ -1112,6 +1112,25 @@ fn slh_keygen_internal(
   sk_prf : Bytes,
   pk_seed : Bytes,
 ) -> (Bytes, Bytes) {
+  // Without this the seeds are absorbed short and the resulting sk is 4n-1
+  // bytes instead of 4n -- a malformed key pair that travels until slh_sign
+  // reads past its end. n is 16/24/32 for the 128/192/256 security levels.
+  let want = p.n
+  if sk_seed.length() != want ||
+    sk_prf.length() != want ||
+    pk_seed.length() != want {
+    abort(
+      "slh_keygen: sk_seed, sk_prf and pk_seed must each be n=" +
+      want.to_string() +
+      " bytes for this parameter set (got " +
+      sk_seed.length().to_string() +
+      ", " +
+      sk_prf.length().to_string() +
+      ", " +
+      pk_seed.length().to_string() +
+      ")",
+    )
+  }
   let adrs = adrs_new()
   adrs_set_layer(adrs, p.d - 1)
   let s = slh_suite_new(p, pk_seed)
@@ -1147,6 +1166,17 @@ fn slh_sign_internal(
   ctx : Bytes?,
 ) -> Bytes {
   let n = p.n
+  // one guard here covers all six public signers (pure, hedged, prehash,
+  // prehash-hedged, raw, raw-hedged): they all funnel through this function
+  if sk.length() != 4 * n {
+    abort(
+      "slh_sign: sk must be 4*n=" +
+      (4 * n).to_string() +
+      " bytes for this parameter set (got " +
+      sk.length().to_string() +
+      ")",
+    )
+  }
   let sk_seed = slh_slice(sk, 0, n)
   let sk_prf = slh_slice(sk, n, n)
   let pk_seed = slh_slice(sk, 2 * n, n)

@@ -569,7 +569,16 @@ cause an `abort` with a descriptive message.
 - **BLAKE3 supports arbitrary-length input** via the tree-Merkle mode (verified
   vs the reference `blake3` Python package up to 5000 bytes).
 - **Inputs are validated, not silently padded.** Wrong key / IV / nonce / tag
-  lengths `abort` immediately rather than producing wrong output.
+  lengths `abort` immediately rather than producing wrong output. That covers
+  the signature schemes' key material too: `slh_keygen` (three n-byte seeds,
+  n = 16/24/32), the six SLH signers (sk = 4n), `ml_dsa_*_sign*` (sk = the
+  expanded length for the parameter set, from one shared helper),
+  `falcon512_keypair_from_seed` / `falcon1024_keypair_from_seed` (48 bytes) and
+  `sm2_sign` / `sm2_sign_with_k` (32 bytes). Before v0.81.0 those either read
+  out of bounds — an `unreachable` trap with no message — or silently accepted
+  the short input: `slh_keygen` returned a 63-byte secret key that only trapped
+  later, at signing time, and Falcon derived full-length but non-standard keys
+  from a 47-byte seed, which no other implementation reproduces.
 - **Untrusted input has a two-tier contract.** Parameter *shapes* (a key of the
   wrong length, a nonce of the wrong size) are caller errors and abort loudly.
   Values that arrive from a peer — ciphertexts, signatures, public keys,

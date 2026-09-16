@@ -836,7 +836,7 @@ fn dsa_keygen_internal(params : DsaParams, seed : Bytes) -> (Bytes, Bytes) {
   let tr = shake_256(pk_b, 64)
   // sk = rho || key || tr || s1 || s2 || t0
   let eta_bytes = if params.eta == 2 { 96 } else { 128 }
-  let sk_len = 128 + eta_bytes * (params.l + params.k) + 416 * params.k
+  let sk_len = dsa_sk_len(params)
   let sk = Array::make(sk_len, b'\x00')
   for i in 0..<32 {
     sk[i] = rho[i]
@@ -1172,12 +1172,44 @@ fn dsa_get_mat(rho : Bytes, k : Int, l : Int) -> Array[Array[Int]] {
 }
 
 ///|
+
+///|
+/// The expanded secret-key length for a parameter set: rho || key || tr (128
+/// bytes), then (l + k) eta-packed polynomials of 96 or 128 bytes, then k t0
+/// polynomials of 416 bytes. Single source of truth for keygen, the unpacker
+/// and the sign-side shape guard, the way `kem_lengths` is for ML-KEM.
+fn dsa_sk_len(params : DsaParams) -> Int {
+  let eta_bytes = if params.eta == 2 { 96 } else { 128 }
+  128 + eta_bytes * (params.l + params.k) + 416 * params.k
+}
+
+///|
+/// Reject a secret key of the wrong length before anything slices it. Both
+/// signing cores call this: `dsa_sign_internal` reads tr = sk[64..128] *before*
+/// reaching `dsa_sign_mu`, so guarding only the latter still let an empty sk
+/// read out of bounds (RuntimeError: unreachable, no message).
+fn dsa_check_sk(params : DsaParams, sk : Bytes) -> Unit {
+  let want = dsa_sk_len(params)
+  if sk.length() != want {
+    abort(
+      "ml_dsa sign: sk must be " +
+      want.to_string() +
+      " bytes for this parameter set (got " +
+      sk.length().to_string() +
+      ")",
+    )
+  }
+}
+
+///|
 fn dsa_sign_mu(
   params : DsaParams,
   sk : Bytes,
   mu : Bytes,
   rnd : Bytes,
 ) -> Bytes {
+  // the mu entry points (ml_dsa_*_sign_mu) come straight here
+  dsa_check_sk(params, sk)
   let (rho, key, _, s1, s2, t0) = dsa_unpack_sk(params, sk)
   // NTT of secret vectors
   let s1_hat = Array::make(params.l, Array::make(256, 0))
@@ -1484,6 +1516,7 @@ fn dsa_sign_internal(
   mpr : Bytes,
   rnd : Bytes,
 ) -> Bytes {
+  dsa_check_sk(params, sk)
   let tr = dsa_bytes_slice(sk, 64, 64)
   dsa_sign_mu(params, sk, shake_256(concat_bytes(tr, mpr), 64), rnd)
 }
