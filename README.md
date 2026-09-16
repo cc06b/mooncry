@@ -9,7 +9,7 @@ verified against official standard vectors.
 - **Correct** — every algorithm is checked against FIPS / NIST / RFC test
   vectors, and cross-validated against reference implementations
   (pycryptodome, cryptography, hashlib, libsodium, zlib) plus randomized
-  differential testing. 1163 tests, run with `moon test --deny-warn`.
+  differential testing. 1165 tests, run with `moon test --deny-warn`.
 - **Broad** — MD5, **SHA-1**, the SHA-2 and SHA-3 families (incl. **SHA-512/224
   and SHA-512/256**), **Keccak-256**,
   SHAKE/**cSHAKE** XOFs, **KMAC128/256**, BLAKE2b, **BLAKE2s**, BLAKE3,
@@ -1198,7 +1198,32 @@ path, a removed RSA modulus check with a trap inside the modexp, a removed
 nonzero-`rand_ps` scan with an accepted zero byte, a removed SM2 on-curve
 check with an accepted off-curve point (that one has a deterministic witness:
 the real x with y zeroed), and a neutered SM2 encoder shape check with an
-out-of-bounds trap.
+out-of-bounds trap. Two more, from the SLH-DSA coverage below: a
+`slh_verify_prehash` that ignores its hash-algorithm argument, and a
+`slh_sign_hedged` that ignores its randomness (the second one reddens as
+"hedged(rnd) equalled the deterministic signature").
+
+**SLH-DSA's four untested entry points** (`lib/slh_prehash_hedged_test.mbt`,
+2 tests) — `slh_verify_prehash`, `slh_sign_hedged`, `slh_sign_prehash_hedged`
+and `slh_sign_raw_hedged` had no coverage at all while their siblings were
+pinned by ACVP known-answer vectors. That asymmetry mattered:
+`slh_sign_prehash` was vector-checked 12 times, so a wrong
+M' = 0x01‖octet(|ctx|)‖ctx‖OID‖PH(M) on the *verify* side would have shipped
+silently — sign and verify would agree with each other and disagree with
+everyone else. The tests now cover all twelve prehash algorithms' verify path
+through three representatives (SHA2, SHA3, an XOF), every binding negative
+(message, context, algorithm, flipped signature byte, wrong key, four malformed
+lengths, an over-long context), both context boundaries (0 and 255 verify, 256
+returns false rather than trapping), and domain separation in both directions
+(a HashSLH-DSA signature verifies neither as a pure nor as a raw-M' signature).
+The three hedged signers are anchored to external authority by a spec identity
+rather than by new vectors: `slh_sign_internal` uses opt_rand = PK.seed when no
+randomness is given, so `slh_sign_hedged(…, pk_seed)` must reproduce
+`slh_sign(…)` byte for byte — and the deterministic signer is the one the ACVP
+vectors pin. Fresh randomness must then differ from it and still verify, for
+all three hedged entry points. These two tests cost ~88s of the release suite
+(one SLH-DSA-128s signature is ~1.3s, verification about the same), which is
+why the matrix is minimal and says so in its header.
 
 **ZUC** (`lib/zuc_test.mbt`, 13 tests) is vector-verified twice over: the
 official GM/T 0001.1-2012 keystream vectors, the 3GPP TS 35.222 EEA3 vectors
@@ -1281,7 +1306,7 @@ keys with 0/1/2 AD entries, AES-KW, AES-CBC (including the PKCS#7 full extra
 padding block on exact multiples of 16) and CTR, SM4-CBC/CTR, the sealed box,
 the ML-KEM hybrid envelope and the SM2 GM/T 0009 envelope.
 
-**1163 tests.**
+**1165 tests.**
 
 ## Development
 
