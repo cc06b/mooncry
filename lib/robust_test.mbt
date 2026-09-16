@@ -113,7 +113,36 @@ fn rb_resize(r : RbRng, data : Bytes) -> Bytes {
 
 ///|
 /// Length-preserving mutation: bit flip, byte replace, byte swap, wipe.
+///
+/// Guaranteed to differ from `data` when `data` is non-empty. Three of the four
+/// branches could silently reproduce the input: replacing a byte with a random
+/// one matches the original 1/256 of the time, swapping a[i] with a[j] is a
+/// no-op when i == j, and the wipe branch is a no-op on an already-wiped buffer.
+/// Callers assert "a mutated value must be rejected", so a no-op mutation shows
+/// up as a spurious failure — rotating the fuzz seeds hit exactly that in
+/// robust-stream-aead's GMAC tag check (about 1 round in 6). Retry, then fall
+/// back to a deterministic single-bit flip so this cannot loop.
 fn rb_flip(r : RbRng, data : Bytes) -> Bytes {
+  if data.length() == 0 {
+    return data
+  }
+  let mut out = rb_flip_once(r, data)
+  let mut tries = 0
+  while rb_eq(out, data) && tries < 8 {
+    out = rb_flip_once(r, data)
+    tries = tries + 1
+  }
+  if rb_eq(out, data) {
+    let a = data.to_array()
+    a[0] = (a[0].to_int() ^ 1).to_byte()
+    out = Bytes::from_array(a)
+  }
+  out
+}
+
+///|
+/// One draw of the mutation (may return `data` unchanged; see `rb_flip`).
+fn rb_flip_once(r : RbRng, data : Bytes) -> Bytes {
   let n = data.length()
   if n == 0 {
     return data
@@ -861,6 +890,23 @@ test "robust-kem" {
 }
 
 ///|
+/// `len` random bytes with no zero in them. PKCS#1 v1.5 type-2 padding requires
+/// PS to consist of nonzero octets (RFC 8017 §7.2.1 step 3) and the encrypt side
+/// rejects a zero byte, so a plain random buffer makes the *fixture* wrong about
+/// one time in three at these lengths. Rotating the fuzz seeds is what surfaced
+/// it: the committed seed happened to yield a zero-free PS, so the suite was
+/// green but seed-dependent.
+fn rb_nonzero(r : RbRng, len : Int) -> Bytes {
+  let a = rb_bytes(r, len).to_array()
+  for i in 0..<len {
+    if a[i] == b'\x00' {
+      a[i] = b'\x2a'
+    }
+  }
+  Bytes::from_array(a)
+}
+
+///|
 test "robust-rsa-decrypt" {
   let r = rb_rng(0x525341524F42UL)
   let n = rsa_test_n
@@ -884,7 +930,7 @@ test "robust-rsa-decrypt" {
       Err(m) => assert_true(m == "rsa_oaep decrypt: decryption error")
     }
   }
-  let ps = rb_bytes(r, n.length() - msg.length() - 3)
+  let ps = rb_nonzero(r, n.length() - msg.length() - 3)
   let v15_ct = rsa_pkcs1_v15_encrypt(msg, n, e, ps)
   match rsa_pkcs1_v15_decrypt_or(v15_ct, n, d) {
     Ok(got) => assert_true(rb_eq(got, msg))
@@ -1458,10 +1504,17 @@ test "robust-zuc" {
       msg="eea3: round trip",
     )
     // and the ciphertext really depends on the key: no key may reproduce
-    // another key's ciphertext. (Skipped for the empty buffer — with nothing to
-    // encrypt every key gives the empty ciphertext, so the property is vacuous
-    // there rather than violated.)
-    if d.length() > 0 {
+    // another key's ciphertext. Two caveats, both found by rotating the fuzz
+    // seeds rather than by reading the code:
+    //   * an empty buffer makes the property vacuous (every key gives the empty
+    //     ciphertext), so it is skipped rather than asserted;
+    //   * a SHORT buffer makes it probabilistic. With a 1-byte message two
+    //     different keys collide whenever their first keystream byte does --
+    //     probability 1/256 per key, which a rotated seed hit after four clean
+    //     rounds on the fixed corpus. At 16 bytes the collision probability is
+    //     2^-128, so "different key => different ciphertext" is a fact here
+    //     rather than a likelihood.
+    if d.length() >= 16 {
       for k in rb_flips(r, key16, 2) {
         assert_true(
           rb_eq(zuc_eea3_encrypt(k, count, 3, 1, nb, d), c3) == rb_eq(k, key16),
@@ -1612,13 +1665,8 @@ test "robust-rsa-encrypt" {
   // length, and the unpad scans for the first 0x00 separator, so it would stop
   // early and the round trip would legitimately fail.
   let ps_len = n.length() - msg.length() - 3
-  let ps_arr = rb_bytes(r, ps_len).to_array()
-  for i in 0..<ps_len {
-    if ps_arr[i] == b'\x00' {
-      ps_arr[i] = b'\x2a'
-    }
-  }
-  let ps = Bytes::from_array(ps_arr)
+  let ps = rb_nonzero(r, ps_len)
+  let ps_arr = ps.to_array()
   match rsa_pkcs1_v15_encrypt_or(msg, n, e, ps) {
     Ok(ct2) => {
       assert_true(

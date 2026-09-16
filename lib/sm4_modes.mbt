@@ -282,6 +282,7 @@ pub fn hkdf_sm3_extract(salt : Bytes, ikm : Bytes) -> Bytes {
 ///|
 /// HKDF-SM3 expand (RFC 5869): OKM up to 255*32 bytes.
 pub fn hkdf_sm3_expand(prk : Bytes, info : Bytes, out_len : Int) -> Bytes {
+  kdf_check_expand_len("hkdf_sm3_expand", out_len, 32)
   guard prk.length() == 32 else {
     abort("hkdf_sm3_expand: prk must be 32 bytes")
   }
@@ -315,6 +316,7 @@ pub fn hkdf_sm3(
   info : Bytes,
   out_len : Int,
 ) -> Bytes {
+  kdf_check_expand_len("hkdf_sm3", out_len, 32)
   hkdf_sm3_expand(hkdf_sm3_extract(salt, ikm), info, out_len)
 }
 
@@ -327,6 +329,7 @@ pub fn pbkdf2_sm3(
   iterations : Int,
   dk_len : Int,
 ) -> Bytes {
+  kdf_check_pbkdf2("pbkdf2_sm3", iterations, dk_len)
   guard iterations > 0 && dk_len > 0 && dk_len <= 512 * 32 else {
     abort("pbkdf2_sm3: bad iterations/dk_len")
   }

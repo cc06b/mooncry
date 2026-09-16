@@ -1208,6 +1208,12 @@ fn dsa_sign_mu(
   mu : Bytes,
   rnd : Bytes,
 ) -> Bytes {
+  // FIPS 204 fixes the external mu at 64 bytes (TR || pk || M hashed);
+  // a shorter one used to be absorbed as-is, producing a signature nobody
+  // else can reproduce
+  if mu.length() != 64 {
+    abort("ml_dsa: mu must be 64 bytes (FIPS 204 external-mu)")
+  }
   // the mu entry points (ml_dsa_*_sign_mu) come straight here
   dsa_check_sk(params, sk)
   let (rho, key, _, s1, s2, t0) = dsa_unpack_sk(params, sk)
@@ -1401,6 +1407,12 @@ fn dsa_verify_mu(
   mu : Bytes,
   sig : Bytes,
 ) -> Bool {
+  // FIPS 204 fixes the external mu at 64 bytes (TR || pk || M hashed);
+  // a shorter one used to be absorbed as-is, producing a signature nobody
+  // else can reproduce
+  if mu.length() != 64 {
+    abort("ml_dsa: mu must be 64 bytes (FIPS 204 external-mu)")
+  }
   let z_bytes = if params.gamma1 == 1 << 17 {
     576 * params.l
   } else {

@@ -373,3 +373,102 @@ test "falcon1024_sign_padded produces a verifying padded signature" {
     msg="sign_padded is not the compact signature zero-padded to 1280",
   )
 }
+
+///|
+test "kdf limits and hpke mode guard" {
+  // The aborts themselves cannot be asserted from a blackbox test, so what is
+  // pinned here is (a) the RFC boundaries from the inside -- a guard that is too
+  // tight would break these -- and (b) the one entry point that reports the same
+  // class of error as a value: hpke_setup_*_or with an out-of-range mode.
+  // RFC 5869 §2.3: L <= 255*HashLen is legal, and must still work
+  assert_true(
+    hkdf_sha256(b"salt", b"ikm", b"info", 255 * 32).length() == 255 * 32,
+    msg="hkdf_sha256 at the RFC 5869 maximum",
+  )
+  assert_true(
+    hkdf_sha512(b"salt", b"ikm", b"info", 255 * 64).length() == 255 * 64,
+    msg="hkdf_sha512 at the RFC 5869 maximum",
+  )
+  assert_true(
+    hkdf_sha384(b"salt", b"ikm", b"info", 255 * 48).length() == 255 * 48,
+    msg="hkdf_sha384 at the RFC 5869 maximum",
+  )
+  assert_true(
+    hkdf_sm3(b"ikm", b"salt", b"info", 255 * 32).length() == 255 * 32,
+    msg="hkdf_sm3 at the RFC 5869 maximum",
+  )
+  // zero-length outputs are legal, not an error
+  assert_true(
+    shake_256(b"data", 0).length() == 0,
+    msg="shake_256 with out_len 0",
+  )
+  assert_true(
+    shake_128(b"data", 0).length() == 0,
+    msg="shake_128 with out_len 0",
+  )
+  assert_true(
+    pbkdf2_hmac_sha256(b"pw", b"salt", 1, 0).length() == 0,
+    msg="pbkdf2 with dklen 0",
+  )
+  // RFC 8018's minimum iteration count must still work
+  assert_true(
+    pbkdf2_hmac_sha256(b"pw", b"salt", 1, 32).length() == 32,
+    msg="pbkdf2 with one iteration",
+  )
+  // ---- HPKE mode: 0..3 are the RFC's four, anything else is an Err ---------
+  let s = hpke_x25519_hkdf_sha256_aes128gcm
+  let (pk_r, sk_r) = hpke_derive_key_pair(s, Bytes::make(32, b'\x01'))
+  let (pk_s, sk_s) = hpke_derive_key_pair(s, Bytes::make(32, b'\x02'))
+  let ikm = Bytes::make(32, b'\x03')
+  for mode in [0, 2] {
+    match hpke_setup_s_or(s, mode, pk_r, ikm, b"info", b"", b"", sk_s) {
+      Ok((enc, ctx)) => {
+        let ct = hpke_seal(ctx, b"aad", b"payload")
+        let ctx_r = match
+          hpke_setup_r_or(s, mode, sk_r, pk_r, enc, b"info", b"", b"", pk_s) {
+          Ok(c) => c
+          Err(e) => {
+            assert_true(
+              false,
+              msg="setup_r_or rejected mode " + mode.to_string() + ": " + e,
+            )
+            ctx
+          }
+        }
+        match hpke_open(ctx_r, b"aad", ct) {
+          Some(pt) =>
+            assert_true(bytes_equal(pt, b"payload"), msg="hpke mode round trip")
+          None =>
+            assert_true(
+              false,
+              msg="hpke mode " + mode.to_string() + " did not open",
+            )
+        }
+      }
+      Err(e) =>
+        assert_true(
+          false,
+          msg="setup_s_or rejected mode " + mode.to_string() + ": " + e,
+        )
+    }
+  }
+  // out-of-range modes used to mean "base mode" silently: no authentication, no
+  // PSK, and no error anywhere
+  for bad in [4, 9, -1, 255] {
+    match hpke_setup_s_or(s, bad, pk_r, ikm, b"info", b"", b"", sk_s) {
+      Ok(_) =>
+        assert_true(false, msg="setup_s_or accepted mode " + bad.to_string())
+      Err(m) =>
+        assert_true(
+          m == "hpke: mode must be 0 (base), 1 (PSK), 2 (auth) or 3 (PSK+auth)",
+          msg="setup_s_or mode message: " + m,
+        )
+    }
+    let (enc0, _) = hpke_setup_s(s, 0, pk_r, ikm, b"info", b"", b"", sk_s)
+    match hpke_setup_r_or(s, bad, sk_r, pk_r, enc0, b"info", b"", b"", pk_s) {
+      Ok(_) =>
+        assert_true(false, msg="setup_r_or accepted mode " + bad.to_string())
+      Err(_) => ()
+    }
+  }
+}

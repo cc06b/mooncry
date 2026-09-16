@@ -12,6 +12,7 @@ pub fn hkdf_sha3_256(
   info : Bytes,
   length : Int,
 ) -> Bytes {
+  kdf_check_expand_len("hkdf_sha3_256", length, 32)
   let prk = hmac_sha3_256(salt, ikm)
   let mut okm = b""
   let mut t = b""
@@ -44,6 +45,7 @@ pub fn pbkdf2_hmac_sha3_256(
   iterations : Int,
   dklen : Int,
 ) -> Bytes {
+  kdf_check_pbkdf2("pbkdf2_hmac_sha3_256", iterations, dklen)
   let h_len = 32
   let num_blocks = (dklen + h_len - 1) / h_len
   let result = Array::make(dklen, b'\x00')

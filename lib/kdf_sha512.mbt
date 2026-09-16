@@ -27,6 +27,7 @@ pub fn hkdf_sha512(
   info : Bytes,
   length : Int,
 ) -> Bytes {
+  kdf_check_expand_len("hkdf_sha512", length, 64)
   let prk = hkdf_sha512_extract(salt, ikm)
   let mut okm = b""
   let mut t = b""
@@ -58,6 +59,7 @@ pub fn pbkdf2_hmac_sha512(
   iterations : Int,
   dklen : Int,
 ) -> Bytes {
+  kdf_check_pbkdf2("pbkdf2_hmac_sha512", iterations, dklen)
   let h_len = 64
   let num_blocks = (dklen + h_len - 1) / h_len
   let result = Array::make(dklen, b'\x00')
@@ -113,6 +115,7 @@ pub fn hkdf_sha384(
   info : Bytes,
   length : Int,
 ) -> Bytes {
+  kdf_check_expand_len("hkdf_sha384", length, 48)
   let prk = hkdf_sha384_extract(salt, ikm)
   let mut okm = b""
   let mut t = b""

@@ -16,6 +16,42 @@ fn hkdf_extract(salt : Bytes, ikm : Bytes) -> Bytes {
 }
 
 ///|
+/// RFC 5869 §2.3 bounds HKDF-Expand's output: L must be at most
+/// 255 * HashLen, because the block counter is a single octet. Past that the
+/// loop runs out of counter values and the final slice reads off the end of what
+/// was produced — a trap for a negative L, and a trap or a silently short
+/// output for a large one (on wasm32 a huge L wraps to something small, on
+/// native64 it does not, so the same call behaves differently per target).
+/// Every hkdf entry point in the library checks through here.
+fn kdf_check_expand_len(what : String, length : Int, hash_len : Int) -> Unit {
+  if length < 0 {
+    abort(what + ": output length must be non-negative")
+  }
+  let cap = 255 * hash_len
+  if length > cap {
+    abort(
+      what +
+      ": output length " +
+      length.to_string() +
+      " exceeds the RFC 5869 limit 255*HashLen = " +
+      cap.to_string(),
+    )
+  }
+}
+
+///|
+/// RFC 8018 §5.2: the iteration count must be at least 1, and a negative
+/// dkLen would reach `Array::make` / a slice and trap.
+fn kdf_check_pbkdf2(what : String, iterations : Int, dklen : Int) -> Unit {
+  if iterations < 1 {
+    abort(what + ": iterations must be >= 1 (RFC 8018 5.2)")
+  }
+  if dklen < 0 {
+    abort(what + ": dklen must be non-negative")
+  }
+}
+
+///|
 /// HKDF-SHA256 (RFC 5869): expand IKM into `length` bytes using salt + info.
 /// Maximum output is 255 * 32 = 8160 bytes; longer requests are clamped.
 pub fn hkdf_sha256(
@@ -24,6 +60,7 @@ pub fn hkdf_sha256(
   info : Bytes,
   length : Int,
 ) -> Bytes {
+  kdf_check_expand_len("hkdf_sha256", length, 32)
   let prk = hkdf_extract(salt, ikm)
   let mut okm = b""
   let mut t = b""
@@ -55,6 +92,7 @@ pub fn pbkdf2_hmac_sha256(
   iterations : Int,
   dklen : Int,
 ) -> Bytes {
+  kdf_check_pbkdf2("pbkdf2_hmac_sha256", iterations, dklen)
   let h_len = 32
   let num_blocks = (dklen + h_len - 1) / h_len
   let result = Array::make(dklen, b'\x00')

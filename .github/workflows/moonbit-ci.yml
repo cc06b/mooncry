@@ -145,3 +145,25 @@ jobs:
 
       - name: moon test (js, SLH-DSA-SHAKE vectors, indices ${{ matrix.range }})
         run: moon test --target js --release -i ${{ matrix.range }} lib/slh_shake_test.mbt
+
+  # The hostile-input suites are seeded from fixed literals so a failure
+  # reproduces byte for byte on all three targets. That also means they only
+  # ever walk one corpus, so an assertion that happens to hold for those inputs
+  # would stay green forever. This job rewrites every rb_rng seed to a fresh
+  # random value and re-runs the suites, three times per push (~20 s a round on
+  # wasm). The workspace is discarded, so the committed seeds never change.
+  #
+  # A red round is a finding, not a flake: some assertion depended on the
+  # specific corpus. The script prints the failing seed set for reproduction.
+  fuzz-rotate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> $GITHUB_PATH
+
+      - name: rotate fuzz seeds and re-run the robustness suites
+        run: python3 .github/scripts/rotate_fuzz_seeds.py --rounds 3

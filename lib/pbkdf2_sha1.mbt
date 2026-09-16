@@ -13,6 +13,7 @@ pub fn pbkdf2_hmac_sha1(
   iterations : Int,
   dklen : Int,
 ) -> Bytes {
+  kdf_check_pbkdf2("pbkdf2_hmac_sha1", iterations, dklen)
   let h_len = 20
   let num_blocks = (dklen + h_len - 1) / h_len
   let result = Array::make(dklen, b'\x00')

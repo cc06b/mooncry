@@ -736,6 +736,19 @@ fn hpke_key_schedule(
 }
 
 ///|
+/// RFC 9180 §5.1 defines four modes. Only `mode == 2 || mode == 3` was ever
+/// tested, so any other value — a typo, an out-of-range constant from a
+/// protocol parser — quietly meant "base mode": no sender authentication and
+/// no PSK, with no error anywhere. Reported as a value so the `_or` twins can
+/// stay abort-free.
+fn hpke_check_mode(mode : Int) -> Result[Unit, String] {
+  if mode < 0 || mode > 3 {
+    return Err("hpke: mode must be 0 (base), 1 (PSK), 2 (auth) or 3 (PSK+auth)")
+  }
+  Ok(())
+}
+
+///|
 /// HPKE sender setup (RFC 9180 §5.1): mode 0 = base, 1 = psk, 2 = auth,
 /// 3 = auth+psk. For base/auth pass `psk`/`psk_id` empty; for
 /// base/psk pass `sk_s`/`pk_s` empty (they are unused). Returns
@@ -750,6 +763,11 @@ pub fn hpke_setup_s(
   psk_id : Bytes,
   sk_s : Bytes,
 ) -> (Bytes, HpkeContext) {
+  match hpke_check_mode(mode) {
+    Err(e) => abort(e)
+    Ok(_) => ()
+  }
+
   let (shared_secret, enc) = if mode == 2 || mode == 3 {
     hpke_auth_encap(s, pk_r, sk_s, ikm_e)
   } else {
@@ -772,6 +790,11 @@ pub fn hpke_setup_r(
   psk_id : Bytes,
   pk_s : Bytes,
 ) -> HpkeContext {
+  match hpke_check_mode(mode) {
+    Err(e) => abort(e)
+    Ok(_) => ()
+  }
+
   let shared_secret = if mode == 2 || mode == 3 {
     hpke_auth_decap(s, enc, sk_r, pk_r, pk_s)
   } else {
@@ -864,6 +887,11 @@ pub fn hpke_setup_s_or(
   psk_id : Bytes,
   sk_s : Bytes,
 ) -> Result[(Bytes, HpkeContext), String] {
+  match hpke_check_mode(mode) {
+    Err(e) => return Err(e)
+    Ok(_) => ()
+  }
+
   if !hpke_valid_pk(s, pk_r) {
     return Err("hpke: invalid peer public key (pk_r)")
   }
@@ -884,6 +912,11 @@ pub fn hpke_setup_r_or(
   psk_id : Bytes,
   pk_s : Bytes,
 ) -> Result[HpkeContext, String] {
+  match hpke_check_mode(mode) {
+    Err(e) => return Err(e)
+    Ok(_) => ()
+  }
+
   if !hpke_valid_pk(s, enc) {
     return Err("hpke: invalid peer public key (enc)")
   }

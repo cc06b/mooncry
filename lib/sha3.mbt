@@ -236,6 +236,11 @@ pub fn sha3_512(data : Bytes) -> Bytes {
 ///|
 /// SHAKE sponge: domain 0x1F, squeeze `out_len` bytes.
 fn shake_sponge(rate_bytes : Int, data : Bytes, out_len : Int) -> Bytes {
+  // both public widths come through here; a negative out_len used to reach the
+  // squeeze loop and trap
+  if out_len < 0 {
+    abort("shake: out_len must be non-negative")
+  }
   let st = new_state()
   let data_len = data.length()
   let num_blocks = data_len / rate_bytes + 1

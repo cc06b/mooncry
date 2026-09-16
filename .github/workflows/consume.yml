@@ -1,0 +1,34 @@
+# Post-release verification: consume the *published* package the way a user does.
+#
+# This cannot run on push, because at push time the version being verified is
+# not on mooncakes yet (publishing happens after CI is green). So it is a manual
+# dispatch, run right after `moon publish`. It is also the only check that
+# exercises the artefact a consumer downloads rather than this working tree.
+name: Consume published package
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "exact version to require (blank = whatever the registry resolves as latest)"
+        required: false
+        default: ""
+
+jobs:
+  consume:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> $GITHUB_PATH
+
+      - name: Python and Node versions
+        run: |
+          python3 --version
+          node --version
+
+      - name: moon add + build + run against the published package
+        run: python3 .github/scripts/consume_check.py --version "${{ github.event.inputs.version }}"
