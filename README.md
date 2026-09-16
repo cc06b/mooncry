@@ -361,7 +361,10 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `gmac_finalize(st) -> Bytes` | Incremental GMAC 16-byte tag |
 | `gmac_iv(key, iv, aad) -> Bytes` | GMAC with any IV length (SP 800-38D) |
 | `gmac_iv_verify(key, iv, aad, tag) -> Bool` | GMAC any-IV constant-time verify |
+| `gmac_stream_verify(key, iv, aad, tag) -> Bool` | Constant-time check of a 16-byte tag produced by the incremental GMAC |
 | `aes_ctr(data, key, iv) -> Bytes` | AES-CTR encrypt/decrypt (symmetric) |
+| `aes_kw_wrap(kek, key_data) -> Bytes` / `aes_kw_unwrap(kek, wrapped) -> Result[Bytes, String]` | AES Key Wrap (RFC 3394): wrap returns the 8·(n+1)-byte `IV ‖ blocks`; unwrap is `Err` on an integrity failure |
+| `aes_siv_encrypt(key, plaintext, ads : Array[Bytes]) -> Bytes` / `aes_siv_decrypt(envelope, key, ads) -> Result[Bytes, String]` | AES-SIV (RFC 5297), nonce-misuse-resistant; `key` 32/48/64 bytes, output is `IV(16) ‖ ct`, and `ads` is the vector of associated-data strings |
 | `chacha20_xor(input, key, nonce, counter) -> Bytes` | ChaCha20 encrypt/decrypt (symmetric) |
 | `salsa20_keystream_block(key, nonce, counter) -> Bytes` | Salsa20 keystream block (64 bytes) |
 | `salsa20_xor(key, nonce, counter, data) -> Bytes` | Salsa20 stream cipher encrypt/decrypt (symmetric) |
@@ -375,6 +378,7 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `totp_sha256 / totp_sha512(key, unix_time, step, digits) -> String` | TOTP (RFC 6238) with HMAC-SHA256/512 |
 | `ed25519ctx_sign(seed, msg, ctx) / ed25519ctx_verify(pk, msg, sig, ctx)` | Ed25519ctx (RFC 8032), ctx 1..255 bytes |
 | `ed25519ph_sign(seed, msg, ctx) / ed25519ph_verify(pk, msg, sig, ctx)` | Ed25519ph (RFC 8032), SHA-512 prehash |
+| `ed25519ph_sign_hashed(seed, ph_hash, ctx) / ed25519ph_verify_hashed(pk, ph_hash, sig, ctx)` | the same, when the caller already holds the 64-byte SHA-512 prehash |
 | `adler32(data : Bytes) -> Bytes` | Adler-32 (RFC 1950), 4-byte big-endian |
 | `hkdf_sha256(salt, ikm, info, len) -> Bytes` | HKDF-SHA256 (RFC 5869) |
 | `hkdf_sha512(salt, ikm, info, len) -> Bytes` | HKDF-SHA512 (RFC 5869) |
@@ -384,6 +388,8 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `hkdf_sha3_256(salt, ikm, info, len) -> Bytes` | HKDF-SHA3-256 (RFC 5869 over FIPS 202) |
 | `pbkdf2_hmac_sha3_256(password, salt, iterations, len) -> Bytes` | PBKDF2-HMAC-SHA3-256 (RFC 8018 over FIPS 202) |
 | `scrypt(password, salt, n, r, p, dklen) -> Bytes` | scrypt memory-hard KDF (RFC 7914), `n` power of two |
+| `argon2id(password, salt, t_cost, m_cost, parallelism, hash_len) -> Bytes` | Argon2id (RFC 9106), the recommended variant |
+| `argon2(…, type) / argon2i(…) / argon2d(…)` | the generic form with an explicit type (0 = d, 1 = i, 2 = id) and the two pure variants |
 | `rsa_pkcs1_v15_encrypt(msg, n, e, rand_ps) -> Bytes` | RSAES-PKCS1-v1.5 encrypt (RFC 8017 §7.2); `rand_ps` must be k−msglen−3 **nonzero** bytes |
 | `rsa_pkcs1_v15_encrypt_or(msg, n, e, rand_ps) -> Result[Bytes, String]` | same, reporting a degenerate peer modulus / a zero byte in `rand_ps` as `Err` |
 | `rsa_pkcs1_v15_decrypt(ct, n, d) -> Bytes` | RSAES-PKCS1-v1.5 decrypt |
@@ -452,15 +458,19 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `hpke_export(ctx, exporter_context, len)` | HPKE exporter |
 | `hpke_x25519_* / hpke_p256_* / hpke_p521_* / hpke_x448_*` | HPKE cipher-suite selectors (all RFC-vectored suites) |
 | `hpke_p384_hkdf_sha384_aes256gcm` | DHKEM(P-384) suite (differential vectors) |
+| `hpke_derive_key_pair(suite, ikm) -> (pk, sk)` | DHKEM DeriveKeyPair (rejection-sampling for the NIST curves, up to 255 tries) |
+| `hpke_encap / hpke_decap(suite, …)` | DHKEM base Encap/Decap; returns **(shared_secret, enc)** |
+| `hpke_auth_encap(suite, pk_r, sk_s, ikm_e) / hpke_auth_decap(suite, enc, sk_r, pk_r, pk_s)` | DHKEM auth modes (RFC 9180 §5.1.3), `kem_context = enc ‖ pkRm ‖ pkSm`; same **(shared_secret, enc)** order |
+| `hpke_setup_r(suite, mode, sk_r, pk_r, enc, info, psk, psk_id, pk_s)` | HPKE receiver setup (all 4 modes) |
 | `hmac_sha384 / hkdf_sha384 / hkdf_sha384_extract` | SHA-384 MAC/KDF family |
 | `ml_dsa_44_keygen(seed) -> (pk, sk)` | ML-DSA-44 keygen (FIPS 204, deterministic in seed) |
 | `ml_dsa_44_sign(sk, msg, rnd, ctx) -> Bytes` | ML-DSA-44 sign (pure; rnd = 0^32 = deterministic) |
 | `ml_dsa_44_verify(pk, msg, sig, ctx) -> Bool` | ML-DSA-44 verify |
 | `ml_dsa_65_keygen / sign / verify` | ML-DSA-65 (same shapes) |
 | `ml_dsa_87_keygen / sign / verify` | ML-DSA-87 (same shapes) |
-| `ml_dsa_44_sign_prehash(sk, msg, rnd, ctx, ph)` | HashML-DSA-44 sign (FIPS 204 Alg 4, OID-tagged pre-hash) |
-| `ml_dsa_44_verify_prehash(pk, msg, sig, ctx, ph)` | HashML-DSA-44 verify (FIPS 204 Alg 5) |
-| `ml_dsa_44_sign_mu(sk, mu, rnd) / verify_mu(pk, mu, sig)` | ML-DSA-44 external-mu interface (Alg 7/8) |
+| `ml_dsa_44_sign_prehash(sk, msg, rnd, ctx, ph)` | HashML-DSA-44 sign (FIPS 204 Alg 4, OID-tagged pre-hash); 65/87 have the same shape |
+| `ml_dsa_44_verify_prehash(pk, msg, sig, ctx, ph)` | HashML-DSA-44 verify (FIPS 204 Alg 5); 65/87 have the same shape |
+| `ml_dsa_44_sign_mu(sk, mu, rnd) / verify_mu(pk, mu, sig)` | ML-DSA external-mu interface (Alg 7/8); 65/87 have the same shape |
 | `dsa_prehash_variants / dsa_prehash_sha2_256 / ...` | 12 pre-hash selectors (SHA2/SHA3 family + SHAKE-128/256) |
 | `slh_keygen(slh_sha2_128s, sk_seed, sk_prf, pk_seed)` | SLH-DSA keygen (FIPS 205, deterministic in the three seeds) |
 | `slh_sign(params, sk, msg, ctx) / slh_sign_hedged(...)` | SLH-DSA pure signing (deterministic / hedged) |
@@ -470,6 +480,7 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `slh_sha2_128s ... slh_shake_256f` | all 12 SLH-DSA parameter sets |
 | `lms_keygen / lms_sign / lms_verify` | LMS (RFC 8554) stateful Merkle signatures; `lms_public_key` regenerates pk from SEED/I |
 | `hss_keygen / hss_sign / hss_verify` | HSS multi-level LMS (L=1..8); `hss_keygen_with` for explicit parameter chains |
+| `hss_public_key(sk) -> Bytes` | The HSS public key blob (typecode ‖ L ‖ root ‖ I) for a private key |
 | `xmss_params(func, n, full_height, ...)` | XMSS/XMSS^MT parameter sets (RFC 8391): SHA2/SHAKE128/SHAKE256, n in {24,32,64}; d=1 is plain XMSS, d>1 multi-tree |
 | `xmss_keygen_from_seed / xmss_sign / xmss_verify` | XMSS from 48-byte seed; `xmss_set_index` manages the leaf counter; `xmss_public_key` regenerates pk |
 | `xmss_wots_pkgen / xmss_wots_sign / xmss_wots_pk_from_sig` | WOTS+ one-time primitives (exposed for verification tooling) |
@@ -526,6 +537,29 @@ valid DER *prefix* returns `(b"", false)` instead of trapping.
 AES-CBC/GCM/CTR keys may be 128, 192, or 256 bits; the nonce for GCM and
 ChaCha20 is 96 bits (12 bytes), the recommended length per spec. Wrong lengths
 cause an `abort` with a descriptive message.
+
+### Public but internal: what `pub` owes you here
+
+MoonBit compiles `*_test.mbt` as a *blackbox* package, so a test can only reach
+items marked `pub`. That forces a layer of internals to be public so the
+layered and differential tests can probe them. They are **not** part of the
+supported API: no stability promise, and they may change or vanish in any
+release.
+
+| Group | Names | Why it is public |
+| --- | --- | --- |
+| Falcon internals | `falcon_xof_*`, `falcon_hash_to_point`, `falcon_{modq,trim,comp}_{encode,decode}`, `falcon_fft` / `falcon_ifft` / `falcon_poly_*_fft`, `falcon_mkgauss`, `modp_*`, `zint_*`, `fp_*`, `falcon_prng_init`, `prng_get_u64` / `prng_get_u8`, `falcon_gaussian0_sampler`, `falcon_sampler*`, `falcon_mq_ntt` / `falcon_mq_intt`, `falcon_to_ntt_monty`, `falcon_is_short`, `falcon_compute_public` | the port was verified layer by layer against the C reference (XOF, codecs, FFT, the NTRU solver, the sampler); those tests still run and need the layer boundaries visible |
+| P-256 debug probes | `p256_dbg_mul` / `p256_dbg_ref_mul` / `p256_dbg_gmul` / `p256_dbg_ref_gmul` | the differential test of the native field against the reference one (`lib/p256_dbg_test.mbt`) |
+| Test RNG | `falcon_test_rng_init` / `_bytes` / `_set_ctr` | a deterministic SHAKE256 stream so the Falcon KATs reproduce byte for byte |
+| XMSS leaf helper | `xmss_gen_leaf_wots` | lets a test regenerate one leaf without building a whole tree |
+
+⚠️ **`falcon_test_rng_*` is not a CSPRNG.** It is a counter-driven SHAKE256
+stream that anyone can reproduce from nothing but the call order. Using it for
+keys, nonces or `ikm` produces material an attacker can recompute. By design
+this library contains no RNG at all: every real key and nonce comes from a
+caller-supplied seed or `rand` callback.
+
+If you consume this package, treat everything in that table as private.
 
 ## Security & performance boundaries
 

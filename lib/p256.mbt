@@ -543,12 +543,3 @@ pub fn p256_dbg_ref_gmul(k : Int) -> Bytes {
   )
   concat_all([pt.x.to_octets(length=32), pt.y.to_octets(length=32)])
 }
-
-///|
-pub fn bytes_slice_dbg(b : Bytes, off : Int, len : Int) -> Bytes {
-  let out = Array::make(len, b'\x00')
-  for i in 0..<len {
-    out[i] = b[off + i]
-  }
-  Bytes::from_array(out)
-}
