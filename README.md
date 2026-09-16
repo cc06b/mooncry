@@ -9,7 +9,7 @@ verified against official standard vectors.
 - **Correct** — every algorithm is checked against FIPS / NIST / RFC test
   vectors, and cross-validated against reference implementations
   (pycryptodome, cryptography, hashlib, libsodium, zlib) plus randomized
-  differential testing. 1165 tests, run with `moon test --deny-warn`.
+  differential testing. 1172 tests, run with `moon test --deny-warn`.
 - **Broad** — MD5, **SHA-1**, the SHA-2 and SHA-3 families (incl. **SHA-512/224
   and SHA-512/256**), **Keccak-256**,
   SHAKE/**cSHAKE** XOFs, **KMAC128/256**, BLAKE2b, **BLAKE2s**, BLAKE3,
@@ -500,7 +500,7 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `ml_kem_512/768/1024_decaps_or(dk, c) -> Result[Bytes, String]` | ML-KEM decapsulation, `Err` on wrong lengths (invalid `c` still gets the implicit-rejection key) |
 | `xwing_encaps_or(pk, eseed) / xwing_decaps_or(ct, sk) -> Result[_, String]` | X-Wing, graceful on wrong-length peer material |
 | `hpke_valid_pk(suite, pk) -> Bool` | Validate a peer HPKE public key / `enc` (length + on-curve for the NIST KEMs) |
-| `hpke_encap_or / auth_encap_or / decap_or / auth_decap_or / setup_s_or / setup_r_or` | HPKE with peer keys validated up front, `Err` instead of aborting |
+| `hpke_encap_or / auth_encap_or / decap_or / auth_decap_or / setup_s_or / setup_r_or` | HPKE with peer keys validated up front, `Err` instead of aborting. The encap pair returns **(shared_secret, enc)** — the reverse of RFC 9180's pseudocode, and both halves are `Bytes`, so a swap compiles and fails silently |
 | `bytes_equal(a, b : Bytes) -> Bool` | Constant-time comparison |
 
 Streaming hashers (`<algo>_new` / `sha3_update` / `sha3_finalize` /
@@ -1315,7 +1315,7 @@ keys with 0/1/2 AD entries, AES-KW, AES-CBC (including the PKCS#7 full extra
 padding block on exact multiples of 16) and CTR, SM4-CBC/CTR, the sealed box,
 the ML-KEM hybrid envelope and the SM2 GM/T 0009 envelope.
 
-**1165 tests.**
+**1172 tests.**
 
 ## Development
 

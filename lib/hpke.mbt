@@ -627,6 +627,11 @@ pub fn hpke_decap(
 
 ///|
 /// HPKE AuthEncap (derandomized). v0.37.0.
+///
+/// Returns **(shared_secret, enc)** — the reverse of RFC 9180's
+/// `return enc, shared_secret`. Both halves are `Bytes`, so swapping them
+/// compiles and then fails silently (the peer would be handed the shared
+/// secret as its `enc`). `hpke_setup_s` destructures it correctly.
 pub fn hpke_auth_encap(
   s : HpkeSuite,
   pk_r : Bytes,
@@ -784,7 +789,8 @@ pub fn hpke_setup_r(
 
 ///|
 /// HPKE Encap without aborting: `Err` if the recipient's `pk_r` is not a
-/// valid public key for the suite's KEM.
+/// valid public key for the suite's KEM. On success the `Ok` payload is
+/// **(shared_secret, enc)**, as in `hpke_encap`.
 pub fn hpke_encap_or(
   s : HpkeSuite,
   pk_r : Bytes,
@@ -797,7 +803,8 @@ pub fn hpke_encap_or(
 }
 
 ///|
-/// HPKE AuthEncap without aborting. See `hpke_encap_or`.
+/// HPKE AuthEncap without aborting. See `hpke_encap_or`; the `Ok` payload is
+/// **(shared_secret, enc)**, not the RFC's (enc, shared_secret).
 pub fn hpke_auth_encap_or(
   s : HpkeSuite,
   pk_r : Bytes,
