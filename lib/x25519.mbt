@@ -31,10 +31,12 @@ fn x25519_clamp(s : Bytes) -> Bytes {
 /// 32-byte clamped `scalar` and a 32-byte `u` coordinate (the peer's public
 /// key, or 9 for base-point key generation). Returns the 32-byte result.
 pub fn x25519(scalar : Bytes, u : Bytes) -> Bytes {
-  if scalar.length() != 32 || u.length() != 32 {
-    abort("x25519: scalar and u must be 32 bytes")
+  // delegates to the `_or` twin: one guard, one message (they were duplicated
+  // verbatim, which is how twins drift)
+  match x25519_or(scalar, u) {
+    Ok(shared) => shared
+    Err(msg) => abort(msg)
   }
-  x25519_ladder(x25519_clamp(scalar), u)
 }
 
 ///|

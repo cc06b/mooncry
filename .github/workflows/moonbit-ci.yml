@@ -58,6 +58,14 @@ jobs:
             exit 1
           fi
 
+      # The API contracts the README otherwise only asserts in prose. Static,
+      # no toolchain needed, ~1 s:
+      #   C1 every `_or` entry point returns Result[_]
+      #   C2 every aborting twin shares ONE guard with its `_or` twin
+      #   C3 every name in the Public API table exists in lib/
+      - name: API contract check
+        run: python3 .github/scripts/api_contract_check.py
+
       - name: Build
         run: moon build
 

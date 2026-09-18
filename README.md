@@ -656,7 +656,11 @@ If you consume this package, treat everything in that table as private.
   the implicit-rejection key. Every such entry point is covered by the
   hostile-input fuzz suite (see [Testing](#testing)); where the historical API
   aborted on an authentication failure, a graceful `_or` twin was added and the
-  original kept for compatibility.
+  original kept for compatibility. Since v0.86.0 a CI check
+  (`.github/scripts/api_contract_check.py`) enforces the rest of that contract
+  statically: every `_or` returns `Result`, each aborting twin shares **one**
+  guard with its twin rather than keeping a copy, and every name in the Public
+  API table below exists in the source.
 - **Encrypting to a peer key crosses the same boundary as verifying one.**
   Sealing and encrypting consume a *recipient* public key that came off the
   wire, so those entry points have `_or` twins too:

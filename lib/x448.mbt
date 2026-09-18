@@ -17,10 +17,11 @@
 /// coordinate is decoded as a little-endian integer mod p (any high bits
 /// beyond 448 are impossible for a 56-byte input).
 pub fn x448(scalar : Bytes, u : Bytes) -> Bytes {
-  if scalar.length() != 56 || u.length() != 56 {
-    abort("x448: scalar and u must be 56 bytes")
+  // delegates to the `_or` twin: one guard, one message (see x25519)
+  match x448_or(scalar, u) {
+    Ok(shared) => shared
+    Err(msg) => abort(msg)
   }
-  x448_ladder_native(scalar, u)
 }
 
 ///|

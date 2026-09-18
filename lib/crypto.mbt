@@ -76,21 +76,13 @@ fn hex_char_to_int(c : Int) -> Int {
 
 ///|
 pub fn hex_to_bytes(hex : String) -> Bytes {
-  let len = hex.length()
-  if len % 2 != 0 {
-    abort("hex_to_bytes: hex string length must be even")
+  // delegates to the `_or` twin so the two cannot drift: they used to be
+  // separate loops with separate messages ("hex string length must be even" /
+  // "invalid hex character" here, "odd length" / "non-hex character" there).
+  match hex_to_bytes_or(hex) {
+    Ok(b) => b
+    Err(msg) => abort(msg)
   }
-  let n = len / 2
-  let out = Array::make(n, b'\x00')
-  for i in 0..<n {
-    let hi = hex_char_to_int(hex[i * 2].to_int())
-    let lo = hex_char_to_int(hex[i * 2 + 1].to_int())
-    if hi < 0 || lo < 0 {
-      abort("hex_to_bytes: invalid hex character")
-    }
-    out[i] = ((hi << 4) | lo).to_byte()
-  }
-  Bytes::from_array(out[:])
 }
 
 // ==================== SHA-256 (FIPS 180-4) ====================
