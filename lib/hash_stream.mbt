@@ -273,6 +273,10 @@ fn sha256_finish_blocks(hasher : Sha256Hasher) -> Unit {
 }
 
 ///|
+/// Finish the stream and return the 32-byte digest. This *consumes* the
+/// hasher: the padding is written into its buffer in place, so a second
+/// `sha256_finalize` — or any `sha256_update` after it — yields an unrelated
+/// digest with no error. Use `sha256_clone` before finalizing to fork a stream.
 pub fn sha256_finalize(hasher : Sha256Hasher) -> Bytes {
   sha256_finish_blocks(hasher)
   let result_arr = Array::make(32, b'\x00')
@@ -287,9 +291,16 @@ pub fn sha256_finalize(hasher : Sha256Hasher) -> Bytes {
 }
 
 ///|
-/// Finalize and return only the first `n` bytes of the digest (n <= 32).
+/// Finalize and return only the first `n` bytes of the digest (0 <= n <= 32).
 /// Cheaper than `sha256_finalize` + truncation (one allocation). v0.34.0.
+///
+/// `n` is the caller's and both ends used to bite without a message: a
+/// negative `n` reached `Array::make` and trapped, and `n > 32` read past the
+/// 8-word state (an out-of-bounds throw). v0.85.0.
 pub fn sha256_finalize_n(hasher : Sha256Hasher, n : Int) -> Bytes {
+  if n < 0 || n > 32 {
+    abort("sha256_finalize_n: n must be in 0..=32")
+  }
   sha256_finish_blocks(hasher)
   let result_arr = Array::make(n, b'\x00')
   for idx in 0..<n {
@@ -403,6 +414,8 @@ fn sha512_finish_blocks(hasher : Sha512Hasher) -> Unit {
 }
 
 ///|
+/// Finish the stream and return the 64-byte digest. Consumes the hasher, as
+/// `sha256_finalize` does; use `sha512_clone` to fork.
 pub fn sha512_finalize(hasher : Sha512Hasher) -> Bytes {
   sha512_finish_blocks(hasher)
   let result_arr = Array::make(64, b'\x00')
@@ -413,9 +426,13 @@ pub fn sha512_finalize(hasher : Sha512Hasher) -> Bytes {
 }
 
 ///|
-/// Finalize and return only the first `n` bytes of the digest (n <= 64).
+/// Finalize and return only the first `n` bytes of the digest (0 <= n <= 64).
 /// Cheaper than `sha512_finalize` + truncation (one allocation). v0.34.0.
+/// Bounds enforced as in `sha256_finalize_n`. v0.85.0.
 pub fn sha512_finalize_n(hasher : Sha512Hasher, n : Int) -> Bytes {
+  if n < 0 || n > 64 {
+    abort("sha512_finalize_n: n must be in 0..=64")
+  }
   sha512_finish_blocks(hasher)
   let result_arr = Array::make(n, b'\x00')
   for idx in 0..<n {

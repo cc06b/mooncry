@@ -58,7 +58,10 @@ pub fn sha3_update(h : Sha3Hasher, data : Bytes) -> Unit {
 
 ///|
 /// Finalize: apply the domain-separation/padding, absorb the last block,
-/// and squeeze `out_len` bytes.
+/// and squeeze `out_len` bytes. This *consumes* the hasher — the padding is
+/// XORed into its buffer in place — so a second call, or a `sha3_update`
+/// after it, produces an unrelated digest with no error. Fork with
+/// `sha3_clone` before finalizing.
 pub fn sha3_finalize(h : Sha3Hasher) -> Bytes {
   // Clear the unused tail (leftover from a previous absorbed block).
   for i in h.buf_len..<h.rate {
@@ -115,6 +118,7 @@ pub fn sha3_512_new() -> Sha3Hasher {
 ///|
 /// Squeeze `out_len` bytes from the sponge (variable-length output).
 fn sha3_squeeze(h : Sha3Hasher, out_len : Int) -> Bytes {
+  shake_check_out_len(out_len)
   let out = Array::make(out_len, b'\x00')
   let mut out_off = 0
   let mut lane_idx = 0
@@ -148,6 +152,8 @@ pub fn shake_256_new() -> Sha3Hasher {
 
 ///|
 /// Finalize a SHAKE hasher and squeeze `out_len` bytes (domain 0x1F, XOF).
+/// `out_len` must be non-negative. Like every finalize here, this consumes the
+/// hasher: see the single-use note in the README.
 pub fn shake_finalize(h : Sha3Hasher, out_len : Int) -> Bytes {
   for i in h.buf_len..<h.rate {
     h.buffer[i] = b'\x00'

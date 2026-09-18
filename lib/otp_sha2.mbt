@@ -7,6 +7,7 @@
 /// RFC 4226 dynamic truncation of a MAC (any length) to an OTP of
 /// `digits` decimal characters.
 fn otp_truncate(mac : Bytes, digits : Int) -> String {
+  otp_check_digits(digits)
   let offset = mac[mac.length() - 1].to_int() & 0x0f
   let binary = ((mac[offset].to_int() & 0x7f) << 24) |
     (mac[offset + 1].to_int() << 16) |
@@ -41,6 +42,7 @@ pub fn totp_sha256(
   step : Int,
   digits : Int,
 ) -> String {
+  otp_check_step(step)
   let counter = unix_time / step.to_uint64()
   hotp_sha256(key, counter, digits)
 }
@@ -54,6 +56,7 @@ pub fn totp_sha512(
   step : Int,
   digits : Int,
 ) -> String {
+  otp_check_step(step)
   let counter = unix_time / step.to_uint64()
   hotp_sha512(key, counter, digits)
 }

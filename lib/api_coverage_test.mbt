@@ -472,3 +472,99 @@ test "kdf limits and hpke mode guard" {
     }
   }
 }
+
+///|
+test "wave-3 boundaries: xof lengths, block offsets, otp digits" {
+  // Third probe wave (v0.85.0). As in the v0.84.0 block above, the aborts
+  // themselves cannot be asserted from a blackbox test, so what is pinned here
+  // is the inside of every new guard's range: a guard one unit too tight turns
+  // these red. Outside the range, the measured behaviour before the guards was
+  // a trap (`shake_finalize(h, -1)`, `sha256_finalize_n(h, -1)`,
+  // `turbo_shake_*(out_len -1)`, `sm4_encrypt_block(off -1)`,
+  // `falcon_xof_extract(-1)`), a core out-of-bounds throw
+  // (`sha256_finalize_n(h, 33)`, a 16-word round key), or a silent answer
+  // (`hotp(digits -1)` returned "0", `turbo_shake_*(D 0x80)` returned a
+  // digest no other implementation produces).
+  // ---- streaming XOF: out_len 0 is legal and must still match one-shot ----
+  let h0 = shake_128_new()
+  sha3_update(h0, b"abc")
+  assert_true(
+    shake_finalize(h0, 0).length() == 0,
+    msg="shake_finalize with out_len 0",
+  )
+  let h1 = shake_256_new()
+  sha3_update(h1, b"abc")
+  assert_true(
+    bytes_equal(shake_finalize(h1, 64), shake_256(b"abc", 64)),
+    msg="streaming shake_finalize == one-shot shake_256",
+  )
+  // ---- truncated digests at both documented ends ----
+  let z = sha256_new()
+  sha256_update(z, b"abc")
+  assert_true(sha256_finalize_n(z, 0).length() == 0, msg="sha256_finalize_n 0")
+  let s2 = sha256_new()
+  sha256_update(s2, b"abc")
+  assert_true(
+    bytes_equal(sha256_finalize_n(s2, 32), sha256(b"abc")),
+    msg="sha256_finalize_n at the full digest width",
+  )
+  let s5 = sha512_new()
+  sha512_update(s5, b"abc")
+  assert_true(
+    bytes_equal(sha512_finalize_n(s5, 64), sha512(b"abc")),
+    msg="sha512_finalize_n at the full digest width",
+  )
+  // ---- TurboSHAKE / KangarooTwelve: D = 1 and D = 127 are RFC 9861's ends ----
+  assert_true(
+    turbo_shake_128(b"data", b'\x01', 0).length() == 0,
+    msg="turbo_shake_128 with out_len 0",
+  )
+  assert_true(
+    turbo_shake_256(b"data", b'\x7f', 32).length() == 32,
+    msg="turbo_shake_256 at D = 127",
+  )
+  assert_true(
+    kangaroo_twelve_128(b"data", b"", 0).length() == 0,
+    msg="kangaroo_twelve_128 with l = 0",
+  )
+  assert_true(
+    kangaroo_twelve_256(b"data", b"", 16).length() == 16,
+    msg="kangaroo_twelve_256 with l = 16",
+  )
+  // ---- sm4: the last whole block of a longer buffer, round-tripped ----
+  let rk = sm4_expand_key(Bytes::make(16, b'\x01'))
+  let data = Bytes::make(32, b'\x61')
+  let ct = sm4_encrypt_block(rk, data, 16)
+  assert_true(ct.length() == 16, msg="sm4_encrypt_block at off = 16 of 32")
+  let pt = sm4_decrypt_block(rk, ct, 0)
+  let mut same = true
+  for i in 0..<16 {
+    if pt[i] != data[16 + i] {
+      same = false
+    }
+  }
+  assert_true(same, msg="sm4 block round trip across the offset guard")
+  // ---- OTP: digits 1 and 9 are the accepted ends, step 1 the smallest ----
+  let okey = Bytes::make(20, b'\x31')
+  assert_true(hotp(okey, 0UL, 1).length() == 1, msg="hotp with digits = 1")
+  assert_true(hotp(okey, 0UL, 9).length() == 9, msg="hotp with digits = 9")
+  assert_true(
+    hotp_sha256(okey, 0UL, 9).length() == 9,
+    msg="hotp_sha256 with digits = 9",
+  )
+  assert_true(
+    hotp_sha512(okey, 0UL, 9).length() == 9,
+    msg="hotp_sha512 with digits = 9",
+  )
+  assert_true(totp(okey, 59UL, 1, 8).length() == 8, msg="totp with step = 1")
+  // step = 1 makes the counter the timestamp itself, so this must equal HOTP
+  assert_true(
+    totp_sha256(okey, 59UL, 1, 8) == hotp_sha256(okey, 59UL, 8),
+    msg="totp_sha256 with step = 1 == hotp_sha256 at counter 59",
+  )
+  // ---- the Falcon XOF at len 0 (falcon_xof_extract's own boundary) ----
+  assert_true(
+    falcon_xof_extract(falcon_xof_init(), 0).length() == 0,
+    msg="falcon_xof_extract with len 0",
+  )
+}

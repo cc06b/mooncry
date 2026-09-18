@@ -120,8 +120,24 @@ fn sm4_write_words(
 }
 
 ///|
-/// Encrypt one 16-byte block with pre-expanded round keys.
-pub fn sm4_encrypt_block(rk : Array[UInt], data : Bytes, off : Int) -> Bytes {
+/// Shared shape check for the two single-block entry points. `rk` must be the
+/// 32 words `sm4_expand_key` returns, and `off` must leave a whole block inside
+/// `data`. Both used to fail without saying which argument was wrong: a short
+/// `rk` threw out of `Array::at` inside the round function, and a bad `off`
+/// trapped in the block read (`check_range`). The modes call these per block,
+/// so the check is two length reads and two compares against 32 rounds.
+/// v0.85.0.
+fn sm4_check_block_args(rk : Array[UInt], data : Bytes, off : Int) -> Unit {
+  if rk.length() != 32 {
+    abort("sm4: round keys must be the 32 words sm4_expand_key returns")
+  }
+  if off < 0 || off + 16 > data.length() {
+    abort("sm4: block offset leaves no whole 16-byte block in data")
+  }
+}
+
+///|
+fn sm4_encrypt_block_raw(rk : Array[UInt], data : Bytes, off : Int) -> Bytes {
   let (x0, x1, x2, x3) = sm4_read_block(data, off)
   let (a, b, c, d) = sm4_crypt_words(rk, x0, x1, x2, x3)
   let out = Array::make(16, (0).to_byte())
@@ -130,13 +146,21 @@ pub fn sm4_encrypt_block(rk : Array[UInt], data : Bytes, off : Int) -> Bytes {
 }
 
 ///|
+/// Encrypt one 16-byte block with pre-expanded round keys.
+pub fn sm4_encrypt_block(rk : Array[UInt], data : Bytes, off : Int) -> Bytes {
+  sm4_check_block_args(rk, data, off)
+  sm4_encrypt_block_raw(rk, data, off)
+}
+
+///|
 /// Decrypt one 16-byte block (same network, reversed round keys).
 pub fn sm4_decrypt_block(rk : Array[UInt], data : Bytes, off : Int) -> Bytes {
+  sm4_check_block_args(rk, data, off)
   let rrk = Array::make(32, 0U)
   for i in 0..<32 {
     rrk[i] = rk[31 - i]
   }
-  sm4_encrypt_block(rrk, data, off)
+  sm4_encrypt_block_raw(rrk, data, off)
 }
 
 ///|

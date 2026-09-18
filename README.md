@@ -9,7 +9,7 @@ verified against official standard vectors.
 - **Correct** — every algorithm is checked against FIPS / NIST / RFC test
   vectors, and cross-validated against reference implementations
   (pycryptodome, cryptography, hashlib, libsodium, zlib) plus randomized
-  differential testing. 1173 tests, run with `moon test --deny-warn`.
+  differential testing. 1174 tests, run with `moon test --deny-warn`.
 - **Broad** — MD5, **SHA-1**, the SHA-2 and SHA-3 families (incl. **SHA-512/224
   and SHA-512/256**), **Keccak-256**,
   SHAKE/**cSHAKE** XOFs, **KMAC128/256**, BLAKE2b, **BLAKE2s**, BLAKE3,
@@ -213,7 +213,19 @@ allocation and a minimal hot path (~1.3x one-shot cost vs ~3.7x for
 calling it twice — or calling `update` after it — produces a *wrong digest
 with no error*. Create a new hasher per message. To fork a stream mid-way
 (e.g. to try two suffixes) use `sha256_clone` / `sha512_clone` /
-`sha3_clone` / `sm3_clone` and finalize the copy.
+`sha3_clone` / `sm3_clone` and finalize the copy — and clone *before*
+finalizing the original, since a clone of a finalized hasher copies the
+padded state (measured: it hashes to neither suffix).
+
+**Incremental MAC and AEAD states are single-use the same way.**
+`gmac_finalize` folds the length block into its accumulator and
+`ml_kem_hybrid_stream_final` encrypts the residue and finishes Poly1305;
+neither resets. A second finalize, an update after finalize, or reusing the
+state for an unrelated message yields a *different tag or blob with no error*
+— measured for GMAC, not assumed. One state per message; `gmac_new` /
+`gmac_new_iv` / `ml_kem_*_hybrid_seal_init` are cheap. (`poly1305_finalize`
+happens to be repeatable today, which is not a contract — treat every finalize
+as consuming its state.)
 
 ## Installation
 
@@ -317,7 +329,7 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `sm3_new() / sm3_update(h, data) / sm3_finalize(h)` | SM3 streaming hasher |
 | `sm3_clone(h) -> Sm3Hasher` | Deep-copy an SM3 hasher (prefix reuse) |
 | `sm4_encrypt(key, block) / sm4_decrypt(key, block)` | SM4 (GB/T 32907) single-block with a 16-byte key |
-| `sm4_expand_key(key)` + `sm4_encrypt_block(rk, data, off)` / `sm4_decrypt_block` | SM4 with reusable round keys |
+| `sm4_expand_key(key)` + `sm4_encrypt_block(rk, data, off)` / `sm4_decrypt_block(rk, data, off)` | SM4 with reusable round keys; `rk` must be the 32 words `sm4_expand_key` returns and `off` must leave a whole 16-byte block in `data` |
 | `sm2_public_key(sk) -> Bytes` | SM2 public key (uncompressed 65 bytes) from a 32-byte secret key |
 | `sm2_sign(sk, msg, id, rand) -> Bytes` | SM2 signature (r\|\|s, 64 bytes); `rand(32)` supplies the nonce k |
 | `sm2_sign_with_k(sk, msg, id, k) -> Bytes` | SM2 sign with explicit nonce (deterministic; aborts on degenerate k) |
@@ -374,8 +386,8 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `xchacha20_xor(input, key, nonce24, counter) -> Bytes` | XChaCha20 stream cipher, 24-byte nonce (symmetric) |
 | `xchacha20_poly1305_encrypt(key, nonce24, aad, pt) -> Bytes` | XChaCha20-Poly1305 AEAD → ct ‖ tag |
 | `xchacha20_poly1305_decrypt(key, nonce24, aad, input) -> Bytes` | XChaCha20-Poly1305 AEAD decrypt, aborts on tag mismatch |
-| `hotp_sha256 / hotp_sha512(key, counter, digits) -> String` | HOTP (RFC 4226) with HMAC-SHA256/512 |
-| `totp_sha256 / totp_sha512(key, unix_time, step, digits) -> String` | TOTP (RFC 6238) with HMAC-SHA256/512 |
+| `hotp(key, counter, digits)` / `hotp_sha256 / hotp_sha512(...) -> String` | HOTP (RFC 4226) with HMAC-SHA1/256/512; `digits` 1..=9 (the RFC recommends 6..=8) |
+| `totp(key, unix_time, step, digits)` / `totp_sha256 / totp_sha512(...) -> String` | TOTP (RFC 6238); `step` in seconds ≥ 1, `digits` 1..=9 |
 | `ed25519ctx_sign(seed, msg, ctx) / ed25519ctx_verify(pk, msg, sig, ctx)` | Ed25519ctx (RFC 8032), ctx 1..255 bytes |
 | `ed25519ph_sign(seed, msg, ctx) / ed25519ph_verify(pk, msg, sig, ctx)` | Ed25519ph (RFC 8032), SHA-512 prehash |
 | `ed25519ph_sign_hashed(seed, ph_hash, ctx) / ed25519ph_verify_hashed(pk, ph_hash, sig, ctx)` | the same, when the caller already holds the 64-byte SHA-512 prehash |
@@ -450,7 +462,7 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `xwing_keygen(seed) -> (pk, sk)` | X-Wing hybrid KEM keygen (ML-KEM-768 + X25519) |
 | `xwing_encaps(pk, eseed) -> (ss, ct)` | X-Wing encapsulation (derandomized) |
 | `xwing_decaps(ct, sk) -> Bytes` | X-Wing decapsulation |
-| `turbo_shake_128(data, d, out_len)` | TurboSHAKE128 (RFC 9861, Keccak-p[1600,12]) |
+| `turbo_shake_128(data, d, out_len)` | TurboSHAKE128 (RFC 9861, Keccak-p[1600,12]); domain byte `d` 1..=127 |
 | `kangaroo_twelve_128(m, c, out_len)` | KangarooTwelve KT128 (tree hash + customization) |
 | `turbo_shake_256 / kangaroo_twelve_256` | 256-bit capacity variants |
 | `hpke_setup_s(suite, mode, pk_r, ikm_e, info, psk, psk_id, sk_s)` | HPKE sender setup (RFC 9180, all 4 modes) |
@@ -613,6 +625,29 @@ If you consume this package, treat everything in that table as private.
   the short input: `slh_keygen` returned a 63-byte secret key that only trapped
   later, at signing time, and Falcon derived full-length but non-standard keys
   from a 47-byte seed, which no other implementation reproduces.
+- **Numeric, enum and offset parameters are validated too** (v0.84.0–v0.85.0).
+  A length, a digit count or a block offset is the caller's business, so each
+  aborts with a message instead of trapping or answering a different question:
+  HKDF's `length` (≤ 255·HashLen, RFC 5869), PBKDF2's `iterations` (≥ 1,
+  RFC 8018) and `dklen`, the output lengths of SHAKE / cSHAKE / KMAC / BLAKE2 /
+  BLAKE3 / TurboSHAKE / KangarooTwelve (≥ 0) and of `sha256_finalize_n` /
+  `sha512_finalize_n` (0..=32 / 0..=64, the contract their doc comments always
+  stated), `shake_finalize` — the streaming twin the v0.84.0 one-shot guard did
+  not cover — TurboSHAKE's domain byte (1..=127, RFC 9861 §2),
+  `sm4_encrypt_block` / `sm4_decrypt_block` (32 round-key words, and an offset
+  that leaves a whole block inside `data`), HPKE's `mode` (0..=3; any other
+  value used to mean base mode, i.e. silently no authentication), ML-DSA's `mu`
+  (exactly 64 bytes, FIPS 204), and HOTP/TOTP's `digits` (1..=9) and `step`
+  (≥ 1 second). Two of those were worse than a trap: `digits = 10` overflowed
+  `pow10` on a 32-bit target — 10^10 wraps to 1410065408 on wasm but is exact
+  on native64, so one call gave two different OTPs depending on the target —
+  and a negative `step` became a huge `UInt64` (−30 → 18446744073709551586),
+  quietly making every counter 0, i.e. the same OTP forever. Guards sit at the
+  narrowest shared chokepoint (`shake_check_out_len`, `turbosha_x`,
+  `sm4_check_block_args`, `otp_check_digits` / `otp_check_step`,
+  `kdf_check_expand_len`, `kdf_check_pbkdf2`, `hpke_check_mode`, `dsa_sk_len`)
+  so twins cannot drift, and each range's legal ends are pinned by a test — an
+  over-tight guard turns it red.
 - **Untrusted input has a two-tier contract.** Parameter *shapes* (a key of the
   wrong length, a nonce of the wrong size) are caller errors and abort loudly.
   Values that arrive from a peer — ciphertexts, signatures, public keys,
@@ -678,9 +713,18 @@ If you consume this package, treat everything in that table as private.
 ## Performance
 
 Throughput is measured by the `lib` benchmark suite (`moon bench`) on 1 KiB
-inputs. Figures below were refreshed for v0.66.0 (release mode, wasm, Windows
-host, toolchain 0.1.20260904); absolute numbers vary
-by host — run `moon bench` locally for comparable figures.
+inputs. Figures below were re-measured for v0.85.0 (release mode, wasm,
+Windows host, toolchain 0.1.20260904): the fastest of three consecutive full
+runs over all 68 benches, of which the table lists 33. Per-row spread between
+the runs was under 8% everywhere except AES-128-CMAC (62–81 µs).
+
+Every figure this replaced was too high — by 4.5% (ZUC-128 stream) to 114%
+(Argon2id, quoted at ~1.2 ms against a measured 561 µs), with AES-128-CMAC,
+HMAC-SHA3-256 and ECDSA P-256 verify all quoted at ~1.9x their actual cost.
+None of those code paths changed between the two measurements, and the rows
+refreshed most recently drifted least, so the spread is host load at measurement
+time rather than regressions. Read the table as one quiet host's numbers and run
+`moon bench` yourself before comparing anything.
 
 ```bash
 moon bench
@@ -688,38 +732,38 @@ moon bench
 
 | Algorithm | 1 KiB (approx.) |
 | --- | --- |
-| MD5 | ~7.6 µs |
-| SHA-256 | ~11 µs |
-| SHA-512 | ~12 µs |
-| SHA3-256 | ~5.3 µs (unrolled Keccak, v0.66) |
-| SHA3-512 | ~8.0 µs |
-| SHAKE128 1KiB (out=32) | ~9.7 µs |
-| SHAKE256 1KiB (out=64) | ~8.2 µs |
-| BLAKE2b | ~32 µs |
-| BLAKE3 | ~54 µs |
-| HMAC-SHA256 | ~18 µs |
-| HMAC-SHA3-256 | ~21 µs |
-| HMAC-SHA3-512 | ~21 µs |
-| AES-128-CMAC | ~120 µs |
-| SipHash-2-4 | ~3.4 µs |
-| CRC32 / CRC32C | ~4.0 / ~3.2 µs |
-| sealed_box_seal | ~163 µs (HKDF + AES-256-GCM) |
-| scrypt (N=1024,r=8,p=1,dk32) | ~32 ms (memory-hard KDF) |
-| Argon2id (t=1,m=64,p=1,dk16) | ~1.2 ms (memory-hard KDF) |
-| ECDSA P-256 sign | ~5.8 ms (native field, v0.51) |
-| ECDSA P-256 verify | ~7.7 ms (native field, v0.51) |
-| AES-256-SIV encrypt 1KiB | ~311 µs (S2V + AES-CTR) |
-| AES-128-KW wrap 32B | ~56 µs |
-| ChaCha20 | ~37 µs |
-| ZUC-128 stream (raw XOR) | ~18 µs (v0.79) |
-| ZUC-256 stream (raw XOR) | ~19 µs (v0.79) |
-| 128-EEA3 encrypt | ~19 µs (v0.79) |
-| 128-EIA3 MAC (32-bit tag) | ~27 µs (v0.79) |
-| ZUC-256 MAC (128-bit tag) | ~38 µs (v0.79) |
-| AES-256-CBC | ~97 µs (T-table, v0.44) |
-| AES-256-GCM | ~116 µs (T-table + GHASH 4-bit tables) |
-| Base64 encode | ~9.1 µs |
-| Hex encode | ~7.7 µs |
+| MD5 | ~6.5 µs |
+| SHA-256 | ~10 µs |
+| SHA-512 | ~10 µs |
+| SHA3-256 | ~4.5 µs (unrolled Keccak) |
+| SHA3-512 | ~6.9 µs |
+| SHAKE128 1KiB (out=32) | ~6.1 µs |
+| SHAKE256 1KiB (out=64) | ~6.4 µs |
+| BLAKE2b | ~20 µs |
+| BLAKE3 | ~31 µs (tree-Merkle) |
+| HMAC-SHA256 | ~16 µs |
+| HMAC-SHA3-256 | ~11 µs |
+| HMAC-SHA3-512 | ~13 µs |
+| AES-128-CMAC | ~62 µs |
+| SipHash-2-4 | ~2.4 µs |
+| CRC32 / CRC32C | ~2.3 / ~2.3 µs |
+| sealed_box_seal | ~111 µs (HKDF + AES-256-GCM) |
+| scrypt (N=1024,r=8,p=1,dk32) | ~21 ms (memory-hard KDF) |
+| Argon2id (t=1,m=64,p=1,dk16) | ~561 µs (memory-hard KDF) |
+| ECDSA P-256 sign | ~3.3 ms (native field) |
+| ECDSA P-256 verify | ~4.1 ms (native field) |
+| AES-256-SIV encrypt 1KiB | ~182 µs (S2V + AES-CTR) |
+| AES-128-KW wrap 32B | ~35 µs |
+| ChaCha20 | ~32 µs |
+| ZUC-128 stream (raw XOR) | ~17 µs |
+| ZUC-256 stream (raw XOR) | ~18 µs |
+| 128-EEA3 encrypt | ~18 µs |
+| 128-EIA3 MAC (32-bit tag) | ~24 µs |
+| ZUC-256 MAC (128-bit tag) | ~34 µs |
+| AES-256-CBC | ~78 µs (T-table) |
+| AES-256-GCM | ~99 µs (T-table + GHASH 4-bit tables) |
+| Base64 encode | ~7.8 µs |
+| Hex encode | ~6.7 µs |
 
 **v0.18.0 perf pass.** The Keccak-f[1600] state was flattened from a
 nested 5×5 `Array[Array[UInt64]]` to a flat 25-lane array (removing the
@@ -1349,7 +1393,7 @@ keys with 0/1/2 AD entries, AES-KW, AES-CBC (including the PKCS#7 full extra
 padding block on exact multiples of 16) and CTR, SM4-CBC/CTR, the sealed box,
 the ML-KEM hybrid envelope and the SM2 GM/T 0009 envelope.
 
-**1173 tests.**
+**1174 tests.**
 
 ## Development
 

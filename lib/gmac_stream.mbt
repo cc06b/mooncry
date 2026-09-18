@@ -199,6 +199,13 @@ pub fn gmac_update(st : GmacState, aad : Bytes) -> Unit {
 ///|
 /// Finalize the incremental GMAC and return the 16-byte tag. For chunked
 /// AAD `c1, c2, ...` the result equals `gmac(key, iv, concat(c1, c2, ...))`.
+///
+/// This *consumes* the state, exactly like a hasher's finalize: the length
+/// block is folded into the accumulator and the partial-block count is not
+/// reset, so a second `gmac_finalize` — or a `gmac_update` after it, including
+/// reusing the state for an unrelated message — returns a different tag with
+/// no error. Call `gmac_new` / `gmac_new_iv` per message. v0.85.0 documents
+/// this after probing it; the tag is not a trap, just wrong.
 pub fn gmac_finalize(st : GmacState) -> Bytes {
   // Zero-pad a trailing partial block.
   if st.buf_len > 0 {

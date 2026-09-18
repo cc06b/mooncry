@@ -30,6 +30,12 @@ pub fn falcon_xof_inject(x : FalconXof, data : Bytes) -> Unit {
 /// Subsequent extracts continue the same stream (lane cursor advances;
 /// the shared sha3_squeeze restarts from lane 0 and cannot be reused).
 pub fn falcon_xof_extract(x : FalconXof, len : Int) -> Bytes {
+  // every Falcon XOF read comes through here, including
+  // `falcon_test_rng_bytes`; a negative `len` reached `Array::make` and
+  // trapped. v0.85.0.
+  if len < 0 {
+    abort("falcon_xof_extract: len must be non-negative")
+  }
   if not_flipped(x) {
     ignore(shake_finalize(x.h, 0))
     x.flipped = true

@@ -96,6 +96,11 @@ pub fn ml_kem_hybrid_stream_update(
 ///|
 /// Finish the stream: encrypts the residue and returns
 /// `tail_ciphertext || 16-byte tag`. v0.33.0.
+///
+/// Single-use, like a hasher's finalize: the residue counter is not reset and
+/// the Poly1305 state has already been folded, so calling this twice — or
+/// feeding more chunks after it — yields a blob that `ml_kem_*_hybrid_open`
+/// rejects (or, worse, a tag no one can reproduce). One stream per seal.
 pub fn ml_kem_hybrid_stream_final(st : MlKemHybridStream) -> Bytes {
   let mut tail = Bytes::make(0, b'\x00')
   if st.residue_len > 0 {

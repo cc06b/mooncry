@@ -9,7 +9,27 @@
 // ============================================================
 
 ///|
+/// RFC 9861 §2 gives TurboSHAKE a domain-separation byte D with 1 <= D <= 127.
+/// Outside that range the old code absorbed whatever it was given: no other
+/// implementation reproduces the output, and at D = 0x80 with |m| == rate-1 the
+/// domain byte and the 0x80 terminator land on the same position and cancel,
+/// leaving the final block with no pad bit at all. Checked here rather than in
+/// `turbosha_x` because KangarooTwelve passes its own fixed D values
+/// (0x07/0x0B/0x06). v0.85.0.
+fn turbosha_check_d(d : Byte) -> Unit {
+  let di = d.to_int()
+  if di < 1 || di > 127 {
+    abort("turboshake: domain byte d must be in 1..=127 (RFC 9861)")
+  }
+}
+
+///|
 fn turbosha_x(rate : Int, data : Bytes, d_byte : Byte, out_len : Int) -> Bytes {
+  // the squeeze loop below allocates `out_len` bytes; a negative one reached
+  // Array::make and trapped (same class as the v0.84.0 SHAKE/HKDF fixes)
+  if out_len < 0 {
+    abort("turboshake: out_len must be non-negative")
+  }
   let st = Array::make(25, 0UL)
   let mlen = data.length() + 1 // message + domain byte
   let blocks = (mlen + rate - 1) / rate
@@ -48,6 +68,7 @@ fn turbosha_x(rate : Int, data : Bytes, d_byte : Byte, out_len : Int) -> Bytes {
 /// TurboSHAKE128 (RFC 9861 §2): Keccak-p[1600,12] sponge, rate 168.
 /// `d` is the domain separation byte (0x01..0x7F). v0.36.0.
 pub fn turbo_shake_128(data : Bytes, d : Byte, out_len : Int) -> Bytes {
+  turbosha_check_d(d)
   turbosha_x(168, data, d, out_len)
 }
 
@@ -55,6 +76,7 @@ pub fn turbo_shake_128(data : Bytes, d : Byte, out_len : Int) -> Bytes {
 /// TurboSHAKE256 (RFC 9861 §2): Keccak-p[1600,12] sponge, rate 136.
 /// v0.36.0.
 pub fn turbo_shake_256(data : Bytes, d : Byte, out_len : Int) -> Bytes {
+  turbosha_check_d(d)
   turbosha_x(136, data, d, out_len)
 }
 

@@ -234,13 +234,21 @@ pub fn sha3_512(data : Bytes) -> Bytes {
 // Like SHA-3 sponge but domain suffix 0x1F and variable output length.
 
 ///|
-/// SHAKE sponge: domain 0x1F, squeeze `out_len` bytes.
-fn shake_sponge(rate_bytes : Int, data : Bytes, out_len : Int) -> Bytes {
-  // both public widths come through here; a negative out_len used to reach the
-  // squeeze loop and trap
+/// One source of truth for a SHAKE output length. v0.84.0 put this check in
+/// `shake_sponge`, which covers the one-shot `shake_128/256` — but the
+/// *streaming* `shake_finalize` squeezes through `sha3_squeeze` instead, so
+/// `shake_finalize(h, -1)` still reached `Array::make(-1)` and trapped. Both
+/// paths call this, so the twins cannot drift. v0.85.0.
+fn shake_check_out_len(out_len : Int) -> Unit {
   if out_len < 0 {
     abort("shake: out_len must be non-negative")
   }
+}
+
+///|
+/// SHAKE sponge: domain 0x1F, squeeze `out_len` bytes.
+fn shake_sponge(rate_bytes : Int, data : Bytes, out_len : Int) -> Bytes {
+  shake_check_out_len(out_len)
   let st = new_state()
   let data_len = data.length()
   let num_blocks = data_len / rate_bytes + 1
