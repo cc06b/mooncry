@@ -213,8 +213,8 @@ test "ML-KEM-512 hybrid open recovers vector message" {
     "46be59ca6d10",
   )
   match ml_kem_512_hybrid_open(dk, blob, aad) {
-    Some(pt) => assert_true(bytes_equal(pt, msg))
-    None => assert_true(false)
+    Ok(pt) => assert_true(bytes_equal(pt, msg))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -474,8 +474,8 @@ test "ML-KEM-768 hybrid open recovers vector message" {
     "797881011f5f",
   )
   match ml_kem_768_hybrid_open(dk, blob, aad) {
-    Some(pt) => assert_true(bytes_equal(pt, msg))
-    None => assert_true(false)
+    Ok(pt) => assert_true(bytes_equal(pt, msg))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -789,8 +789,8 @@ test "ML-KEM-1024 hybrid open recovers vector message" {
     "2c62ac3281f9",
   )
   match ml_kem_1024_hybrid_open(dk, blob, aad) {
-    Some(pt) => assert_true(bytes_equal(pt, msg))
-    None => assert_true(false)
+    Ok(pt) => assert_true(bytes_equal(pt, msg))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -813,8 +813,8 @@ test "ML-KEM hybrid round-trips (empty / exact blocks / awkward sizes)" {
   for msg in msgs {
     let blob = ml_kem_768_hybrid_seal(ek, m, aad, msg)
     match ml_kem_768_hybrid_open(dk, blob, aad) {
-      Some(pt) => assert_true(bytes_equal(pt, msg))
-      None => assert_true(false)
+      Ok(pt) => assert_true(bytes_equal(pt, msg))
+      Err(_) => assert_true(false)
     }
   }
 }
@@ -832,23 +832,38 @@ test "ML-KEM hybrid rejects tampering and truncation" {
   let arr1 = blob.to_array()
   arr1[1200] = arr1[1200] ^ b'\x01'
   let bad1 = Bytes::from_array(arr1)
-  assert_true(ml_kem_768_hybrid_open(dk, bad1, aad) == None)
+  match ml_kem_768_hybrid_open(dk, bad1, aad) {
+    Ok(_) => assert_true(false, msg="rejected ciphertext opened")
+    Err(_) => ()
+  }
   // flip one byte inside the KEM part
   let arr2 = blob.to_array()
   arr2[10] = arr2[10] ^ b'\x80'
   let bad2 = Bytes::from_array(arr2)
-  assert_true(ml_kem_768_hybrid_open(dk, bad2, aad) == None)
+  match ml_kem_768_hybrid_open(dk, bad2, aad) {
+    Ok(_) => assert_true(false, msg="rejected ciphertext opened")
+    Err(_) => ()
+  }
   // wrong aad
-  assert_true(ml_kem_768_hybrid_open(dk, blob, b"other aad") == None)
+  match ml_kem_768_hybrid_open(dk, blob, b"other aad") {
+    Ok(_) => assert_true(false, msg="rejected ciphertext opened")
+    Err(_) => ()
+  }
   // truncated blob
   let short = Bytes::from_array(blob.to_array()[:500])
-  assert_true(ml_kem_768_hybrid_open(dk, short, aad) == None)
+  match ml_kem_768_hybrid_open(dk, short, aad) {
+    Ok(_) => assert_true(false, msg="rejected ciphertext opened")
+    Err(_) => ()
+  }
   // wrong key
   let (_, dk2) = ml_kem_768_keygen(
     Bytes::make(32, b'\x11'),
     Bytes::make(32, b'\x22'),
   )
-  assert_true(ml_kem_768_hybrid_open(dk2, blob, aad) == None)
+  match ml_kem_768_hybrid_open(dk2, blob, aad) {
+    Ok(_) => assert_true(false, msg="rejected ciphertext opened")
+    Err(_) => ()
+  }
 }
 
 ///|
@@ -879,8 +894,8 @@ test "ML-KEM hybrid streaming equals one-shot (awkward chunking)" {
   }
   assert_true(bytes_equal(streamed, one_shot))
   match ml_kem_768_hybrid_open(dk, streamed, aad) {
-    Some(pt) => assert_true(bytes_equal(pt, msg))
-    None => assert_true(false)
+    Ok(pt) => assert_true(bytes_equal(pt, msg))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -894,13 +909,13 @@ test "ML-KEM 512/1024 hybrid round-trips" {
   let (ek5, dk5) = ml_kem_512_keygen(d, z)
   let b5 = ml_kem_512_hybrid_seal(ek5, m, aad, msg)
   match ml_kem_512_hybrid_open(dk5, b5, aad) {
-    Some(pt) => assert_true(bytes_equal(pt, msg))
-    None => assert_true(false)
+    Ok(pt) => assert_true(bytes_equal(pt, msg))
+    Err(_) => assert_true(false)
   }
   let (ek10, dk10) = ml_kem_1024_keygen(d, z)
   let b10 = ml_kem_1024_hybrid_seal(ek10, m, aad, msg)
   match ml_kem_1024_hybrid_open(dk10, b10, aad) {
-    Some(pt) => assert_true(bytes_equal(pt, msg))
-    None => assert_true(false)
+    Ok(pt) => assert_true(bytes_equal(pt, msg))
+    Err(_) => assert_true(false)
   }
 }

@@ -165,18 +165,22 @@ pub fn ml_kem_512_hybrid_seal_or(
 }
 
 ///|
-/// ML-KEM-512 hybrid open: decapsulates and verifies; `None` on any
+/// ML-KEM-512 hybrid open: decapsulates and verifies; `Err` on any
 /// failure (bad tag, truncated blob). v0.33.0.
-pub fn ml_kem_512_hybrid_open(dk : Bytes, blob : Bytes, aad : Bytes) -> Bytes? {
+pub fn ml_kem_512_hybrid_open(
+  dk : Bytes,
+  blob : Bytes,
+  aad : Bytes,
+) -> Result[Bytes, String] {
   let c_len = 768
   if blob.length() < c_len + 16 {
-    return None
+    return Err(ml_kem_hybrid_open_rejected)
   }
   let c = bytes_sub(blob, 0, c_len)
-  // A wrong-length local dk would trap inside decaps; surface it as None.
+  // A wrong-length local dk would trap inside decaps; surface it as Err.
   let k = match ml_kem_512_decaps_or(dk, c) {
     Ok(shared) => shared
-    Err(_) => return None
+    Err(_) => return Err(ml_kem_hybrid_open_rejected)
   }
   let (key, nonce) = ml_kem_hybrid_derive(c, k)
   let body = bytes_sub(blob, c_len, blob.length() - c_len)
@@ -187,35 +191,19 @@ pub fn ml_kem_512_hybrid_open(dk : Bytes, blob : Bytes, aad : Bytes) -> Bytes? {
     poly1305_mac_data(aad, ct),
   )
   if !bytes_equal(expected, tag) {
-    return None
+    return Err(ml_kem_hybrid_open_rejected)
   }
-  Some(chacha20_xor(ct, key, nonce, 1U))
+  Ok(chacha20_xor(ct, key, nonce, 1U))
 }
 
 ///|
-/// The one message every `ml_kem_*_hybrid_open_or` failure carries. Opening a
+/// The one message every `ml_kem_*_hybrid_open` failure carries. Opening a
 /// peer's blob can fail because it is truncated, because the local `dk` has the
 /// wrong length, or because the Poly1305 tag does not verify -- and telling
 /// those apart to a caller that logs the string would be an authentication
 /// oracle, so all three share one text (the same rule the RSA `_or` decryption
 /// family follows).
 let ml_kem_hybrid_open_rejected : String = "ml_kem_hybrid_open: rejected (malformed blob, wrong-length dk, or authentication failure)"
-
-///|
-/// `ml_kem_512_hybrid_open` as a `Result` instead of an `Option`: same
-/// uniform message for every rejection, but it lives in the channel every new
-/// graceful entry point uses, so 1.0 can retire the `Option` form without
-/// leaving callers nowhere to go. v0.89.0.
-pub fn ml_kem_512_hybrid_open_or(
-  dk : Bytes,
-  blob : Bytes,
-  aad : Bytes,
-) -> Result[Bytes, String] {
-  match ml_kem_512_hybrid_open(dk, blob, aad) {
-    Some(pt) => Ok(pt)
-    None => Err(ml_kem_hybrid_open_rejected)
-  }
-}
 
 ///|
 /// ML-KEM-512 streaming hybrid seal start: encapsulates with `m` and
@@ -295,16 +283,20 @@ pub fn ml_kem_768_hybrid_seal_or(
 
 ///|
 /// ML-KEM-768 hybrid open. See `ml_kem_512_hybrid_open`. v0.33.0.
-pub fn ml_kem_768_hybrid_open(dk : Bytes, blob : Bytes, aad : Bytes) -> Bytes? {
+pub fn ml_kem_768_hybrid_open(
+  dk : Bytes,
+  blob : Bytes,
+  aad : Bytes,
+) -> Result[Bytes, String] {
   let c_len = 1088
   if blob.length() < c_len + 16 {
-    return None
+    return Err(ml_kem_hybrid_open_rejected)
   }
   let c = bytes_sub(blob, 0, c_len)
-  // A wrong-length local dk would trap inside decaps; surface it as None.
+  // A wrong-length local dk would trap inside decaps; surface it as Err.
   let k = match ml_kem_768_decaps_or(dk, c) {
     Ok(shared) => shared
-    Err(_) => return None
+    Err(_) => return Err(ml_kem_hybrid_open_rejected)
   }
   let (key, nonce) = ml_kem_hybrid_derive(c, k)
   let body = bytes_sub(blob, c_len, blob.length() - c_len)
@@ -315,22 +307,9 @@ pub fn ml_kem_768_hybrid_open(dk : Bytes, blob : Bytes, aad : Bytes) -> Bytes? {
     poly1305_mac_data(aad, ct),
   )
   if !bytes_equal(expected, tag) {
-    return None
+    return Err(ml_kem_hybrid_open_rejected)
   }
-  Some(chacha20_xor(ct, key, nonce, 1U))
-}
-
-///|
-/// `ml_kem_768_hybrid_open` as a `Result`. See `ml_kem_512_hybrid_open_or`.
-pub fn ml_kem_768_hybrid_open_or(
-  dk : Bytes,
-  blob : Bytes,
-  aad : Bytes,
-) -> Result[Bytes, String] {
-  match ml_kem_768_hybrid_open(dk, blob, aad) {
-    Some(pt) => Ok(pt)
-    None => Err(ml_kem_hybrid_open_rejected)
-  }
+  Ok(chacha20_xor(ct, key, nonce, 1U))
 }
 
 ///|
@@ -409,16 +388,20 @@ pub fn ml_kem_1024_hybrid_seal_or(
 
 ///|
 /// ML-KEM-1024 hybrid open. See `ml_kem_512_hybrid_open`. v0.33.0.
-pub fn ml_kem_1024_hybrid_open(dk : Bytes, blob : Bytes, aad : Bytes) -> Bytes? {
+pub fn ml_kem_1024_hybrid_open(
+  dk : Bytes,
+  blob : Bytes,
+  aad : Bytes,
+) -> Result[Bytes, String] {
   let c_len = 1568
   if blob.length() < c_len + 16 {
-    return None
+    return Err(ml_kem_hybrid_open_rejected)
   }
   let c = bytes_sub(blob, 0, c_len)
-  // A wrong-length local dk would trap inside decaps; surface it as None.
+  // A wrong-length local dk would trap inside decaps; surface it as Err.
   let k = match ml_kem_1024_decaps_or(dk, c) {
     Ok(shared) => shared
-    Err(_) => return None
+    Err(_) => return Err(ml_kem_hybrid_open_rejected)
   }
   let (key, nonce) = ml_kem_hybrid_derive(c, k)
   let body = bytes_sub(blob, c_len, blob.length() - c_len)
@@ -429,22 +412,9 @@ pub fn ml_kem_1024_hybrid_open(dk : Bytes, blob : Bytes, aad : Bytes) -> Bytes? 
     poly1305_mac_data(aad, ct),
   )
   if !bytes_equal(expected, tag) {
-    return None
+    return Err(ml_kem_hybrid_open_rejected)
   }
-  Some(chacha20_xor(ct, key, nonce, 1U))
-}
-
-///|
-/// `ml_kem_1024_hybrid_open` as a `Result`. See `ml_kem_512_hybrid_open_or`.
-pub fn ml_kem_1024_hybrid_open_or(
-  dk : Bytes,
-  blob : Bytes,
-  aad : Bytes,
-) -> Result[Bytes, String] {
-  match ml_kem_1024_hybrid_open(dk, blob, aad) {
-    Some(pt) => Ok(pt)
-    None => Err(ml_kem_hybrid_open_rejected)
-  }
+  Ok(chacha20_xor(ct, key, nonce, 1U))
 }
 
 ///|

@@ -9,8 +9,8 @@ test "AES-128-GCM-SIV RFC8452 vector 1 (pt 0B, aad 0B)" {
   let ct = aes_gcm_siv_encrypt(key, nonce, aad, pt)
   assert_true(bytes_equal(ct, hex_to_bytes("dc20e2d83f25705bb49e439eca56de25")))
   match aes_gcm_siv_decrypt(key, nonce, aad, ct) {
-    Some(rec) => assert_true(bytes_equal(rec, pt))
-    None => assert_true(false)
+    Ok(rec) => assert_true(bytes_equal(rec, pt))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -28,8 +28,8 @@ test "AES-128-GCM-SIV RFC8452 vector 2 (pt 8B, aad 0B)" {
     ),
   )
   match aes_gcm_siv_decrypt(key, nonce, aad, ct) {
-    Some(rec) => assert_true(bytes_equal(rec, pt))
-    None => assert_true(false)
+    Ok(rec) => assert_true(bytes_equal(rec, pt))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -47,8 +47,8 @@ test "AES-128-GCM-SIV RFC8452 vector 3 (pt 12B, aad 0B)" {
     ),
   )
   match aes_gcm_siv_decrypt(key, nonce, aad, ct) {
-    Some(rec) => assert_true(bytes_equal(rec, pt))
-    None => assert_true(false)
+    Ok(rec) => assert_true(bytes_equal(rec, pt))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -68,8 +68,8 @@ test "AES-128-GCM-SIV RFC8452 vector 4 (pt 16B, aad 0B)" {
     ),
   )
   match aes_gcm_siv_decrypt(key, nonce, aad, ct) {
-    Some(rec) => assert_true(bytes_equal(rec, pt))
-    None => assert_true(false)
+    Ok(rec) => assert_true(bytes_equal(rec, pt))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -92,8 +92,8 @@ test "AES-128-GCM-SIV RFC8452 vector 5 (pt 32B, aad 0B)" {
     ),
   )
   match aes_gcm_siv_decrypt(key, nonce, aad, ct) {
-    Some(rec) => assert_true(bytes_equal(rec, pt))
-    None => assert_true(false)
+    Ok(rec) => assert_true(bytes_equal(rec, pt))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -117,8 +117,8 @@ test "AES-128-GCM-SIV RFC8452 vector 6 (pt 48B, aad 0B)" {
     ),
   )
   match aes_gcm_siv_decrypt(key, nonce, aad, ct) {
-    Some(rec) => assert_true(bytes_equal(rec, pt))
-    None => assert_true(false)
+    Ok(rec) => assert_true(bytes_equal(rec, pt))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -142,8 +142,8 @@ test "AES-128-GCM-SIV RFC8452 vector 7 (pt 64B, aad 0B)" {
     ),
   )
   match aes_gcm_siv_decrypt(key, nonce, aad, ct) {
-    Some(rec) => assert_true(bytes_equal(rec, pt))
-    None => assert_true(false)
+    Ok(rec) => assert_true(bytes_equal(rec, pt))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -161,8 +161,8 @@ test "AES-128-GCM-SIV RFC8452 vector 8 (pt 8B, aad 1B)" {
     ),
   )
   match aes_gcm_siv_decrypt(key, nonce, aad, ct) {
-    Some(rec) => assert_true(bytes_equal(rec, pt))
-    None => assert_true(false)
+    Ok(rec) => assert_true(bytes_equal(rec, pt))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -180,8 +180,8 @@ test "AES-128-GCM-SIV RFC8452 vector 9 (pt 12B, aad 1B)" {
     ),
   )
   match aes_gcm_siv_decrypt(key, nonce, aad, ct) {
-    Some(rec) => assert_true(bytes_equal(rec, pt))
-    None => assert_true(false)
+    Ok(rec) => assert_true(bytes_equal(rec, pt))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -201,8 +201,8 @@ test "AES-128-GCM-SIV RFC8452 vector 10 (pt 16B, aad 1B)" {
     ),
   )
   match aes_gcm_siv_decrypt(key, nonce, aad, ct) {
-    Some(rec) => assert_true(bytes_equal(rec, pt))
-    None => assert_true(false)
+    Ok(rec) => assert_true(bytes_equal(rec, pt))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -225,8 +225,8 @@ test "AES-128-GCM-SIV RFC8452 vector 11 (pt 32B, aad 1B)" {
     ),
   )
   match aes_gcm_siv_decrypt(key, nonce, aad, ct) {
-    Some(rec) => assert_true(bytes_equal(rec, pt))
-    None => assert_true(false)
+    Ok(rec) => assert_true(bytes_equal(rec, pt))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -250,8 +250,8 @@ test "AES-128-GCM-SIV RFC8452 vector 12 (pt 48B, aad 1B)" {
     ),
   )
   match aes_gcm_siv_decrypt(key, nonce, aad, ct) {
-    Some(rec) => assert_true(bytes_equal(rec, pt))
-    None => assert_true(false)
+    Ok(rec) => assert_true(bytes_equal(rec, pt))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -275,8 +275,8 @@ test "AES-128-GCM-SIV RFC8452 vector 13 (pt 64B, aad 1B)" {
     ),
   )
   match aes_gcm_siv_decrypt(key, nonce, aad, ct) {
-    Some(rec) => assert_true(bytes_equal(rec, pt))
-    None => assert_true(false)
+    Ok(rec) => assert_true(bytes_equal(rec, pt))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -291,8 +291,8 @@ test "AES-128-GCM-SIV RFC8452 vector 14 (pt 4B, aad 12B)" {
     bytes_equal(ct, hex_to_bytes("a8fe3e8707eb1f84fb28f8cb73de8e99e2f48a14")),
   )
   match aes_gcm_siv_decrypt(key, nonce, aad, ct) {
-    Some(rec) => assert_true(bytes_equal(rec, pt))
-    None => assert_true(false)
+    Ok(rec) => assert_true(bytes_equal(rec, pt))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -312,8 +312,8 @@ test "AES-128-GCM-SIV RFC8452 vector 15 (pt 20B, aad 18B)" {
     ),
   )
   match aes_gcm_siv_decrypt(key, nonce, aad, ct) {
-    Some(rec) => assert_true(bytes_equal(rec, pt))
-    None => assert_true(false)
+    Ok(rec) => assert_true(bytes_equal(rec, pt))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -333,8 +333,8 @@ test "AES-128-GCM-SIV RFC8452 vector 16 (pt 18B, aad 20B)" {
     ),
   )
   match aes_gcm_siv_decrypt(key, nonce, aad, ct) {
-    Some(rec) => assert_true(bytes_equal(rec, pt))
-    None => assert_true(false)
+    Ok(rec) => assert_true(bytes_equal(rec, pt))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -347,8 +347,8 @@ test "AES-128-GCM-SIV RFC8452 vector 17 (pt 0B, aad 0B)" {
   let ct = aes_gcm_siv_encrypt(key, nonce, aad, pt)
   assert_true(bytes_equal(ct, hex_to_bytes("a4194b79071b01a87d65f706e3949578")))
   match aes_gcm_siv_decrypt(key, nonce, aad, ct) {
-    Some(rec) => assert_true(bytes_equal(rec, pt))
-    None => assert_true(false)
+    Ok(rec) => assert_true(bytes_equal(rec, pt))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -363,8 +363,8 @@ test "AES-128-GCM-SIV RFC8452 vector 18 (pt 3B, aad 5B)" {
     bytes_equal(ct, hex_to_bytes("af60eb711bd85bc1e4d3e0a462e074eea428a8")),
   )
   match aes_gcm_siv_decrypt(key, nonce, aad, ct) {
-    Some(rec) => assert_true(bytes_equal(rec, pt))
-    None => assert_true(false)
+    Ok(rec) => assert_true(bytes_equal(rec, pt))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -382,8 +382,8 @@ test "AES-128-GCM-SIV RFC8452 vector 19 (pt 6B, aad 10B)" {
     ),
   )
   match aes_gcm_siv_decrypt(key, nonce, aad, ct) {
-    Some(rec) => assert_true(bytes_equal(rec, pt))
-    None => assert_true(false)
+    Ok(rec) => assert_true(bytes_equal(rec, pt))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -401,8 +401,8 @@ test "AES-128-GCM-SIV RFC8452 vector 20 (pt 9B, aad 15B)" {
     ),
   )
   match aes_gcm_siv_decrypt(key, nonce, aad, ct) {
-    Some(rec) => assert_true(bytes_equal(rec, pt))
-    None => assert_true(false)
+    Ok(rec) => assert_true(bytes_equal(rec, pt))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -420,8 +420,8 @@ test "AES-128-GCM-SIV RFC8452 vector 21 (pt 12B, aad 20B)" {
     ),
   )
   match aes_gcm_siv_decrypt(key, nonce, aad, ct) {
-    Some(rec) => assert_true(bytes_equal(rec, pt))
-    None => assert_true(false)
+    Ok(rec) => assert_true(bytes_equal(rec, pt))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -441,8 +441,8 @@ test "AES-128-GCM-SIV RFC8452 vector 22 (pt 15B, aad 25B)" {
     ),
   )
   match aes_gcm_siv_decrypt(key, nonce, aad, ct) {
-    Some(rec) => assert_true(bytes_equal(rec, pt))
-    None => assert_true(false)
+    Ok(rec) => assert_true(bytes_equal(rec, pt))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -464,8 +464,8 @@ test "AES-128-GCM-SIV RFC8452 vector 23 (pt 18B, aad 30B)" {
     ),
   )
   match aes_gcm_siv_decrypt(key, nonce, aad, ct) {
-    Some(rec) => assert_true(bytes_equal(rec, pt))
-    None => assert_true(false)
+    Ok(rec) => assert_true(bytes_equal(rec, pt))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -487,8 +487,8 @@ test "AES-128-GCM-SIV RFC8452 vector 24 (pt 21B, aad 35B)" {
     ),
   )
   match aes_gcm_siv_decrypt(key, nonce, aad, ct) {
-    Some(rec) => assert_true(bytes_equal(rec, pt))
-    None => assert_true(false)
+    Ok(rec) => assert_true(bytes_equal(rec, pt))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -503,8 +503,8 @@ test "AES-256-GCM-SIV RFC8452 vector 25 (pt 0B, aad 0B)" {
   let ct = aes_gcm_siv_encrypt(key, nonce, aad, pt)
   assert_true(bytes_equal(ct, hex_to_bytes("07f5f4169bbf55a8400cd47ea6fd400f")))
   match aes_gcm_siv_decrypt(key, nonce, aad, ct) {
-    Some(rec) => assert_true(bytes_equal(rec, pt))
-    None => assert_true(false)
+    Ok(rec) => assert_true(bytes_equal(rec, pt))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -524,8 +524,8 @@ test "AES-256-GCM-SIV RFC8452 vector 26 (pt 8B, aad 0B)" {
     ),
   )
   match aes_gcm_siv_decrypt(key, nonce, aad, ct) {
-    Some(rec) => assert_true(bytes_equal(rec, pt))
-    None => assert_true(false)
+    Ok(rec) => assert_true(bytes_equal(rec, pt))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -545,8 +545,8 @@ test "AES-256-GCM-SIV RFC8452 vector 27 (pt 12B, aad 0B)" {
     ),
   )
   match aes_gcm_siv_decrypt(key, nonce, aad, ct) {
-    Some(rec) => assert_true(bytes_equal(rec, pt))
-    None => assert_true(false)
+    Ok(rec) => assert_true(bytes_equal(rec, pt))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -568,8 +568,8 @@ test "AES-256-GCM-SIV RFC8452 vector 28 (pt 16B, aad 0B)" {
     ),
   )
   match aes_gcm_siv_decrypt(key, nonce, aad, ct) {
-    Some(rec) => assert_true(bytes_equal(rec, pt))
-    None => assert_true(false)
+    Ok(rec) => assert_true(bytes_equal(rec, pt))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -594,8 +594,8 @@ test "AES-256-GCM-SIV RFC8452 vector 29 (pt 32B, aad 0B)" {
     ),
   )
   match aes_gcm_siv_decrypt(key, nonce, aad, ct) {
-    Some(rec) => assert_true(bytes_equal(rec, pt))
-    None => assert_true(false)
+    Ok(rec) => assert_true(bytes_equal(rec, pt))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -621,8 +621,8 @@ test "AES-256-GCM-SIV RFC8452 vector 30 (pt 48B, aad 0B)" {
     ),
   )
   match aes_gcm_siv_decrypt(key, nonce, aad, ct) {
-    Some(rec) => assert_true(bytes_equal(rec, pt))
-    None => assert_true(false)
+    Ok(rec) => assert_true(bytes_equal(rec, pt))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -648,8 +648,8 @@ test "AES-256-GCM-SIV RFC8452 vector 31 (pt 64B, aad 0B)" {
     ),
   )
   match aes_gcm_siv_decrypt(key, nonce, aad, ct) {
-    Some(rec) => assert_true(bytes_equal(rec, pt))
-    None => assert_true(false)
+    Ok(rec) => assert_true(bytes_equal(rec, pt))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -669,8 +669,8 @@ test "AES-256-GCM-SIV RFC8452 vector 32 (pt 8B, aad 1B)" {
     ),
   )
   match aes_gcm_siv_decrypt(key, nonce, aad, ct) {
-    Some(rec) => assert_true(bytes_equal(rec, pt))
-    None => assert_true(false)
+    Ok(rec) => assert_true(bytes_equal(rec, pt))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -690,8 +690,8 @@ test "AES-256-GCM-SIV RFC8452 vector 33 (pt 12B, aad 1B)" {
     ),
   )
   match aes_gcm_siv_decrypt(key, nonce, aad, ct) {
-    Some(rec) => assert_true(bytes_equal(rec, pt))
-    None => assert_true(false)
+    Ok(rec) => assert_true(bytes_equal(rec, pt))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -713,8 +713,8 @@ test "AES-256-GCM-SIV RFC8452 vector 34 (pt 16B, aad 1B)" {
     ),
   )
   match aes_gcm_siv_decrypt(key, nonce, aad, ct) {
-    Some(rec) => assert_true(bytes_equal(rec, pt))
-    None => assert_true(false)
+    Ok(rec) => assert_true(bytes_equal(rec, pt))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -739,8 +739,8 @@ test "AES-256-GCM-SIV RFC8452 vector 35 (pt 32B, aad 1B)" {
     ),
   )
   match aes_gcm_siv_decrypt(key, nonce, aad, ct) {
-    Some(rec) => assert_true(bytes_equal(rec, pt))
-    None => assert_true(false)
+    Ok(rec) => assert_true(bytes_equal(rec, pt))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -766,8 +766,8 @@ test "AES-256-GCM-SIV RFC8452 vector 36 (pt 48B, aad 1B)" {
     ),
   )
   match aes_gcm_siv_decrypt(key, nonce, aad, ct) {
-    Some(rec) => assert_true(bytes_equal(rec, pt))
-    None => assert_true(false)
+    Ok(rec) => assert_true(bytes_equal(rec, pt))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -793,8 +793,8 @@ test "AES-256-GCM-SIV RFC8452 vector 37 (pt 64B, aad 1B)" {
     ),
   )
   match aes_gcm_siv_decrypt(key, nonce, aad, ct) {
-    Some(rec) => assert_true(bytes_equal(rec, pt))
-    None => assert_true(false)
+    Ok(rec) => assert_true(bytes_equal(rec, pt))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -811,8 +811,8 @@ test "AES-256-GCM-SIV RFC8452 vector 38 (pt 4B, aad 12B)" {
     bytes_equal(ct, hex_to_bytes("22b3f4cd1835e517741dfddccfa07fa4661b74cf")),
   )
   match aes_gcm_siv_decrypt(key, nonce, aad, ct) {
-    Some(rec) => assert_true(bytes_equal(rec, pt))
-    None => assert_true(false)
+    Ok(rec) => assert_true(bytes_equal(rec, pt))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -834,8 +834,8 @@ test "AES-256-GCM-SIV RFC8452 vector 39 (pt 20B, aad 18B)" {
     ),
   )
   match aes_gcm_siv_decrypt(key, nonce, aad, ct) {
-    Some(rec) => assert_true(bytes_equal(rec, pt))
-    None => assert_true(false)
+    Ok(rec) => assert_true(bytes_equal(rec, pt))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -857,8 +857,8 @@ test "AES-256-GCM-SIV RFC8452 vector 40 (pt 18B, aad 20B)" {
     ),
   )
   match aes_gcm_siv_decrypt(key, nonce, aad, ct) {
-    Some(rec) => assert_true(bytes_equal(rec, pt))
-    None => assert_true(false)
+    Ok(rec) => assert_true(bytes_equal(rec, pt))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -873,8 +873,8 @@ test "AES-256-GCM-SIV RFC8452 vector 41 (pt 0B, aad 0B)" {
   let ct = aes_gcm_siv_encrypt(key, nonce, aad, pt)
   assert_true(bytes_equal(ct, hex_to_bytes("169fbb2fbf389a995f6390af22228a62")))
   match aes_gcm_siv_decrypt(key, nonce, aad, ct) {
-    Some(rec) => assert_true(bytes_equal(rec, pt))
-    None => assert_true(false)
+    Ok(rec) => assert_true(bytes_equal(rec, pt))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -891,8 +891,8 @@ test "AES-256-GCM-SIV RFC8452 vector 42 (pt 3B, aad 5B)" {
     bytes_equal(ct, hex_to_bytes("0eaccb93da9bb81333aee0c785b240d319719d")),
   )
   match aes_gcm_siv_decrypt(key, nonce, aad, ct) {
-    Some(rec) => assert_true(bytes_equal(rec, pt))
-    None => assert_true(false)
+    Ok(rec) => assert_true(bytes_equal(rec, pt))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -912,8 +912,8 @@ test "AES-256-GCM-SIV RFC8452 vector 43 (pt 6B, aad 10B)" {
     ),
   )
   match aes_gcm_siv_decrypt(key, nonce, aad, ct) {
-    Some(rec) => assert_true(bytes_equal(rec, pt))
-    None => assert_true(false)
+    Ok(rec) => assert_true(bytes_equal(rec, pt))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -933,8 +933,8 @@ test "AES-256-GCM-SIV RFC8452 vector 44 (pt 9B, aad 15B)" {
     ),
   )
   match aes_gcm_siv_decrypt(key, nonce, aad, ct) {
-    Some(rec) => assert_true(bytes_equal(rec, pt))
-    None => assert_true(false)
+    Ok(rec) => assert_true(bytes_equal(rec, pt))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -954,8 +954,8 @@ test "AES-256-GCM-SIV RFC8452 vector 45 (pt 12B, aad 20B)" {
     ),
   )
   match aes_gcm_siv_decrypt(key, nonce, aad, ct) {
-    Some(rec) => assert_true(bytes_equal(rec, pt))
-    None => assert_true(false)
+    Ok(rec) => assert_true(bytes_equal(rec, pt))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -977,8 +977,8 @@ test "AES-256-GCM-SIV RFC8452 vector 46 (pt 15B, aad 25B)" {
     ),
   )
   match aes_gcm_siv_decrypt(key, nonce, aad, ct) {
-    Some(rec) => assert_true(bytes_equal(rec, pt))
-    None => assert_true(false)
+    Ok(rec) => assert_true(bytes_equal(rec, pt))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -1002,8 +1002,8 @@ test "AES-256-GCM-SIV RFC8452 vector 47 (pt 18B, aad 30B)" {
     ),
   )
   match aes_gcm_siv_decrypt(key, nonce, aad, ct) {
-    Some(rec) => assert_true(bytes_equal(rec, pt))
-    None => assert_true(false)
+    Ok(rec) => assert_true(bytes_equal(rec, pt))
+    Err(_) => assert_true(false)
   }
 }
 
@@ -1027,7 +1027,7 @@ test "AES-256-GCM-SIV RFC8452 vector 48 (pt 21B, aad 35B)" {
     ),
   )
   match aes_gcm_siv_decrypt(key, nonce, aad, ct) {
-    Some(rec) => assert_true(bytes_equal(rec, pt))
-    None => assert_true(false)
+    Ok(rec) => assert_true(bytes_equal(rec, pt))
+    Err(_) => assert_true(false)
   }
 }

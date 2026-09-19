@@ -41,7 +41,6 @@ verified against official standard vectors.
   `rsa_oaep_decrypt_or` (+ `_with_or` / `_crt_or`),
   `rsa_pkcs1_v15_decrypt_or` (+ `_crt_or`), `ml_kem_*_encaps_or` /
   `ml_kem_*_decaps_or`, `ml_kem_*_hybrid_seal_or` (+ `_seal_init_or`),
-  `ml_kem_*_hybrid_open_or`,
   `rsa_oaep_encrypt_or` (+ `_with_or`) / `rsa_pkcs1_v15_encrypt_or`,
   `sm2_encrypt_or` / `sm2_encrypt_with_k_or` / `sm2_seal_or` / `sm2_open_or`,
   `sm2_ct_to_der_or` / `sm2_ct_from_der_or` / `sm2_sig_to_der_or` /
@@ -458,13 +457,12 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `ml_kem_768_keygen / encaps / decaps` | ML-KEM-768 (same shapes) |
 | `ml_kem_1024_keygen / encaps / decaps` | ML-KEM-1024 (same shapes) |
 | `ml_kem_768_hybrid_seal(ek, m, aad, msg)` | ML-KEM-768 hybrid encryption (HKDF + ChaCha20-Poly1305) |
-| `ml_kem_768_hybrid_open(dk, blob, aad) -> Option[Bytes]` | hybrid decryption; `None` on any failure |
+| `ml_kem_768_hybrid_open(dk, blob, aad) -> Result[Bytes, String]` | hybrid decryption; one uniform `Err` for a malformed blob, a wrong-length `dk` or a failed tag |
 | `ml_kem_768_hybrid_seal_init + ml_kem_hybrid_stream_update/final` | streaming hybrid seal |
 | `ml_kem_{512,768,1024}_hybrid_seal_or / _hybrid_seal_init_or` | the seal path as `Result` — `ek` is the recipient's key, i.e. peer-supplied |
-| `ml_kem_{512,768,1024}_hybrid_open_or(dk, blob, aad)` | the open path as `Result` instead of `Option`; one uniform message for a malformed blob, a wrong-length `dk` and an authentication failure |
 | `poly1305_new / poly1305_update / poly1305_finalize` | incremental Poly1305 |
 | `aes_gcm_siv_encrypt(key, nonce, aad, pt)` | AES-GCM-SIV (RFC 8452, nonce-misuse-resistant) |
-| `aes_gcm_siv_decrypt(key, nonce, aad, ct) -> Option[Bytes]` | AES-GCM-SIV decryption; `aes_gcm_siv_decrypt_or` returns `Result` |
+| `aes_gcm_siv_decrypt(key, nonce, aad, ct) -> Result[Bytes, String]` | AES-GCM-SIV decryption (returned `Option` before v0.91.0) |
 | `xwing_keygen(seed) -> (pk, sk)` | X-Wing hybrid KEM keygen (ML-KEM-768 + X25519) |
 | `xwing_encaps(pk, eseed) -> (ss, ct)` | X-Wing encapsulation (derandomized) |
 | `xwing_decaps(ct, sk) -> Bytes` | X-Wing decapsulation |
@@ -472,7 +470,7 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `kangaroo_twelve_128(m, c, out_len)` | KangarooTwelve KT128 (tree hash + customization) |
 | `turbo_shake_256 / kangaroo_twelve_256` | 256-bit capacity variants |
 | `hpke_setup_s(suite, mode, pk_r, ikm_e, info, psk, psk_id, sk_s)` | HPKE sender setup (RFC 9180, all 4 modes) |
-| `hpke_seal(ctx, aad, pt) / hpke_open(ctx, aad, ct)` | HPKE authenticated encryption (auto sequence numbers); `hpke_open_or` returns `Result` and advances the sequence number exactly once, in the twin |
+| `hpke_seal(ctx, aad, pt) / hpke_open(ctx, aad, ct) -> Result[Bytes, String]` | HPKE authenticated encryption (auto sequence numbers); Open advances the sequence exactly once per call and reports a failure as `Err` |
 | `hpke_export(ctx, exporter_context, len)` | HPKE exporter |
 | `hpke_x25519_* / hpke_p256_* / hpke_p521_* / hpke_x448_*` | HPKE cipher-suite selectors (all RFC-vectored suites) |
 | `hpke_p384_hkdf_sha384_aes256gcm` | DHKEM(P-384) suite (differential vectors) |
@@ -558,36 +556,35 @@ cause an `abort` with a descriptive message.
 
 ### Which channel reports a failure
 
-Four shapes coexist. Which one a function uses is frozen and machine-checked
-(`.github/scripts/api_contract_check.py`, rule C4): a **new** entry point that
-reports failure must be `foo_or -> Result[_, String]`.
+Four shapes coexist — one of them empty as of v0.91.0. Which one a function
+uses is frozen and machine-checked (`.github/scripts/api_contract_check.py`,
+rule C4): a **new** entry point that reports failure must return
+`Result[_, String]`.
 
 | Channel | Count | Used by | On failure |
 | --- | --- | --- | --- |
 | `Bool` | 39 | every `*_verify` / `*_check`: signature, MAC and AEAD-tag verification, plus `bytes_equal`, `hpke_valid_pk`, `dh_shared_is_zero` | `false`. There is nothing to hand back, and a distinguishable error would be an authentication oracle |
-| `(Bytes, Bool)` | 10 | `aes_gcm_decrypt`, `sm4_gcm_decrypt`, `sm2_decrypt`, `sm2_open`, and the six SM2 DER/PEM decoders | the `Bytes` are meaningless — read the flag |
-| `Option` (`Bytes?`) | 5 | `aes_gcm_siv_decrypt`, `hpke_open`, `ml_kem_512/768/1024_hybrid_open` | `None`; no reason is available |
-| `Result[_, String]` | 47 | the 44 `_or` twins, plus `aes_kw_unwrap`, `aes_siv_decrypt` and `sealed_box_open` | `Err(msg)`. The RSA decryption family returns one uniform message for every padding failure, so the text is not a Bleichenbacher/Manger oracle |
+| `(Bytes, Bool)` | 10 | `aes_gcm_decrypt`, `sm4_gcm_decrypt`, `sm2_decrypt`, `sm2_open`, and the six SM2 DER/PEM decoders | the `Bytes` are meaningless — read the flag. Each has a `Result` twin (`_or`) |
+| `Option` (`Bytes?`) | **0** | — | **eliminated in v0.91.0**: `aes_gcm_siv_decrypt`, `hpke_open` and the three `ml_kem_*_hybrid_open` now return `Result` themselves. C4 keeps the list empty |
+| `Result[_, String]` | 62 | the 54 `_or` twins, plus `aes_kw_unwrap`, `aes_siv_decrypt`, `sealed_box_open` and the five former `Option` functions | `Err(msg)`. Decryption and opening return **one uniform message** for every way peer input can fail, so the text is not a Bleichenbacher/Manger oracle |
 
 Everything else either cannot fail on well-formed caller input (it `abort`s —
 see the two-tier contract above) or just returns a value.
 
-**All fifteen of these legacy entry points now have a `Result` twin.** Ten came
-in v0.89.0 (the three `ml_kem_*_hybrid_open_or`, `sm2_open_or`,
-`sm2_ct_from_der_or`, `sm2_sig_from_der_or`, `sm2_pkcs8_der_to_sk_or`,
-`sm2_spki_der_to_pk_or`, `sm2_sk_from_pem_or`, `sm2_pk_from_pem_or`); the five
-that mix an `abort` on caller shape with a failure value for hostile input came
-in v0.90.0 (`aes_gcm_decrypt_or`, `sm4_gcm_decrypt_or`,
-`aes_gcm_siv_decrypt_or`, `hpke_open_or`, `sm2_decrypt_or`), by moving each body
-into the twin and leaving the original as a projection: `Ok` becomes the old
-success value, and the twin's *uniform* failure message becomes the old failure
-value while any other message still aborts. The two sides share that one message
-through a `let`, so they cannot drift, and C2 sees the delegation.
+**Migration state.** All ten `(Bytes, Bool)` entry points have a `Result` twin
+(`sm2_open_or`, `sm2_ct_from_der_or`, `sm2_sig_from_der_or`,
+`sm2_pkcs8_der_to_sk_or`, `sm2_spki_der_to_pk_or`, `sm2_sk_from_pem_or`,
+`sm2_pk_from_pem_or`, `aes_gcm_decrypt_or`, `sm4_gcm_decrypt_or`,
+`sm2_decrypt_or`), added in v0.89.0–v0.90.0. The five `Option` ones went
+further in v0.91.0: the `Option` form was **deleted** and the name now returns
+`Result` directly, since an open that reports nothing is strictly less useful
+than one that says why, and there was no aborting variant worth keeping (an
+AEAD open that aborted on a forged tag would be a denial of service).
 
-Prefer the twin in new code: it is where 1.0 will land, and the legacy shapes
-are frozen (rule C4) rather than maintained. For `hpke_open` the sequence number
-advances inside the twin, so one call to either form burns exactly one nonce —
-but calling both forms for the same message burns two, as it always did.
+Prefer the `Result` forms in new code: the `(Bytes, Bool)` shapes are frozen
+(rule C4) rather than maintained, and the twins are where they land. For
+`hpke_open` the sequence number advances inside the function, so one call burns
+exactly one nonce.
 
 Two rules follow, and C4 enforces both:
 

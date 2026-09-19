@@ -633,17 +633,17 @@ test "robust-aead-authenticity" {
   // AES-GCM-SIV (Option convention)
   let siv_ct = aes_gcm_siv_encrypt(key16, nonce12, aad, pt)
   match aes_gcm_siv_decrypt(key16, nonce12, aad, siv_ct) {
-    Some(g) => assert_true(rb_eq(g, pt))
-    None => assert_true(false, msg="aes_gcm_siv: authentic input rejected")
+    Ok(g) => assert_true(rb_eq(g, pt))
+    Err(_) => assert_true(false, msg="aes_gcm_siv: authentic input rejected")
   }
   for c in rb_cases(r, siv_ct, 10) {
     match aes_gcm_siv_decrypt(key16, nonce12, aad, c) {
-      Some(g) =>
+      Ok(g) =>
         assert_true(
           rb_eq(c, siv_ct) && rb_eq(g, pt),
           msg="aes_gcm_siv: forged input accepted",
         )
-      None => ()
+      Err(_) => ()
     }
   }
   // AES-SIV (Result convention)
@@ -833,17 +833,17 @@ test "robust-kem" {
   // hybrid envelope: hostile blob or hostile dk must be None, never a trap
   let blob = ml_kem_512_hybrid_seal(ek512, m, b"aad", b"payload")
   match ml_kem_512_hybrid_open(dk512, blob, b"aad") {
-    Some(g) => assert_true(rb_eq(g, b"payload"))
-    None => assert_true(false, msg="ml_kem_hybrid: authentic blob rejected")
+    Ok(g) => assert_true(rb_eq(g, b"payload"))
+    Err(_) => assert_true(false, msg="ml_kem_hybrid: authentic blob rejected")
   }
   for e in rb_cases(r, blob, 12) {
     match ml_kem_512_hybrid_open(dk512, e, b"aad") {
-      Some(g) =>
+      Ok(g) =>
         assert_true(
           rb_eq(e, blob) && rb_eq(g, b"payload"),
           msg="ml_kem_hybrid: forged blob accepted",
         )
-      None => ()
+      Err(_) => ()
     }
   }
   // A mutated dk must be rejected -- but not every mutation of dk can change
@@ -868,12 +868,12 @@ test "robust-kem" {
       }
     }
     match ml_kem_512_hybrid_open(dk, blob, b"aad") {
-      Some(g) =>
+      Ok(g) =>
         assert_true(
           live_same && rb_eq(g, b"payload"),
           msg="ml_kem_hybrid: a dk differing outside z opened the blob",
         )
-      None =>
+      Err(_) =>
         assert_true(
           !live_same,
           msg="ml_kem_hybrid: a dk equal outside z was rejected, but z is only " +
@@ -1200,18 +1200,18 @@ test "robust-hpke" {
   let ctx_r = hpke_setup_r(s_x, 0, sk_r, pk_r, enc, info, b"", b"", b"")
   let ct = hpke_seal(ctx_s, b"aad", b"payload")
   match hpke_open(ctx_r, b"aad", ct) {
-    Some(pt) => assert_true(rb_eq(pt, b"payload"))
-    None => assert_true(false, msg="hpke: authentic ciphertext rejected")
+    Ok(pt) => assert_true(rb_eq(pt, b"payload"))
+    Err(_) => assert_true(false, msg="hpke: authentic ciphertext rejected")
   }
   for c in rb_cases(r, ct, 12) {
     let ctx = hpke_setup_r(s_x, 0, sk_r, pk_r, enc, info, b"", b"", b"")
     match hpke_open(ctx, b"aad", c) {
-      Some(pt) =>
+      Ok(pt) =>
         assert_true(
           rb_eq(c, ct) && rb_eq(pt, b"payload"),
           msg="hpke: forged ciphertext accepted",
         )
-      None => ()
+      Err(_) => ()
     }
   }
   // X25519 accepts ANY 32-byte input by design (RFC 7748: low-order points
@@ -1288,8 +1288,8 @@ test "robust-hpke" {
       Ok(ctx_rp) => {
         let c = hpke_seal(ctx_sp, b"aad", b"payload")
         match hpke_open(ctx_rp, b"aad", c) {
-          Some(pt) => assert_true(rb_eq(pt, b"payload"))
-          None => assert_true(false, msg="hpke: nist round trip failed")
+          Ok(pt) => assert_true(rb_eq(pt, b"payload"))
+          Err(_) => assert_true(false, msg="hpke: nist round trip failed")
         }
       }
       Err(_) => assert_true(false, msg="hpke: authentic nist setup rejected")
@@ -1757,8 +1757,8 @@ test "robust-kem-seal" {
     msg="hybrid_seal and hybrid_seal_or disagree",
   )
   match ml_kem_512_hybrid_open(dk512, blob, aad) {
-    Some(got) => assert_true(rb_eq(got, msg), msg="seal_or blob did not open")
-    None => assert_true(false, msg="seal_or blob rejected by open")
+    Ok(got) => assert_true(rb_eq(got, msg), msg="seal_or blob did not open")
+    Err(_) => assert_true(false, msg="seal_or blob rejected by open")
   }
   // ---- hostile ek: Err exactly when the length is wrong, never a trap -----
   for ek in rb_cases(r, ek512, 8) {

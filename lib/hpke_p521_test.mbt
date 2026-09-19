@@ -62,7 +62,7 @@ test "HPKE RFC9180 p521_hkdf_sha512_aes256gcm Base mode" {
         "5a7c5b841a",
       ),
     ) {
-    Some(pt) =>
+    Ok(pt) =>
       assert_true(
         bytes_equal(
           pt,
@@ -71,7 +71,7 @@ test "HPKE RFC9180 p521_hkdf_sha512_aes256gcm Base mode" {
           ),
         ),
       )
-    None => assert_true(false)
+    Err(_) => assert_true(false)
   }
   {
     let ct = hpke_seal(
@@ -98,7 +98,7 @@ test "HPKE RFC9180 p521_hkdf_sha512_aes256gcm Base mode" {
         "05fd352256",
       ),
     ) {
-    Some(pt) =>
+    Ok(pt) =>
       assert_true(
         bytes_equal(
           pt,
@@ -107,7 +107,7 @@ test "HPKE RFC9180 p521_hkdf_sha512_aes256gcm Base mode" {
           ),
         ),
       )
-    None => assert_true(false)
+    Err(_) => assert_true(false)
   }
   {
     let ct = hpke_seal(
@@ -134,7 +134,7 @@ test "HPKE RFC9180 p521_hkdf_sha512_aes256gcm Base mode" {
         "61d24e1c7a",
       ),
     ) {
-    Some(pt) =>
+    Ok(pt) =>
       assert_true(
         bytes_equal(
           pt,
@@ -143,7 +143,7 @@ test "HPKE RFC9180 p521_hkdf_sha512_aes256gcm Base mode" {
           ),
         ),
       )
-    None => assert_true(false)
+    Err(_) => assert_true(false)
   }
   assert_true(
     bytes_equal(
@@ -235,7 +235,7 @@ test "HPKE RFC9180 p521_hkdf_sha512_aes256gcm PSK mode" {
         "31aa7843a1",
       ),
     ) {
-    Some(pt) =>
+    Ok(pt) =>
       assert_true(
         bytes_equal(
           pt,
@@ -244,7 +244,7 @@ test "HPKE RFC9180 p521_hkdf_sha512_aes256gcm PSK mode" {
           ),
         ),
       )
-    None => assert_true(false)
+    Err(_) => assert_true(false)
   }
   {
     let ct = hpke_seal(
@@ -271,7 +271,7 @@ test "HPKE RFC9180 p521_hkdf_sha512_aes256gcm PSK mode" {
         "943984553e",
       ),
     ) {
-    Some(pt) =>
+    Ok(pt) =>
       assert_true(
         bytes_equal(
           pt,
@@ -280,7 +280,7 @@ test "HPKE RFC9180 p521_hkdf_sha512_aes256gcm PSK mode" {
           ),
         ),
       )
-    None => assert_true(false)
+    Err(_) => assert_true(false)
   }
   {
     let ct = hpke_seal(
@@ -307,7 +307,7 @@ test "HPKE RFC9180 p521_hkdf_sha512_aes256gcm PSK mode" {
         "53f3ec7336",
       ),
     ) {
-    Some(pt) =>
+    Ok(pt) =>
       assert_true(
         bytes_equal(
           pt,
@@ -316,7 +316,7 @@ test "HPKE RFC9180 p521_hkdf_sha512_aes256gcm PSK mode" {
           ),
         ),
       )
-    None => assert_true(false)
+    Err(_) => assert_true(false)
   }
   assert_true(
     bytes_equal(
@@ -414,7 +414,7 @@ test "HPKE RFC9180 p521_hkdf_sha512_aes256gcm Auth mode" {
         "a8207427f9",
       ),
     ) {
-    Some(pt) =>
+    Ok(pt) =>
       assert_true(
         bytes_equal(
           pt,
@@ -423,7 +423,7 @@ test "HPKE RFC9180 p521_hkdf_sha512_aes256gcm Auth mode" {
           ),
         ),
       )
-    None => assert_true(false)
+    Err(_) => assert_true(false)
   }
   {
     let ct = hpke_seal(
@@ -450,7 +450,7 @@ test "HPKE RFC9180 p521_hkdf_sha512_aes256gcm Auth mode" {
         "ba7c539cc6",
       ),
     ) {
-    Some(pt) =>
+    Ok(pt) =>
       assert_true(
         bytes_equal(
           pt,
@@ -459,7 +459,7 @@ test "HPKE RFC9180 p521_hkdf_sha512_aes256gcm Auth mode" {
           ),
         ),
       )
-    None => assert_true(false)
+    Err(_) => assert_true(false)
   }
   {
     let ct = hpke_seal(
@@ -486,7 +486,7 @@ test "HPKE RFC9180 p521_hkdf_sha512_aes256gcm Auth mode" {
         "d27005b4bd",
       ),
     ) {
-    Some(pt) =>
+    Ok(pt) =>
       assert_true(
         bytes_equal(
           pt,
@@ -495,7 +495,7 @@ test "HPKE RFC9180 p521_hkdf_sha512_aes256gcm Auth mode" {
           ),
         ),
       )
-    None => assert_true(false)
+    Err(_) => assert_true(false)
   }
   assert_true(
     bytes_equal(
@@ -595,7 +595,7 @@ test "HPKE RFC9180 p521_hkdf_sha512_aes256gcm AuthPSK mode" {
         "a262448ab7",
       ),
     ) {
-    Some(pt) =>
+    Ok(pt) =>
       assert_true(
         bytes_equal(
           pt,
@@ -604,7 +604,7 @@ test "HPKE RFC9180 p521_hkdf_sha512_aes256gcm AuthPSK mode" {
           ),
         ),
       )
-    None => assert_true(false)
+    Err(_) => assert_true(false)
   }
   {
     let ct = hpke_seal(
@@ -631,7 +631,7 @@ test "HPKE RFC9180 p521_hkdf_sha512_aes256gcm AuthPSK mode" {
         "c78d1d7f29",
       ),
     ) {
-    Some(pt) =>
+    Ok(pt) =>
       assert_true(
         bytes_equal(
           pt,
@@ -640,7 +640,7 @@ test "HPKE RFC9180 p521_hkdf_sha512_aes256gcm AuthPSK mode" {
           ),
         ),
       )
-    None => assert_true(false)
+    Err(_) => assert_true(false)
   }
   {
     let ct = hpke_seal(
@@ -667,7 +667,7 @@ test "HPKE RFC9180 p521_hkdf_sha512_aes256gcm AuthPSK mode" {
         "8f2c785312",
       ),
     ) {
-    Some(pt) =>
+    Ok(pt) =>
       assert_true(
         bytes_equal(
           pt,
@@ -676,7 +676,7 @@ test "HPKE RFC9180 p521_hkdf_sha512_aes256gcm AuthPSK mode" {
           ),
         ),
       )
-    None => assert_true(false)
+    Err(_) => assert_true(false)
   }
   assert_true(
     bytes_equal(

@@ -75,6 +75,15 @@ LEGACY_RESULT = {
     "aes_kw_unwrap",       # graceful from the start, no aborting twin
     "aes_siv_decrypt",     # same
     "sealed_box_open",     # same
+    # The Option channel was collapsed into Result in v0.91.0: these five kept
+    # their names and gained a reason string. They are not `_or` twins because
+    # there is no aborting form left to twin with -- an AEAD/Hybrid open that
+    # aborted on a forged tag would be a denial of service.
+    "aes_gcm_siv_decrypt",
+    "hpke_open",
+    "ml_kem_512_hybrid_open",
+    "ml_kem_768_hybrid_open",
+    "ml_kem_1024_hybrid_open",
 }
 LEGACY_BYTES_BOOL = {
     "aes_gcm_decrypt",
@@ -88,13 +97,9 @@ LEGACY_BYTES_BOOL = {
     "sm2_sk_from_pem",
     "sm2_pk_from_pem",
 }
-LEGACY_OPTION = {
-    "aes_gcm_siv_decrypt",
-    "hpke_open",
-    "ml_kem_512_hybrid_open",
-    "ml_kem_768_hybrid_open",
-    "ml_kem_1024_hybrid_open",
-}
+# Empty since v0.91.0 and it must stay empty: `Option` is no longer a channel
+# this library reports failures through.
+LEGACY_OPTION = set()
 
 
 # --------------------------------------------------------------------------
@@ -464,6 +469,17 @@ def main():
           % (len(chans["Bool"]), len(chans["Result"]), len(LEGACY_RESULT),
              len(chans["(Bytes,Bool)"]), len(chans["Option"]),
              "yes" if not c4 else "NO (%d)" % c4))
+    # A ratchet only works if the lists are pruned: an entry that no longer
+    # names a public function means a migration happened and the list lied.
+    for label, names in (("LEGACY_RESULT", LEGACY_RESULT),
+                         ("LEGACY_BYTES_BOOL", LEGACY_BYTES_BOOL),
+                         ("LEGACY_OPTION", LEGACY_OPTION)):
+        for n in sorted(names):
+            if n not in funcs:
+                c4 += 1
+                problems.append(
+                    "C4 %s lists %s, which is not a public function any more -- "
+                    "prune the list" % (label, n))
     print("    %d same-type tuples (1.0 will decide whether these become "
           "structs): %s" % (len(same_type_tuples),
                             ", ".join(same_type_tuples[:4]) +

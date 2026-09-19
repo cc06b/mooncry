@@ -83,8 +83,8 @@ test "HPKE P-384 key schedule + seal/open sequence differential" {
       bytes_equal(ct, hex_to_bytes("5df1c0d427f4ad9caf6be9d4084e39e8")),
     )
     match hpke_open(ctx_r, hex_to_bytes("6161642d30"), ct) {
-      Some(pt) => assert_true(bytes_equal(pt, b""))
-      None => assert_true(false)
+      Ok(pt) => assert_true(bytes_equal(pt, b""))
+      Err(_) => assert_true(false)
     }
   }
   {
@@ -100,8 +100,8 @@ test "HPKE P-384 key schedule + seal/open sequence differential" {
       ),
     )
     match hpke_open(ctx_r, hex_to_bytes("6161642d30"), ct) {
-      Some(pt) => assert_true(bytes_equal(pt, hex_to_bytes("73686f7274")))
-      None => assert_true(false)
+      Ok(pt) => assert_true(bytes_equal(pt, hex_to_bytes("73686f7274")))
+      Err(_) => assert_true(false)
     }
   }
   {
@@ -123,7 +123,7 @@ test "HPKE P-384 key schedule + seal/open sequence differential" {
       ),
     )
     match hpke_open(ctx_r, hex_to_bytes("6161642d30"), ct) {
-      Some(pt) =>
+      Ok(pt) =>
         assert_true(
           bytes_equal(
             pt,
@@ -132,7 +132,7 @@ test "HPKE P-384 key schedule + seal/open sequence differential" {
             ),
           ),
         )
-      None => assert_true(false)
+      Err(_) => assert_true(false)
     }
   }
   {
@@ -157,7 +157,7 @@ test "HPKE P-384 key schedule + seal/open sequence differential" {
       ),
     )
     match hpke_open(ctx_r, hex_to_bytes("6161642d30"), ct) {
-      Some(pt) =>
+      Ok(pt) =>
         assert_true(
           bytes_equal(
             pt,
@@ -166,7 +166,7 @@ test "HPKE P-384 key schedule + seal/open sequence differential" {
             ),
           ),
         )
-      None => assert_true(false)
+      Err(_) => assert_true(false)
     }
   }
   assert_true(

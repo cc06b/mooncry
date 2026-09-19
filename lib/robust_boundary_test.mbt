@@ -135,16 +135,16 @@ test "boundary-aes-gcm-family" {
           msg="gcm_siv " + label + ": length",
         )
         match aes_gcm_siv_decrypt(key, nonce, aad, box) {
-          Some(got) => assert_true(rb_eq(got, pt), msg="gcm_siv " + label)
-          None => assert_true(false, msg="gcm_siv " + label + ": rejected")
+          Ok(got) => assert_true(rb_eq(got, pt), msg="gcm_siv " + label)
+          Err(_) => assert_true(false, msg="gcm_siv " + label + ": rejected")
         }
         rb_assert_tamper_rejected(
           r,
           box,
           fn(c : Bytes) -> Bool {
             match aes_gcm_siv_decrypt(key, nonce, aad, c) {
-              Some(_) => true
-              None => false
+              Ok(_) => true
+              Err(_) => false
             }
           },
           "gcm_siv " + label,
@@ -340,16 +340,16 @@ test "boundary-kem-envelopes" {
       msg=label + ": blob length " + blob.length().to_string(),
     )
     match ml_kem_512_hybrid_open(dk, blob, aad) {
-      Some(got) => assert_true(rb_eq(got, pt), msg=label + ": round trip")
-      None => assert_true(false, msg=label + ": rejected authentic blob")
+      Ok(got) => assert_true(rb_eq(got, pt), msg=label + ": round trip")
+      Err(_) => assert_true(false, msg=label + ": rejected authentic blob")
     }
     rb_assert_tamper_rejected(
       r,
       blob,
       fn(e : Bytes) -> Bool {
         match ml_kem_512_hybrid_open(dk, e, aad) {
-          Some(_) => true
-          None => false
+          Ok(_) => true
+          Err(_) => false
         }
       },
       label,

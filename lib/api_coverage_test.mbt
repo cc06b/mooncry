@@ -300,9 +300,9 @@ test "ml_kem hybrid streaming seal_init matches the one-shot seal" {
   assert_true(c10.length() == 1568, msg="1024: ciphertext length")
   // and the streamed blob really opens
   match ml_kem_1024_hybrid_open(dk10, blob10, aad) {
-    Some(got) =>
+    Ok(got) =>
       assert_true(bytes_equal(got, msg), msg="1024: streamed blob did not open")
-    None => assert_true(false, msg="1024: streamed blob rejected")
+    Err(_) => assert_true(false, msg="1024: streamed blob rejected")
   }
   // feeding the message in pieces must give the same blob
   let (c10b, st10b) = ml_kem_1024_hybrid_seal_init(ek10, m, aad)
@@ -436,9 +436,9 @@ test "kdf limits and hpke mode guard" {
           }
         }
         match hpke_open(ctx_r, b"aad", ct) {
-          Some(pt) =>
+          Ok(pt) =>
             assert_true(bytes_equal(pt, b"payload"), msg="hpke mode round trip")
-          None =>
+          Err(_) =>
             assert_true(
               false,
               msg="hpke mode " + mode.to_string() + " did not open",
@@ -653,6 +653,28 @@ test "wave-4 boundaries: the 1 GiB size policy and argon2's variants" {
 let wave5_fails : Array[String] = []
 
 ///|
+/// The `Option` family collapsed into `Result` in v0.91.0, so there is no twin
+/// left to compare against; these two assert the single form directly and report
+/// through the same list as wave5_pair.
+fn wave7_ok(label : String, got : Result[Bytes, String], want : Bytes) -> Unit {
+  match got {
+    Ok(b) =>
+      if !bytes_equal(b, want) {
+        wave5_fails.push(label + ": opened, but the plaintext differs")
+      }
+    Err(e) => wave5_fails.push(label + ": rejected: " + e)
+  }
+}
+
+///|
+fn wave7_err(label : String, got : Result[Bytes, String]) -> Unit {
+  match got {
+    Ok(_) => wave5_fails.push(label + ": accepted input that must be rejected")
+    Err(_) => ()
+  }
+}
+
+///|
 /// A twin and its legacy original must agree on every input: `Ok` exactly
 /// when the original reported success, carrying the same bytes.
 fn wave5_pair(
@@ -675,24 +697,6 @@ fn wave5_pair(
           label + ": twin said Err but the legacy form succeeded",
         )
       }
-  }
-}
-
-///|
-/// The same, for the `Option` family.
-fn wave5_pair_opt(
-  label : String,
-  legacy : Bytes?,
-  twin : Result[Bytes, String],
-  want : Bytes,
-) -> Unit {
-  match (legacy, twin) {
-    (Some(got), Ok(g2)) =>
-      if !(bytes_equal(got, want) && bytes_equal(g2, want)) {
-        wave5_fails.push(label + ": both accepted but the bytes differ")
-      }
-    (None, Err(_)) => ()
-    _ => wave5_fails.push(label + ": twin and legacy disagree about success")
   }
 }
 
@@ -810,40 +814,24 @@ test "the Result twins of the legacy-channel decoders and openers" {
     Bytes::make(32, b'\x02'),
   )
   let blob5 = ml_kem_512_hybrid_seal(ek5, Bytes::make(32, b'\x03'), b"aad", msg)
-  wave5_pair_opt(
-    "hybrid_open 512",
-    ml_kem_512_hybrid_open(dk5, blob5, b"aad"),
-    ml_kem_512_hybrid_open_or(dk5, blob5, b"aad"),
-    msg,
-  )
-  wave5_pair_opt(
+  wave7_ok("hybrid_open 512", ml_kem_512_hybrid_open(dk5, blob5, b"aad"), msg)
+  wave7_err(
     "hybrid_open 512 short",
     ml_kem_512_hybrid_open(dk5, b"short", b"aad"),
-    ml_kem_512_hybrid_open_or(dk5, b"short", b"aad"),
-    msg,
   )
-  wave5_pair_opt(
+  wave7_err(
     "hybrid_open 512 wrong aad",
     ml_kem_512_hybrid_open(dk5, blob5, b"other"),
-    ml_kem_512_hybrid_open_or(dk5, blob5, b"other"),
-    msg,
   )
   let (ek7, dk7) = ml_kem_768_keygen(
     Bytes::make(32, b'\x04'),
     Bytes::make(32, b'\x05'),
   )
   let blob7 = ml_kem_768_hybrid_seal(ek7, Bytes::make(32, b'\x06'), b"aad", msg)
-  wave5_pair_opt(
-    "hybrid_open 768",
-    ml_kem_768_hybrid_open(dk7, blob7, b"aad"),
-    ml_kem_768_hybrid_open_or(dk7, blob7, b"aad"),
-    msg,
-  )
-  wave5_pair_opt(
+  wave7_ok("hybrid_open 768", ml_kem_768_hybrid_open(dk7, blob7, b"aad"), msg)
+  wave7_err(
     "hybrid_open 768 wrong dk",
     ml_kem_768_hybrid_open(dk5, blob7, b"aad"),
-    ml_kem_768_hybrid_open_or(dk5, blob7, b"aad"),
-    msg,
   )
   let (ek10, dk10) = ml_kem_1024_keygen(
     Bytes::make(32, b'\x07'),
@@ -855,17 +843,14 @@ test "the Result twins of the legacy-channel decoders and openers" {
     b"aad",
     msg,
   )
-  wave5_pair_opt(
+  wave7_ok(
     "hybrid_open 1024",
     ml_kem_1024_hybrid_open(dk10, blob10, b"aad"),
-    ml_kem_1024_hybrid_open_or(dk10, blob10, b"aad"),
     msg,
   )
-  wave5_pair_opt(
+  wave7_err(
     "hybrid_open 1024 empty",
     ml_kem_1024_hybrid_open(dk10, b"", b"aad"),
-    ml_kem_1024_hybrid_open_or(dk10, b"", b"aad"),
-    msg,
   )
   let mut joined = ""
   for f in wave5_fails {
@@ -956,26 +941,14 @@ test "the five mixed-semantics twins agree with their aborting originals" {
   }
   // ---- AES-GCM-SIV ----
   let siv = aes_gcm_siv_encrypt(key32, iv12, aad, msg)
-  wave5_pair_opt(
-    "gcm_siv",
-    aes_gcm_siv_decrypt(key32, iv12, aad, siv),
-    aes_gcm_siv_decrypt_or(key32, iv12, aad, siv),
-    msg,
-  )
+  wave7_ok("gcm_siv", aes_gcm_siv_decrypt(key32, iv12, aad, siv), msg)
   let siv_bad = siv.to_array()
   siv_bad[0] = (siv_bad[0].to_int() ^ 1).to_byte()
-  wave5_pair_opt(
+  wave7_err(
     "gcm_siv forged",
     aes_gcm_siv_decrypt(key32, iv12, aad, Bytes::from_array(siv_bad[:])),
-    aes_gcm_siv_decrypt_or(key32, iv12, aad, Bytes::from_array(siv_bad[:])),
-    msg,
   )
-  wave5_pair_opt(
-    "gcm_siv short",
-    aes_gcm_siv_decrypt(key32, iv12, aad, b"tooshort"),
-    aes_gcm_siv_decrypt_or(key32, iv12, aad, b"tooshort"),
-    msg,
-  )
+  wave7_err("gcm_siv short", aes_gcm_siv_decrypt(key32, iv12, aad, b"tooshort"))
   // ---- SM2 ----
   let sk2 = Bytes::make(32, b'\x11')
   let pk2 = sm2_public_key(sk2)
@@ -1007,42 +980,35 @@ test "the five mixed-semantics twins agree with their aborting originals" {
   let ct2 = hpke_seal(ctx_s, aad, b"second") // sender sequence 1
   let sk_r_copy = sk_r
   let pk_s_copy = pk_s
-  wave5_pair_opt(
+  wave7_ok(
     "hpke_open ct1",
     hpke_open(wave6_hpke_receiver(enc, sk_r_copy, pk_r, pk_s_copy), aad, ct1),
-    hpke_open_or(wave6_hpke_receiver(enc, sk_r_copy, pk_r, pk_s_copy), aad, ct1),
     msg,
   )
   let ct1_bad = ct1.to_array()
   ct1_bad[ct1_bad.length() - 1] = (ct1_bad[ct1_bad.length() - 1].to_int() ^ 1).to_byte()
   let forged1 = Bytes::from_array(ct1_bad[:])
-  wave5_pair_opt(
+  wave7_err(
     "hpke_open forged",
     hpke_open(
       wave6_hpke_receiver(enc, sk_r_copy, pk_r, pk_s_copy),
       aad,
       forged1,
     ),
-    hpke_open_or(
-      wave6_hpke_receiver(enc, sk_r_copy, pk_r, pk_s_copy),
-      aad,
-      forged1,
-    ),
-    msg,
   )
   // one nonce per call: the same context must open ct1 then ct2 in order
   let seq_ctx = wave6_hpke_receiver(enc, sk_r_copy, pk_r, pk_s_copy)
-  match hpke_open_or(seq_ctx, aad, ct1) {
+  match hpke_open(seq_ctx, aad, ct1) {
     Ok(pt) => assert_true(bytes_equal(pt, msg), msg="hpke open ct1 plaintext")
     Err(e) => assert_true(false, msg="hpke open ct1 rejected: " + e)
   }
-  match hpke_open_or(seq_ctx, aad, ct2) {
+  match hpke_open(seq_ctx, aad, ct2) {
     Ok(pt) =>
       assert_true(bytes_equal(pt, b"second"), msg="hpke open ct2 plaintext")
     Err(e) => assert_true(false, msg="hpke open ct2 rejected: " + e)
   }
   // and a third open of ct1 must now fail: the sequence moved on
-  match hpke_open_or(seq_ctx, aad, ct1) {
+  match hpke_open(seq_ctx, aad, ct1) {
     Ok(_) => assert_true(false, msg="hpke replayed ct1 at sequence 2")
     Err(_) => ()
   }

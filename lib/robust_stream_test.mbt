@@ -388,8 +388,8 @@ test "robust-stream-aead" {
       msg="hybrid stream step=" + step.to_string(),
     )
     match ml_kem_512_hybrid_open(_dk, streamed, aad) {
-      Some(got) => assert_true(rb_eq(got, msg), msg="hybrid stream open")
-      None => assert_true(false, msg="hybrid stream: open rejected")
+      Ok(got) => assert_true(rb_eq(got, msg), msg="hybrid stream open")
+      Err(_) => assert_true(false, msg="hybrid stream: open rejected")
     }
   }
 }

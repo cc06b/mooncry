@@ -204,14 +204,14 @@ pub fn aes_gcm_siv_encrypt(
 ///|
 /// The one message `aes_gcm_siv_decrypt_or` gives when the SIV tag does not
 /// verify (or the input is too short to carry one); shared with the projection
-/// in `aes_gcm_siv_decrypt`. See `aes_gcm_auth_failed`.
+/// uniform message. See `aes_gcm_auth_failed`.
 let aes_gcm_siv_auth_failed : String = "aes_gcm_siv_decrypt: tag verification failed"
 
 ///|
-/// `aes_gcm_siv_decrypt` as a `Result` instead of an `Option`: `Err` for a
+/// AES-GCM-SIV decrypt as a `Result` (the `Option` form is gone since v0.91.0):
 /// wrong-shape key/nonce (the same texts the aborting form uses), one uniform
 /// `Err` for a short input or a tag that does not verify. v0.90.0.
-pub fn aes_gcm_siv_decrypt_or(
+pub fn aes_gcm_siv_decrypt(
   key : Bytes,
   nonce : Bytes,
   aad : Bytes,
@@ -255,21 +255,5 @@ pub fn aes_gcm_siv_decrypt_or(
     Ok(pt)
   } else {
     Err(aes_gcm_siv_auth_failed)
-  }
-}
-
-///|
-/// AES-GCM-SIV decrypt — `Some(plaintext)`, or `None` when the SIV tag does not
-/// verify. A wrong-shape key or nonce aborts, as before; prefer
-/// `aes_gcm_siv_decrypt_or`.
-pub fn aes_gcm_siv_decrypt(
-  key : Bytes,
-  nonce : Bytes,
-  aad : Bytes,
-  ct_and_tag : Bytes,
-) -> Bytes? {
-  match aes_gcm_siv_decrypt_or(key, nonce, aad, ct_and_tag) {
-    Ok(pt) => Some(pt)
-    Err(msg) => if msg == aes_gcm_siv_auth_failed { None } else { abort(msg) }
   }
 }

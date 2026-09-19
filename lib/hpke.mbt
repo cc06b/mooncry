@@ -971,7 +971,7 @@ pub fn hpke_seal(ctx : HpkeContext, aad : Bytes, pt : Bytes) -> Bytes {
 /// Increments the sequence counter either way. v0.37.0.
 
 ///|
-/// The one message `hpke_open_or` gives for a ciphertext that does not open:
+/// The one message `hpke_open` gives for a ciphertext that does not open:
 /// shorter than a tag, a failed AEAD tag, or an unsupported suite AEAD. Shared
 /// with the projection in `hpke_open`. v0.90.0.
 let hpke_open_failed : String = "hpke_open: rejected (malformed ciphertext or authentication failure)"
@@ -1005,12 +1005,13 @@ fn hpke_open_gcm(
 }
 
 ///|
-/// `hpke_open` as a `Result`. The sequence number is advanced exactly once per
+/// HPKE Open (RFC 9180 §5.2) as a `Result` -- the `Option` form is gone since
+/// v0.91.0. The sequence number is advanced exactly once per
 /// call, in here -- so the `Option` form delegates rather than the other way
-/// round, and calling both forms for one message would burn two nonces (as it
-/// always did). `Err` is uniform for a short ciphertext, a failed tag and an
-/// unsupported AEAD id. v0.90.0.
-pub fn hpke_open_or(
+/// call. `Err` is uniform for a short ciphertext, a failed tag and an
+/// unsupported AEAD id; the aborting behaviour for an unsupported suite is gone
+/// with the projection, and is now an `Err` like everything else.
+pub fn hpke_open(
   ctx : HpkeContext,
   aad : Bytes,
   ct : Bytes,
@@ -1035,18 +1036,6 @@ pub fn hpke_open_or(
         }
       }
     _ => Err("hpke: unsupported aead_id")
-  }
-}
-
-///|
-/// HPKE Open (RFC 9180 §5.2): decrypts one message with the context's current
-/// sequence number and advances it. `Some(plaintext)`, or `None` when the
-/// ciphertext does not open; an unsupported suite AEID aborts, as before.
-/// Prefer `hpke_open_or`.
-pub fn hpke_open(ctx : HpkeContext, aad : Bytes, ct : Bytes) -> Bytes? {
-  match hpke_open_or(ctx, aad, ct) {
-    Ok(pt) => Some(pt)
-    Err(msg) => if msg == hpke_open_failed { None } else { abort(msg) }
   }
 }
 
