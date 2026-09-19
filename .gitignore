@@ -14,3 +14,7 @@ target/
 *.mbti
 pkg.generated.mbti
 *.log
+
+# Python — left behind by the CI helper scripts in .github/scripts/
+__pycache__/
+*.pyc

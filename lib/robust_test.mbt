@@ -846,14 +846,39 @@ test "robust-kem" {
       None => ()
     }
   }
+  // A mutated dk must be rejected -- but not every mutation of dk can change
+  // the answer. FIPS 203 §7.3 lays dk out as dk_pke || ek || h(ek) || z, and z
+  // (the last 32 bytes) is read only when the re-encryption check fails, to
+  // derive the implicit-rejection key J(z, c). With an authentic ciphertext
+  // decapsulation never touches z, so a dk that differs only there yields the
+  // same shared secret and the envelope still opens. That is the standard, not
+  // a hole: a seed rotation found it (robust-kem at seed 0xE98B352E18C9 -- one
+  // flipped byte at index 1627 of 1632, plaintext still correct), and the old
+  // assertion "any changed dk must be None" was simply wrong. The decaps loop
+  // above gets this right already, by accepting any 32-byte key.
+  let z_len = 32
   for dk in rb_cases(r, dk512, 8) {
+    // does this candidate differ anywhere the successful path actually reads?
+    let mut live_same = dk.length() == dk512.length()
+    if live_same {
+      for i in 0..<(dk.length() - z_len) {
+        if dk[i] != dk512[i] {
+          live_same = false
+        }
+      }
+    }
     match ml_kem_512_hybrid_open(dk, blob, b"aad") {
       Some(g) =>
         assert_true(
-          rb_eq(dk, dk512) && rb_eq(g, b"payload"),
-          msg="ml_kem_hybrid: wrong dk accepted",
+          live_same && rb_eq(g, b"payload"),
+          msg="ml_kem_hybrid: a dk differing outside z opened the blob",
         )
-      None => ()
+      None =>
+        assert_true(
+          !live_same,
+          msg="ml_kem_hybrid: a dk equal outside z was rejected, but z is only " +
+            "used for implicit rejection so this must still open",
+        )
     }
   }
   // X-Wing
