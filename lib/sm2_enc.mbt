@@ -461,6 +461,20 @@ pub fn sm2_ct_from_der(der : Bytes) -> (Bytes, Bool) {
 }
 
 ///|
+/// `sm2_ct_from_der` as a `Result` instead of `(Bytes, Bool)`: `Err` when the
+/// bytes are not the one canonical DER encoding of an SM2 ciphertext. One
+/// message for every malformed shape -- a peer that can distinguish "trailing
+/// bytes" from "non-minimal length" learns which encodings a verifier accepts,
+/// which is the malleability channel the strictness exists to close. v0.89.0.
+pub fn sm2_ct_from_der_or(der : Bytes) -> Result[Bytes, String] {
+  match sm2_ct_from_der(der) {
+    (raw, true) => Ok(raw)
+    (_, _) =>
+      Err("sm2_ct_from_der: not a canonical SM2 ciphertext DER encoding")
+  }
+}
+
+///|
 /// Shape check for a raw r||s signature, shared by both encoders (see
 /// `sm2_ct_shape`).
 fn sm2_sig_shape(sig : Bytes) -> Result[Unit, String] {
@@ -525,6 +539,17 @@ pub fn sm2_sig_from_der(der : Bytes) -> (Bytes, Bool) {
 // ==================== SM2 sealed envelope (GM/T 0009 style) ====================
 
 ///|
+/// `sm2_sig_from_der` as a `Result`. See `sm2_ct_from_der_or` for why the
+/// message is uniform. v0.89.0.
+pub fn sm2_sig_from_der_or(der : Bytes) -> Result[Bytes, String] {
+  match sm2_sig_from_der(der) {
+    (raw, true) => Ok(raw)
+    (_, _) =>
+      Err("sm2_sig_from_der: not a canonical SM2 signature DER encoding")
+  }
+}
+
+///|
 /// Seal a message for an SM2 recipient: a fresh SM4 key + IV are encrypted
 /// to the recipient (raw C1||C3||C2, fixed 125 bytes for the 28-byte
 /// payload), then the message is SM4-GCM encrypted under them.
@@ -587,6 +612,20 @@ pub fn sm2_open(sk : Bytes, envelope : Bytes) -> (Bytes, Bool) {
     return (b"", false)
   }
   (pt, true)
+}
+
+///|
+/// `sm2_open` as a `Result`: `Err` for a short envelope, a rejected encrypted
+/// key, or a failed SM4-GCM tag -- one message for all three, since telling
+/// them apart would be an oracle on the recipient's key. v0.89.0.
+pub fn sm2_open_or(sk : Bytes, envelope : Bytes) -> Result[Bytes, String] {
+  match sm2_open(sk, envelope) {
+    (pt, true) => Ok(pt)
+    (_, _) =>
+      Err(
+        "sm2_open: rejected (malformed envelope, bad encrypted key, or authentication failure)",
+      )
+  }
 }
 
 ///|

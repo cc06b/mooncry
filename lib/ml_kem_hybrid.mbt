@@ -193,6 +193,31 @@ pub fn ml_kem_512_hybrid_open(dk : Bytes, blob : Bytes, aad : Bytes) -> Bytes? {
 }
 
 ///|
+/// The one message every `ml_kem_*_hybrid_open_or` failure carries. Opening a
+/// peer's blob can fail because it is truncated, because the local `dk` has the
+/// wrong length, or because the Poly1305 tag does not verify -- and telling
+/// those apart to a caller that logs the string would be an authentication
+/// oracle, so all three share one text (the same rule the RSA `_or` decryption
+/// family follows).
+let ml_kem_hybrid_open_rejected : String = "ml_kem_hybrid_open: rejected (malformed blob, wrong-length dk, or authentication failure)"
+
+///|
+/// `ml_kem_512_hybrid_open` as a `Result` instead of an `Option`: same
+/// uniform message for every rejection, but it lives in the channel every new
+/// graceful entry point uses, so 1.0 can retire the `Option` form without
+/// leaving callers nowhere to go. v0.89.0.
+pub fn ml_kem_512_hybrid_open_or(
+  dk : Bytes,
+  blob : Bytes,
+  aad : Bytes,
+) -> Result[Bytes, String] {
+  match ml_kem_512_hybrid_open(dk, blob, aad) {
+    Some(pt) => Ok(pt)
+    None => Err(ml_kem_hybrid_open_rejected)
+  }
+}
+
+///|
 /// ML-KEM-512 streaming hybrid seal start: encapsulates with `m` and
 /// returns `(c, stream)`. Feed the message through the stream with
 /// `ml_kem_hybrid_stream_update` / `ml_kem_hybrid_stream_final`, then
@@ -296,6 +321,19 @@ pub fn ml_kem_768_hybrid_open(dk : Bytes, blob : Bytes, aad : Bytes) -> Bytes? {
 }
 
 ///|
+/// `ml_kem_768_hybrid_open` as a `Result`. See `ml_kem_512_hybrid_open_or`.
+pub fn ml_kem_768_hybrid_open_or(
+  dk : Bytes,
+  blob : Bytes,
+  aad : Bytes,
+) -> Result[Bytes, String] {
+  match ml_kem_768_hybrid_open(dk, blob, aad) {
+    Some(pt) => Ok(pt)
+    None => Err(ml_kem_hybrid_open_rejected)
+  }
+}
+
+///|
 /// ML-KEM-768 streaming hybrid seal start. See
 /// `ml_kem_512_hybrid_seal_init`. v0.33.0.
 ///
@@ -394,6 +432,19 @@ pub fn ml_kem_1024_hybrid_open(dk : Bytes, blob : Bytes, aad : Bytes) -> Bytes? 
     return None
   }
   Some(chacha20_xor(ct, key, nonce, 1U))
+}
+
+///|
+/// `ml_kem_1024_hybrid_open` as a `Result`. See `ml_kem_512_hybrid_open_or`.
+pub fn ml_kem_1024_hybrid_open_or(
+  dk : Bytes,
+  blob : Bytes,
+  aad : Bytes,
+) -> Result[Bytes, String] {
+  match ml_kem_1024_hybrid_open(dk, blob, aad) {
+    Some(pt) => Ok(pt)
+    None => Err(ml_kem_hybrid_open_rejected)
+  }
 }
 
 ///|

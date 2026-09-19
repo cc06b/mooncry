@@ -644,3 +644,238 @@ test "wave-4 boundaries: the 1 GiB size policy and argon2's variants" {
     msg="argon2 hash_len 64 KiB",
   )
 }
+
+///|
+/// Mismatches found by the two helpers below. They cannot use `assert_*`
+/// themselves: those carry an error type, which a plain helper `fn` may not
+/// have in its signature. So the helpers collect and the test asserts once --
+/// which also reports every mismatch instead of stopping at the first.
+let wave5_fails : Array[String] = []
+
+///|
+/// A twin and its legacy original must agree on every input: `Ok` exactly
+/// when the original reported success, carrying the same bytes.
+fn wave5_pair(
+  label : String,
+  legacy : (Bytes, Bool),
+  twin : Result[Bytes, String],
+  want : Bytes,
+) -> Unit {
+  let (got, ok) = legacy
+  match twin {
+    Ok(g2) =>
+      if !(ok && bytes_equal(got, want) && bytes_equal(g2, want)) {
+        wave5_fails.push(
+          label + ": twin said Ok, legacy disagreed or the bytes differ",
+        )
+      }
+    Err(_) =>
+      if ok {
+        wave5_fails.push(
+          label + ": twin said Err but the legacy form succeeded",
+        )
+      }
+  }
+}
+
+///|
+/// The same, for the `Option` family.
+fn wave5_pair_opt(
+  label : String,
+  legacy : Bytes?,
+  twin : Result[Bytes, String],
+  want : Bytes,
+) -> Unit {
+  match (legacy, twin) {
+    (Some(got), Ok(g2)) =>
+      if !(bytes_equal(got, want) && bytes_equal(g2, want)) {
+        wave5_fails.push(label + ": both accepted but the bytes differ")
+      }
+    (None, Err(_)) => ()
+    _ => wave5_fails.push(label + ": twin and legacy disagree about success")
+  }
+}
+
+///|
+test "the Result twins of the legacy-channel decoders and openers" {
+  // v0.89.0: every legacy-channel entry point whose logic could be wrapped
+  // without restructuring it now has an `_or` twin, so 1.0 can retire
+  // `(Bytes, Bool)` and `Option` without leaving callers nowhere to go. The
+  // six that mix an `abort` on caller shape with a failure value
+  // (aes_gcm_decrypt, sm4_gcm_decrypt, aes_gcm_siv_decrypt, hpke_open,
+  // sm2_decrypt) still need their bodies split into a shared core; they are
+  // tracked in API_1.0_PLAN.md §3 rather than half-done here.
+  let sk = Bytes::make(32, b'\x11')
+  let pk = sm2_public_key(sk)
+  let msg = b"wave5 payload"
+  let rand = sm2_test_rand(7)
+  // ---- PKCS#8 / SPKI / PEM ----
+  let pkcs8 = sm2_sk_to_pkcs8_der(sk)
+  let spki = sm2_pk_to_spki_der(pk)
+  wave5_pair(
+    "pkcs8_der_to_sk",
+    sm2_pkcs8_der_to_sk(pkcs8),
+    sm2_pkcs8_der_to_sk_or(pkcs8),
+    sk,
+  )
+  wave5_pair(
+    "spki_der_to_pk",
+    sm2_spki_der_to_pk(spki),
+    sm2_spki_der_to_pk_or(spki),
+    pk,
+  )
+  let sk_pem = sm2_sk_to_pem(sk)
+  let pk_pem = sm2_pk_to_pem(pk)
+  wave5_pair(
+    "sk_from_pem",
+    sm2_sk_from_pem(sk_pem),
+    sm2_sk_from_pem_or(sk_pem),
+    sk,
+  )
+  wave5_pair(
+    "pk_from_pem",
+    sm2_pk_from_pem(pk_pem),
+    sm2_pk_from_pem_or(pk_pem),
+    pk,
+  )
+  // hostile inputs: both forms must reject
+  let bad_der = Bytes::make(10, b'\x30')
+  wave5_pair(
+    "pkcs8 bad",
+    sm2_pkcs8_der_to_sk(bad_der),
+    sm2_pkcs8_der_to_sk_or(bad_der),
+    sk,
+  )
+  wave5_pair(
+    "spki empty",
+    sm2_spki_der_to_pk(b""),
+    sm2_spki_der_to_pk_or(b""),
+    pk,
+  )
+  wave5_pair(
+    "sk pem junk",
+    sm2_sk_from_pem("not a pem"),
+    sm2_sk_from_pem_or("not a pem"),
+    sk,
+  )
+  let bad_pem = "-----BEGIN PUBLIC KEY-----\n@@@@\n-----END PUBLIC KEY-----\n"
+  wave5_pair(
+    "pk pem junk",
+    sm2_pk_from_pem(bad_pem),
+    sm2_pk_from_pem_or(bad_pem),
+    pk,
+  )
+  // ---- ciphertext and signature DER ----
+  let ct = sm2_encrypt(pk, msg, rand)
+  let der_ct = sm2_ct_to_der(ct)
+  wave5_pair(
+    "ct_from_der",
+    sm2_ct_from_der(der_ct),
+    sm2_ct_from_der_or(der_ct),
+    ct,
+  )
+  wave5_pair(
+    "ct_from_der bad",
+    sm2_ct_from_der(bad_der),
+    sm2_ct_from_der_or(bad_der),
+    ct,
+  )
+  let sig = sm2_sign(sk, msg, b"1234567812345678", rand)
+  let der_sig = sm2_sig_to_der(sig)
+  wave5_pair(
+    "sig_from_der",
+    sm2_sig_from_der(der_sig),
+    sm2_sig_from_der_or(der_sig),
+    sig,
+  )
+  wave5_pair(
+    "sig_from_der empty",
+    sm2_sig_from_der(b""),
+    sm2_sig_from_der_or(b""),
+    sig,
+  )
+  // ---- the GM/T 0009 envelope ----
+  let env = sm2_seal(pk, msg, rand)
+  wave5_pair("sm2_open", sm2_open(sk, env), sm2_open_or(sk, env), msg)
+  let short_env = Bytes::make(20, b'\x00')
+  wave5_pair(
+    "sm2_open short",
+    sm2_open(sk, short_env),
+    sm2_open_or(sk, short_env),
+    msg,
+  )
+  // ---- the Option family: ML-KEM hybrid envelopes ----
+  let (ek5, dk5) = ml_kem_512_keygen(
+    Bytes::make(32, b'\x01'),
+    Bytes::make(32, b'\x02'),
+  )
+  let blob5 = ml_kem_512_hybrid_seal(ek5, Bytes::make(32, b'\x03'), b"aad", msg)
+  wave5_pair_opt(
+    "hybrid_open 512",
+    ml_kem_512_hybrid_open(dk5, blob5, b"aad"),
+    ml_kem_512_hybrid_open_or(dk5, blob5, b"aad"),
+    msg,
+  )
+  wave5_pair_opt(
+    "hybrid_open 512 short",
+    ml_kem_512_hybrid_open(dk5, b"short", b"aad"),
+    ml_kem_512_hybrid_open_or(dk5, b"short", b"aad"),
+    msg,
+  )
+  wave5_pair_opt(
+    "hybrid_open 512 wrong aad",
+    ml_kem_512_hybrid_open(dk5, blob5, b"other"),
+    ml_kem_512_hybrid_open_or(dk5, blob5, b"other"),
+    msg,
+  )
+  let (ek7, dk7) = ml_kem_768_keygen(
+    Bytes::make(32, b'\x04'),
+    Bytes::make(32, b'\x05'),
+  )
+  let blob7 = ml_kem_768_hybrid_seal(ek7, Bytes::make(32, b'\x06'), b"aad", msg)
+  wave5_pair_opt(
+    "hybrid_open 768",
+    ml_kem_768_hybrid_open(dk7, blob7, b"aad"),
+    ml_kem_768_hybrid_open_or(dk7, blob7, b"aad"),
+    msg,
+  )
+  wave5_pair_opt(
+    "hybrid_open 768 wrong dk",
+    ml_kem_768_hybrid_open(dk5, blob7, b"aad"),
+    ml_kem_768_hybrid_open_or(dk5, blob7, b"aad"),
+    msg,
+  )
+  let (ek10, dk10) = ml_kem_1024_keygen(
+    Bytes::make(32, b'\x07'),
+    Bytes::make(32, b'\x08'),
+  )
+  let blob10 = ml_kem_1024_hybrid_seal(
+    ek10,
+    Bytes::make(32, b'\x09'),
+    b"aad",
+    msg,
+  )
+  wave5_pair_opt(
+    "hybrid_open 1024",
+    ml_kem_1024_hybrid_open(dk10, blob10, b"aad"),
+    ml_kem_1024_hybrid_open_or(dk10, blob10, b"aad"),
+    msg,
+  )
+  wave5_pair_opt(
+    "hybrid_open 1024 empty",
+    ml_kem_1024_hybrid_open(dk10, b"", b"aad"),
+    ml_kem_1024_hybrid_open_or(dk10, b"", b"aad"),
+    msg,
+  )
+  let mut joined = ""
+  for f in wave5_fails {
+    joined = joined + " | " + f
+  }
+  assert_true(
+    wave5_fails.length() == 0,
+    msg="twin/legacy mismatches (" +
+      wave5_fails.length().to_string() +
+      "):" +
+      joined,
+  )
+}

@@ -9,7 +9,7 @@ verified against official standard vectors.
 - **Correct** — every algorithm is checked against FIPS / NIST / RFC test
   vectors, and cross-validated against reference implementations
   (pycryptodome, cryptography, hashlib, libsodium, zlib) plus randomized
-  differential testing. 1175 tests, run with `moon test --deny-warn`.
+  differential testing. 1176 tests, run with `moon test --deny-warn`.
 - **Broad** — MD5, **SHA-1**, the SHA-2 and SHA-3 families (incl. **SHA-512/224
   and SHA-512/256**), **Keccak-256**,
   SHAKE/**cSHAKE** XOFs, **KMAC128/256**, BLAKE2b, **BLAKE2s**, BLAKE3,
@@ -41,15 +41,20 @@ verified against official standard vectors.
   `rsa_oaep_decrypt_or` (+ `_with_or` / `_crt_or`),
   `rsa_pkcs1_v15_decrypt_or` (+ `_crt_or`), `ml_kem_*_encaps_or` /
   `ml_kem_*_decaps_or`, `ml_kem_*_hybrid_seal_or` (+ `_seal_init_or`),
+  `ml_kem_*_hybrid_open_or`,
   `rsa_oaep_encrypt_or` (+ `_with_or`) / `rsa_pkcs1_v15_encrypt_or`,
-  `sm2_encrypt_or` / `sm2_encrypt_with_k_or` / `sm2_seal_or`,
-  `sm2_ct_to_der_or` / `sm2_sig_to_der_or` / `sm2_pk_to_spki_der_or` /
-  `sm2_pk_to_pem_or`,
+  `sm2_encrypt_or` / `sm2_encrypt_with_k_or` / `sm2_seal_or` / `sm2_open_or`,
+  `sm2_ct_to_der_or` / `sm2_ct_from_der_or` / `sm2_sig_to_der_or` /
+  `sm2_sig_from_der_or` / `sm2_pk_to_spki_der_or` / `sm2_spki_der_to_pk_or` /
+  `sm2_pk_to_pem_or` / `sm2_pk_from_pem_or` / `sm2_pkcs8_der_to_sk_or` /
+  `sm2_sk_from_pem_or`,
   `xwing_encaps_or` / `xwing_decaps_or`, `x25519_or` /
   `x448_or`, and the HPKE `*_or` setup/encap/decap family return `Result` so
   network-facing code never traps on malformed input. The RSA decryption ones
   return a single uniform error for every padding failure (no
-  Bleichenbacher/Manger oracle through error text).
+  Bleichenbacher/Manger oracle through error text), and so do the SM2 envelope
+  and ML-KEM hybrid openers — a truncated blob, a wrong-length key and a failed
+  tag are deliberately indistinguishable there too.
 - **Single source of truth** — one-shot hash entry points delegate to the
   streaming hashers, so the incremental and one-shot paths share one
   implementation.
@@ -348,13 +353,13 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `hmac_sm3(key, msg) -> Bytes` | HMAC-SM3 (RFC 2104, 64-byte block, 32-byte MAC) |
 | `sm2_encrypt(pk, msg, rand) / sm2_encrypt_with_k(pk, msg, k)` | SM2 encryption (GB/T 32918.4), raw C1\|\|C3\|\|C2; `sm2_encrypt_or` / `sm2_encrypt_with_k_or` for a peer-supplied `pk` |
 | `sm2_decrypt(sk, ct) -> (Bytes, Bool)` | SM2 decryption (false on tamper/wrong key, GCM convention) |
-| `sm2_ct_to_der(ct) / sm2_ct_from_der(der)` | openssl-compatible ASN.1 DER ciphertext conversion; the decoder is strict DER (see below), and `sm2_ct_to_der_or` reports a malformed *raw* ciphertext instead of aborting |
-| `sm2_sig_to_der(sig) / sm2_sig_from_der(der)` | SM2 signature raw r\|\|s <-> DER SEQUENCE{r,s}; the decoder is strict DER (see below), `sm2_sig_to_der_or` never traps |
+| `sm2_ct_to_der(ct) / sm2_ct_from_der(der)` | openssl-compatible ASN.1 DER ciphertext conversion; the decoder is strict DER (see below), and `sm2_ct_to_der_or` / `sm2_ct_from_der_or` report a malformed encoding instead of aborting or returning a bare flag |
+| `sm2_sig_to_der(sig) / sm2_sig_from_der(der)` | SM2 signature raw r\|\|s <-> DER SEQUENCE{r,s}; the decoder is strict DER (see below), `sm2_sig_to_der_or` / `sm2_sig_from_der_or` never trap |
 | `hkdf_sm3(ikm, salt, info, out_len)` / `hkdf_sm3_extract` / `hkdf_sm3_expand` | HKDF-SM3 (RFC 5869) |
 | `pbkdf2_sm3(password, salt, iterations, dk_len)` | PBKDF2-HMAC-SM3 (RFC 2898) |
-| `sm2_sk_to_pem / sm2_sk_from_pem / sm2_pk_to_pem / sm2_pk_from_pem` | SM2 key PEM (PKCS#8 / SPKI, openssl-identical); `sm2_pk_to_pem_or` for a peer-supplied point |
-| `sm2_sk_to_pkcs8_der / sm2_pkcs8_der_to_sk / sm2_pk_to_spki_der / sm2_spki_der_to_pk` | SM2 key DER forms; `sm2_pk_to_spki_der_or` never traps on a malformed point |
-| `sm2_seal(pk, msg, rand) / sm2_open(sk, env)` | SM2 sealed envelope: enc_key(125)\|\|iv(12)\|\|SM4-GCM ct\|\|tag(16); `sm2_seal_or` never traps on a bad `pk` |
+| `sm2_sk_to_pem / sm2_sk_from_pem / sm2_pk_to_pem / sm2_pk_from_pem` | SM2 key PEM (PKCS#8 / SPKI, openssl-identical); `_or` twins for all four (`sm2_pk_to_pem_or`, `sm2_sk_from_pem_or`, `sm2_pk_from_pem_or`, …) when the input is peer-supplied |
+| `sm2_sk_to_pkcs8_der / sm2_pkcs8_der_to_sk / sm2_pk_to_spki_der / sm2_spki_der_to_pk` | SM2 key DER forms; `_or` twins for all four, so a malformed peer encoding is an `Err` rather than a flag |
+| `sm2_seal(pk, msg, rand) / sm2_open(sk, env)` | SM2 sealed envelope: enc_key(125)\|\|iv(12)\|\|SM4-GCM ct\|\|tag(16); `sm2_seal_or` never traps on a bad `pk`, `sm2_open_or` reports a rejected envelope as `Err` |
 | `hmac_sha256 / hmac_sha512(key, msg : Bytes) -> Bytes` | HMAC (RFC 2104) |
 | `hmac_sha3_256 / hmac_sha3_512(key, msg : Bytes) -> Bytes` | HMAC over SHA-3 (RFC 2104 + FIPS 202) |
 | `hmac_sha3_224 / hmac_sha3_384(key, msg : Bytes) -> Bytes` | HMAC over SHA3-224/384 (RFC 2104 + FIPS 202) |
@@ -456,6 +461,7 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `ml_kem_768_hybrid_open(dk, blob, aad) -> Option[Bytes]` | hybrid decryption; `None` on any failure |
 | `ml_kem_768_hybrid_seal_init + ml_kem_hybrid_stream_update/final` | streaming hybrid seal |
 | `ml_kem_{512,768,1024}_hybrid_seal_or / _hybrid_seal_init_or` | the seal path as `Result` — `ek` is the recipient's key, i.e. peer-supplied |
+| `ml_kem_{512,768,1024}_hybrid_open_or(dk, blob, aad)` | the open path as `Result` instead of `Option`; one uniform message for a malformed blob, a wrong-length `dk` and an authentication failure |
 | `poly1305_new / poly1305_update / poly1305_finalize` | incremental Poly1305 |
 | `aes_gcm_siv_encrypt(key, nonce, aad, pt)` | AES-GCM-SIV (RFC 8452, nonce-misuse-resistant) |
 | `aes_gcm_siv_decrypt(key, nonce, aad, ct) -> Option[Bytes]` | AES-GCM-SIV decryption |
@@ -565,6 +571,18 @@ reports failure must be `foo_or -> Result[_, String]`.
 
 Everything else either cannot fail on well-formed caller input (it `abort`s —
 see the two-tier contract above) or just returns a value.
+
+**Ten of these fifteen legacy entry points now have a `Result` twin** (v0.89.0):
+the three `ml_kem_*_hybrid_open_or`, `sm2_open_or`, `sm2_ct_from_der_or`,
+`sm2_sig_from_der_or`, `sm2_pkcs8_der_to_sk_or`, `sm2_spki_der_to_pk_or`,
+`sm2_sk_from_pem_or` and `sm2_pk_from_pem_or`. Each wraps its original, so the
+two cannot disagree — a test pins exactly that, on round trips and on hostile
+inputs alike. Prefer the twin in new code: it is where 1.0 will land. The five
+that still have no twin (`aes_gcm_decrypt`, `sm4_gcm_decrypt`,
+`aes_gcm_siv_decrypt`, `hpke_open`, `sm2_decrypt`) are the ones that *mix* an
+`abort` on caller shape with a failure value, so giving them a twin means
+splitting their bodies into a shared core first — recorded in the maintainer
+plan rather than half-done.
 
 Two rules follow, and C4 enforces both:
 
@@ -1475,7 +1493,7 @@ keys with 0/1/2 AD entries, AES-KW, AES-CBC (including the PKCS#7 full extra
 padding block on exact multiples of 16) and CTR, SM4-CBC/CTR, the sealed box,
 the ML-KEM hybrid envelope and the SM2 GM/T 0009 envelope.
 
-**1175 tests.**
+**1176 tests.**
 
 ## Development
 

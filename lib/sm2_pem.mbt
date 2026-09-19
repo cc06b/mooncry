@@ -270,6 +270,17 @@ pub fn sm2_pkcs8_der_to_sk(der : Bytes) -> (Bytes, Bool) {
 }
 
 ///|
+/// `sm2_pkcs8_der_to_sk` as a `Result` instead of `(Bytes, Bool)`; one message
+/// for every non-canonical encoding. v0.89.0.
+pub fn sm2_pkcs8_der_to_sk_or(der : Bytes) -> Result[Bytes, String] {
+  match sm2_pkcs8_der_to_sk(der) {
+    (sk, true) => Ok(sk)
+    (_, _) =>
+      Err("sm2_pkcs8_der_to_sk: not a canonical SM2 PKCS#8 DER encoding")
+  }
+}
+
+///|
 /// Decode SPKI DER (SM2) to the 65-byte uncompressed public key.
 pub fn sm2_spki_der_to_pk(der : Bytes) -> (Bytes, Bool) {
   let fail = (b"", false)
@@ -392,6 +403,15 @@ fn sm2_pem_unwrap(pem : String, header : String) -> (Bytes, Bool) {
 }
 
 ///|
+/// `sm2_spki_der_to_pk` as a `Result`. See `sm2_pkcs8_der_to_sk_or`. v0.89.0.
+pub fn sm2_spki_der_to_pk_or(der : Bytes) -> Result[Bytes, String] {
+  match sm2_spki_der_to_pk(der) {
+    (pk, true) => Ok(pk)
+    (_, _) => Err("sm2_spki_der_to_pk: not a canonical SM2 SPKI DER encoding")
+  }
+}
+
+///|
 /// PEM-encode a secret key (PKCS#8, "PRIVATE KEY", 64-char lines).
 pub fn sm2_sk_to_pem(sk : Bytes) -> String {
   sm2_pem_wrap(base64_encode(sm2_sk_to_pkcs8_der(sk)), "PRIVATE KEY")
@@ -405,6 +425,15 @@ pub fn sm2_sk_from_pem(pem : String) -> (Bytes, Bool) {
     return (b"", false)
   }
   sm2_pkcs8_der_to_sk(der)
+}
+
+///|
+/// `sm2_sk_from_pem` as a `Result`. See `sm2_pkcs8_der_to_sk_or`. v0.89.0.
+pub fn sm2_sk_from_pem_or(pem : String) -> Result[Bytes, String] {
+  match sm2_sk_from_pem(pem) {
+    (sk, true) => Ok(sk)
+    (_, _) => Err("sm2_sk_from_pem: not a canonical SM2 PRIVATE KEY PEM block")
+  }
 }
 
 ///|
@@ -440,4 +469,13 @@ pub fn sm2_pk_from_pem(pem : String) -> (Bytes, Bool) {
     return (b"", false)
   }
   sm2_spki_der_to_pk(der)
+}
+
+///|
+/// `sm2_pk_from_pem` as a `Result`. See `sm2_pkcs8_der_to_sk_or`. v0.89.0.
+pub fn sm2_pk_from_pem_or(pem : String) -> Result[Bytes, String] {
+  match sm2_pk_from_pem(pem) {
+    (pk, true) => Ok(pk)
+    (_, _) => Err("sm2_pk_from_pem: not a canonical SM2 PUBLIC KEY PEM block")
+  }
 }
