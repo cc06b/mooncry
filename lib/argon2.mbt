@@ -453,6 +453,19 @@ fn a2_fill_memory_blocks(
 }
 
 ///|
+/// RFC 9106 §3 fixes the type byte that goes into H0: 0x00 Argon2d, 0x01
+/// Argon2i, 0x02 Argon2id. Any other value used to be accepted and hashed into
+/// H0 as-is, so `variant = 9` returned a key that differs from all three
+/// standard variants (measured) and that no other implementation can reproduce
+/// — the same class as the v0.84.0 HPKE mode fix. All three public wrappers
+/// (`argon2d` / `argon2i` / `argon2id`) come through `argon2`. v0.87.0.
+fn a2_check_variant(variant : Int) -> Unit {
+  if variant < 0 || variant > 2 {
+    abort("argon2: variant must be 0 (Argon2d), 1 (Argon2i) or 2 (Argon2id)")
+  }
+}
+
+///|
 /// Argon2 (RFC 9106) memory-hard KDF. `variant`: 0 = Argon2d, 1 = Argon2i,
 /// 2 = Argon2id. `t_cost` = passes, `m_cost` = memory in 1-KiB blocks,
 /// `parallelism` = lanes, `hash_len` = output length (>= 4).
@@ -468,6 +481,12 @@ pub fn argon2(
   if t_cost < 1 || m_cost < 8 * parallelism || parallelism < 1 || hash_len < 4 {
     abort("argon2: invalid parameters (t>=1, m>=8*p, p>=1, hashlen>=4)")
   }
+  a2_check_variant(variant)
+  // m_cost counts 1-KiB blocks, each pushed as a distinct array, and hash_len
+  // is the output buffer. Both were bounded only from below, so a large value
+  // meant an out-of-memory trap with no message. v0.87.0.
+  check_count("argon2: m_cost", m_cost, 1024)
+  check_size("argon2: hash_len", hash_len)
   if salt.length() < 8 {
     abort("argon2: salt must be at least 8 bytes")
   }

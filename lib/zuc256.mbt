@@ -103,9 +103,8 @@ fn zuc256_init_row(key : Bytes, iv : Bytes, row : Int) -> ZucState {
 ///|
 /// `nwords` ZUC-256 keystream words as big-endian bytes (4 * nwords).
 pub fn zuc256_keystream(key : Bytes, iv : Bytes, nwords : Int) -> Bytes {
-  guard nwords >= 0 else {
-    abort("zuc256_keystream: nwords must be non-negative")
-  }
+  // see zuc_keystream: the 4-byte word product wraps on a 32-bit Int
+  check_count("zuc256_keystream: nwords", nwords, 4)
   let st = zuc256_init(key, iv)
   let out = Array::make(nwords * 4, (0).to_byte())
   zuc_words_into(st, out, nwords)

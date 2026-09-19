@@ -6,6 +6,55 @@
 // ==================== Shared Utilities ====================
 
 ///|
+/// The largest single buffer this library will build: 1 GiB.
+///
+/// Two measured reasons. (1) Several entry points turn a caller-supplied
+/// *count* into a byte size by multiplying, and that product overflows a
+/// 32-bit `Int`: `zuc_keystream(nwords = 2^30)` computes 2^32, which wraps to
+/// 0 on wasm32, so the keystream array is empty and the first word written
+/// throws out of `Array::set` — an opaque error whose real cause (a wrapped
+/// size) is invisible. The same call on native64 tries to allocate 4 GiB.
+/// scrypt has the shape one level up: `p * (128 * r)` with r = 2^20 and p = 32
+/// is exactly 2^32 and wraps to 0. (2) With no bound at all, a length is
+/// limited only by the host, and the difference between a 1 MiB request
+/// (honoured, ~50 ms) and a 1 GiB one is whether the process dies of an
+/// out-of-memory trap with no message.
+///
+/// The bound is always checked by *division* (`check_count`), never by
+/// computing the product, so the check itself cannot overflow. v0.87.0.
+let max_buffer_bytes : Int = 0x40000000
+
+///|
+/// Reject a byte count outside 0..=`max_buffer_bytes`.
+fn check_size(what : String, bytes : Int) -> Unit {
+  if bytes < 0 || bytes > max_buffer_bytes {
+    abort(
+      what +
+      ": size must be within 0..=1 GiB (got " +
+      bytes.to_string() +
+      " bytes)",
+    )
+  }
+}
+
+///|
+/// Reject an element count whose byte size would exceed the same bound.
+/// The division is the point: `count * elem_bytes` is exactly the expression
+/// that wraps.
+fn check_count(what : String, count : Int, elem_bytes : Int) -> Unit {
+  if count < 0 || count > max_buffer_bytes / elem_bytes {
+    abort(
+      what +
+      ": size must be within 0..=1 GiB (got " +
+      count.to_string() +
+      " elements of " +
+      elem_bytes.to_string() +
+      " bytes)",
+    )
+  }
+}
+
+///|
 /// Concatenate two Bytes
 fn concat_bytes(a : Bytes, b : Bytes) -> Bytes {
   let len_a = a.length()

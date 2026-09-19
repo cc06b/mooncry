@@ -9,7 +9,7 @@ verified against official standard vectors.
 - **Correct** — every algorithm is checked against FIPS / NIST / RFC test
   vectors, and cross-validated against reference implementations
   (pycryptodome, cryptography, hashlib, libsodium, zlib) plus randomized
-  differential testing. 1174 tests, run with `moon test --deny-warn`.
+  differential testing. 1175 tests, run with `moon test --deny-warn`.
 - **Broad** — MD5, **SHA-1**, the SHA-2 and SHA-3 families (incl. **SHA-512/224
   and SHA-512/256**), **Keccak-256**,
   SHAKE/**cSHAKE** XOFs, **KMAC128/256**, BLAKE2b, **BLAKE2s**, BLAKE3,
@@ -648,6 +648,28 @@ If you consume this package, treat everything in that table as private.
   `kdf_check_expand_len`, `kdf_check_pbkdf2`, `hpke_check_mode`, `dsa_sk_len`)
   so twins cannot drift, and each range's legal ends are pinned by a test — an
   over-tight guard turns it red.
+- **Every buffer the library builds is capped at 1 GiB** (v0.87.0), and the
+  cap is checked by *division*, never by computing the product — because the
+  product is what overflows. `zuc_keystream(nwords = 2^30)` used to compute
+  `nwords * 4`, which is 2^32 and wraps to 0 on a 32-bit target, so the
+  keystream array came out empty and the first word written threw out of
+  `Array::set` with nothing to explain why; scrypt's `p * 128 * r` is exactly
+  2^32 at r = 2^20 and p = 32. Now argon2's `m_cost` (1-KiB blocks) and
+  `hash_len`, scrypt's `r` / `p` / `N` / `dklen`, PBKDF2's `dklen`, and every
+  XOF output length (SHAKE one-shot *and* streaming, cSHAKE/KMAC, BLAKE3,
+  TurboSHAKE/KangarooTwelve, the Falcon XOF) refuse an out-of-range size with a
+  message instead of dying in the allocator. `argon2`'s `variant` is validated
+  as RFC 9106 §3 defines it (0 = Argon2d, 1 = Argon2i, 2 = Argon2id): any other
+  value used to be hashed into H0 as-is, producing a key that differs from all
+  three standard variants and that no other implementation reproduces.
+- **A length expression can overflow before the call reaches the library.** On
+  wasm32 `Int` is 32 bits, so `hkdf_sha256(salt, ikm, info, 1 << 40)` passes
+  **256** — measured: the shift wraps in the caller's own expression, the
+  RFC 5869 limit then sees a perfectly legal request, and the call returns 256
+  bytes. The same source on native64 passes 2^40 and aborts on the RFC limit.
+  No library-side check can see this. If a length comes from arithmetic rather
+  than from a `Bytes.length()`, and the wasm target matters, compute it where
+  the overflow is visible.
 - **Untrusted input has a two-tier contract.** Parameter *shapes* (a key of the
   wrong length, a nonce of the wrong size) are caller errors and abort loudly.
   Values that arrive from a peer — ciphertexts, signatures, public keys,
@@ -1397,7 +1419,7 @@ keys with 0/1/2 AD entries, AES-KW, AES-CBC (including the PKCS#7 full extra
 padding block on exact multiples of 16) and CTR, SM4-CBC/CTR, the sealed box,
 the ML-KEM hybrid envelope and the SM2 GM/T 0009 envelope.
 
-**1174 tests.**
+**1175 tests.**
 
 ## Development
 

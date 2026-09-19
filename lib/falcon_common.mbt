@@ -32,10 +32,9 @@ pub fn falcon_xof_inject(x : FalconXof, data : Bytes) -> Unit {
 pub fn falcon_xof_extract(x : FalconXof, len : Int) -> Bytes {
   // every Falcon XOF read comes through here, including
   // `falcon_test_rng_bytes`; a negative `len` reached `Array::make` and
-  // trapped. v0.85.0.
-  if len < 0 {
-    abort("falcon_xof_extract: len must be non-negative")
-  }
+  // trapped (v0.85.0), and the shared size policy caps the absurd end
+  // (v0.87.0)
+  check_size("falcon_xof_extract: len", len)
   if not_flipped(x) {
     ignore(shake_finalize(x.h, 0))
     x.flipped = true

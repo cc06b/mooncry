@@ -455,9 +455,7 @@ fn b3_hasher_finalize(h : B3Hasher, out_len : Int) -> Bytes {
 ///|
 /// BLAKE3 XOF, `out_len` bytes. Arbitrary-length input (tree-Merkle).
 pub fn blake3_xof(data : Bytes, out_len : Int) -> Bytes {
-  if out_len < 0 {
-    abort("blake3_xof: out_len must be non-negative")
-  }
+  check_size("blake3_xof: out_len", out_len)
   let h = b3_hasher_new()
   b3_hasher_update(h, data)
   b3_hasher_finalize(h, out_len)

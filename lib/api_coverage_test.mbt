@@ -568,3 +568,79 @@ test "wave-3 boundaries: xof lengths, block offsets, otp digits" {
     msg="falcon_xof_extract with len 0",
   )
 }
+
+///|
+test "wave-4 boundaries: the 1 GiB size policy and argon2's variants" {
+  // Fourth probe wave (v0.87.0). The aborts cannot be asserted from a blackbox
+  // test, so this pins the inside of every new bound: all of these are far
+  // under the 1 GiB per-buffer cap and must still be honoured, and argon2's
+  // three variants must still work. Outside the bounds the measured behaviour
+  // before the guards was an opaque throw out of `Array::set` --
+  // `zuc_keystream(nwords = 2^30)`, where `nwords * 4` wrapped to 0 so the
+  // array was empty -- a silently non-interoperable key (`argon2` with
+  // variant 9 or -1, which differs from all three standard variants), and, for
+  // scrypt, a `p * 128 * r` that is exactly 2^32 at r = 2^20 and p = 32.
+  let kib = 1 << 16
+  assert_true(shake_128(b"data", kib).length() == kib, msg="shake_128 64 KiB")
+  assert_true(shake_256(b"data", kib).length() == kib, msg="shake_256 64 KiB")
+  assert_true(blake3_xof(b"data", kib).length() == kib, msg="blake3_xof 64 KiB")
+  assert_true(
+    turbo_shake_128(b"data", b'\x07', kib).length() == kib,
+    msg="turbo_shake_128 64 KiB",
+  )
+  assert_true(
+    kangaroo_twelve_256(b"data", b"", kib).length() == kib,
+    msg="kangaroo_twelve_256 64 KiB",
+  )
+  assert_true(
+    cshake_128(b"data", b"", b"", kib).length() == kib,
+    msg="cshake_128 64 KiB",
+  )
+  assert_true(
+    kmac_256(Bytes::make(32, b'\x40'), b"data", b"", kib).length() == kib,
+    msg="kmac_256 64 KiB",
+  )
+  assert_true(
+    pbkdf2_hmac_sha256(b"pw", b"salt", 1, kib).length() == kib,
+    msg="pbkdf2 dklen 64 KiB",
+  )
+  assert_true(
+    zuc_keystream(Bytes::make(16, b'\x01'), Bytes::make(16, b'\x02'), kib / 4).length() ==
+    kib,
+    msg="zuc_keystream 64 KiB",
+  )
+  assert_true(
+    zuc256_keystream(
+      Bytes::make(32, b'\x01'),
+      Bytes::make(23, b'\x02'),
+      kib / 4,
+    ).length() ==
+    kib,
+    msg="zuc256_keystream 64 KiB",
+  )
+  assert_true(
+    falcon_xof_extract(falcon_xof_init(), kib).length() == kib,
+    msg="falcon_xof_extract 64 KiB",
+  )
+  // the memory-hard KDFs at their vector sizes, and argon2's variant ends
+  assert_true(
+    scrypt(b"pw", b"salt", 16, 1, 1, 32).length() == 32,
+    msg="scrypt N=16 r=1 p=1",
+  )
+  assert_true(
+    argon2(b"pw", Bytes::make(16, b'\x73'), 1, 64, 1, 32, 0).length() == 32,
+    msg="argon2 variant 0 (Argon2d)",
+  )
+  assert_true(
+    argon2(b"pw", Bytes::make(16, b'\x73'), 1, 64, 1, 32, 1).length() == 32,
+    msg="argon2 variant 1 (Argon2i)",
+  )
+  assert_true(
+    argon2(b"pw", Bytes::make(16, b'\x73'), 1, 64, 1, 32, 2).length() == 32,
+    msg="argon2 variant 2 (Argon2id)",
+  )
+  assert_true(
+    argon2(b"pw", Bytes::make(16, b'\x73'), 1, 64, 1, kib, 2).length() == kib,
+    msg="argon2 hash_len 64 KiB",
+  )
+}

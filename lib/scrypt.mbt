@@ -146,7 +146,23 @@ pub fn scrypt(
   if r <= 0 || p <= 0 || dklen <= 0 {
     abort("scrypt: r, p, dklen must be positive")
   }
+  // The three products scrypt builds — 128*r (one block), p*128*r (B) and
+  // N*128*r (the ROMix table V) — all overflow a 32-bit Int with parameters
+  // that look plausible: r = 2^20 and p = 32 make p*block_len exactly 2^32,
+  // which wraps to 0 (measured), leaving B empty and every later write out of
+  // bounds. Each bound is checked by division so the check cannot itself
+  // overflow, and r is bounded *before* block_len is computed — an unchecked r
+  // would wrap block_len to 0 and turn the divisions below into a divide by
+  // zero. v0.87.0.
+  check_count("scrypt: r", r, 128)
+  check_size("scrypt: dklen", dklen)
   let block_len = 128 * r
+  if p > max_buffer_bytes / block_len {
+    abort("scrypt: p * 128 * r must be within 0..=1 GiB")
+  }
+  if n > max_buffer_bytes / block_len {
+    abort("scrypt: N * 128 * r must be within 0..=1 GiB")
+  }
   // B0 = PBKDF2-HMAC-SHA256(P, S, 1, p * 128 * r) — p blocks of 128r bytes.
   let b0 = pbkdf2_hmac_sha256(password, salt, 1, p * block_len)
   // ROMix each block independently.

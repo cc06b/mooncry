@@ -293,7 +293,10 @@ fn zuc_xor_into(
 /// This is the raw ZUC keystream: 128-EEA3 is its XOR against the plaintext,
 /// and the words are also what the EIA3 MAC consumes.
 pub fn zuc_keystream(key : Bytes, iv : Bytes, nwords : Int) -> Bytes {
-  guard nwords >= 0 else { abort("zuc_keystream: nwords must be non-negative") }
+  // the buffer is nwords * 4 bytes, and that product wraps on a 32-bit Int:
+  // nwords = 2^30 made it 0, so the array was empty and the first word written
+  // threw out of Array::set. check_count divides instead. v0.87.0.
+  check_count("zuc_keystream: nwords", nwords, 4)
   let st = zuc_init(key, iv)
   let out = Array::make(nwords * 4, (0).to_byte())
   zuc_words_into(st, out, nwords)

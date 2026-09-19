@@ -49,6 +49,11 @@ fn kdf_check_pbkdf2(what : String, iterations : Int, dklen : Int) -> Unit {
   if dklen < 0 {
     abort(what + ": dklen must be non-negative")
   }
+  // no RFC upper bound here, so the shared size policy is the only one: without
+  // it a huge dklen allocates the output array first and then runs one HMAC per
+  // 32 bytes -- an out-of-memory trap or an effectively unbounded loop, with no
+  // message either way (v0.87.0)
+  check_size(what + ": dklen", dklen)
 }
 
 ///|

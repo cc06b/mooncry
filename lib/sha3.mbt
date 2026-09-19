@@ -240,9 +240,7 @@ pub fn sha3_512(data : Bytes) -> Bytes {
 /// `shake_finalize(h, -1)` still reached `Array::make(-1)` and trapped. Both
 /// paths call this, so the twins cannot drift. v0.85.0.
 fn shake_check_out_len(out_len : Int) -> Unit {
-  if out_len < 0 {
-    abort("shake: out_len must be non-negative")
-  }
+  check_size("shake: out_len", out_len)
 }
 
 ///|

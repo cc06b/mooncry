@@ -26,10 +26,10 @@ fn turbosha_check_d(d : Byte) -> Unit {
 ///|
 fn turbosha_x(rate : Int, data : Bytes, d_byte : Byte, out_len : Int) -> Bytes {
   // the squeeze loop below allocates `out_len` bytes; a negative one reached
-  // Array::make and trapped (same class as the v0.84.0 SHAKE/HKDF fixes)
-  if out_len < 0 {
-    abort("turboshake: out_len must be non-negative")
-  }
+  // Array::make and trapped (same class as the v0.84.0 SHAKE/HKDF fixes), and
+  // an absurd one is refused by the shared size policy rather than left to the
+  // host's allocator (v0.87.0)
+  check_size("turboshake: out_len", out_len)
   let st = Array::make(25, 0UL)
   let mlen = data.length() + 1 // message + domain byte
   let blocks = (mlen + rate - 1) / rate

@@ -104,6 +104,7 @@ fn cshake_core(
   if out_len < 1 {
     abort("cshake: out_len must be at least 1")
   }
+  check_size("cshake: out_len", out_len)
   let has_custom = n.length() > 0 || s.length() > 0
   let domain = if has_custom { 0x04 } else { 0x1F }
   let hasher = sha3_new(rate, out_len, domain)
