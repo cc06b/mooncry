@@ -879,3 +879,182 @@ test "the Result twins of the legacy-channel decoders and openers" {
       joined,
   )
 }
+
+///|
+/// A fresh HPKE receiver context over the same deterministic key material, so
+/// each comparison in the test below starts at sequence 0. `abort` is fine in a
+/// plain helper (unlike `assert_*`, it carries no error type).
+fn wave6_hpke_receiver(
+  enc : Bytes,
+  sk_r : Bytes,
+  pk_r : Bytes,
+  pk_s : Bytes,
+) -> HpkeContext {
+  let suite = hpke_x25519_hkdf_sha256_aes128gcm
+  match hpke_setup_r_or(suite, 0, sk_r, pk_r, enc, b"info", b"", b"", pk_s) {
+    Ok(c) => c
+    Err(e) => abort("hpke setup_r failed: " + e)
+  }
+}
+
+///|
+test "the five mixed-semantics twins agree with their aborting originals" {
+  // v0.90.0: aes_gcm_decrypt, sm4_gcm_decrypt, aes_gcm_siv_decrypt, hpke_open
+  // and sm2_decrypt each mix an abort on caller shape with a failure value for
+  // hostile input. Their bodies moved into the `_or` twin and the original
+  // became a projection, so what has to hold is: same success/failure verdict,
+  // same bytes -- and, new in the twin, a shape error is an Err instead of an
+  // abort. wave5_pair / wave5_pair_opt check the first two on every input.
+  let key32 = Bytes::make(32, b'\x2b')
+  let iv12 = Bytes::make(12, b'\x07')
+  let aad = b"wave6 aad"
+  let msg = b"wave6 plaintext"
+  // ---- AES-GCM ----
+  let (ct, tag) = aes_gcm_encrypt(msg, key32, iv12, aad)
+  wave5_pair(
+    "aes_gcm",
+    aes_gcm_decrypt(ct, key32, iv12, aad, tag),
+    aes_gcm_decrypt_or(ct, key32, iv12, aad, tag),
+    msg,
+  )
+  let bad_tag = tag.to_array()
+  bad_tag[0] = (bad_tag[0].to_int() ^ 1).to_byte()
+  let forged = Bytes::from_array(bad_tag[:])
+  wave5_pair(
+    "aes_gcm forged",
+    aes_gcm_decrypt(ct, key32, iv12, aad, forged),
+    aes_gcm_decrypt_or(ct, key32, iv12, aad, forged),
+    msg,
+  )
+  // a 20-byte key: the original aborts, the twin must report it
+  match aes_gcm_decrypt_or(ct, Bytes::make(20, b'\x01'), iv12, aad, tag) {
+    Ok(_) => assert_true(false, msg="aes_gcm_decrypt_or accepted a 20-byte key")
+    Err(_) => ()
+  }
+  // ---- SM4-GCM ----
+  let k16 = Bytes::make(16, b'\x01')
+  let (sct, stag) = sm4_gcm_encrypt(msg, k16, iv12, aad)
+  wave5_pair(
+    "sm4_gcm",
+    sm4_gcm_decrypt(sct, k16, iv12, aad, stag),
+    sm4_gcm_decrypt_or(sct, k16, iv12, aad, stag),
+    msg,
+  )
+  let s_bad_tag = stag.to_array()
+  s_bad_tag[3] = (s_bad_tag[3].to_int() ^ 1).to_byte()
+  wave5_pair(
+    "sm4_gcm forged",
+    sm4_gcm_decrypt(sct, k16, iv12, aad, Bytes::from_array(s_bad_tag[:])),
+    sm4_gcm_decrypt_or(sct, k16, iv12, aad, Bytes::from_array(s_bad_tag[:])),
+    msg,
+  )
+  // An 8-byte tag is a caller shape error, so the original aborts on it and
+  // only the twin can be asked: it must report, not abort.
+  match sm4_gcm_decrypt_or(sct, k16, iv12, aad, Bytes::make(8, b'\x00')) {
+    Ok(_) => assert_true(false, msg="sm4_gcm_decrypt_or accepted an 8-byte tag")
+    Err(_) => ()
+  }
+  // ---- AES-GCM-SIV ----
+  let siv = aes_gcm_siv_encrypt(key32, iv12, aad, msg)
+  wave5_pair_opt(
+    "gcm_siv",
+    aes_gcm_siv_decrypt(key32, iv12, aad, siv),
+    aes_gcm_siv_decrypt_or(key32, iv12, aad, siv),
+    msg,
+  )
+  let siv_bad = siv.to_array()
+  siv_bad[0] = (siv_bad[0].to_int() ^ 1).to_byte()
+  wave5_pair_opt(
+    "gcm_siv forged",
+    aes_gcm_siv_decrypt(key32, iv12, aad, Bytes::from_array(siv_bad[:])),
+    aes_gcm_siv_decrypt_or(key32, iv12, aad, Bytes::from_array(siv_bad[:])),
+    msg,
+  )
+  wave5_pair_opt(
+    "gcm_siv short",
+    aes_gcm_siv_decrypt(key32, iv12, aad, b"tooshort"),
+    aes_gcm_siv_decrypt_or(key32, iv12, aad, b"tooshort"),
+    msg,
+  )
+  // ---- SM2 ----
+  let sk2 = Bytes::make(32, b'\x11')
+  let pk2 = sm2_public_key(sk2)
+  let rand2 = sm2_test_rand(23)
+  let c2 = sm2_encrypt(pk2, msg, rand2)
+  wave5_pair("sm2_decrypt", sm2_decrypt(sk2, c2), sm2_decrypt_or(sk2, c2), msg)
+  let c2_bad = c2.to_array()
+  c2_bad[c2_bad.length() - 1] = (c2_bad[c2_bad.length() - 1].to_int() ^ 1).to_byte()
+  wave5_pair(
+    "sm2_decrypt forged",
+    sm2_decrypt(sk2, Bytes::from_array(c2_bad[:])),
+    sm2_decrypt_or(sk2, Bytes::from_array(c2_bad[:])),
+    msg,
+  )
+  match sm2_decrypt_or(Bytes::make(31, b'\x01'), c2) {
+    Ok(_) => assert_true(false, msg="sm2_decrypt_or accepted a 31-byte sk")
+    Err(_) => ()
+  }
+  // ---- HPKE ----
+  // Every Open advances the receiver's sequence number, so each comparison
+  // needs its own fresh context; wave6_hpke_receiver builds one from the same
+  // deterministic key material and the sender's `enc`.
+  let suite = hpke_x25519_hkdf_sha256_aes128gcm
+  let (pk_r, sk_r) = hpke_derive_key_pair(suite, Bytes::make(32, b''))
+  let (pk_s, sk_s) = hpke_derive_key_pair(suite, Bytes::make(32, b''))
+  let ikm = Bytes::make(32, b'')
+  let (enc, ctx_s) = hpke_setup_s(suite, 0, pk_r, ikm, b"info", b"", b"", sk_s)
+  let ct1 = hpke_seal(ctx_s, aad, msg) // sender sequence 0
+  let ct2 = hpke_seal(ctx_s, aad, b"second") // sender sequence 1
+  let sk_r_copy = sk_r
+  let pk_s_copy = pk_s
+  wave5_pair_opt(
+    "hpke_open ct1",
+    hpke_open(wave6_hpke_receiver(enc, sk_r_copy, pk_r, pk_s_copy), aad, ct1),
+    hpke_open_or(wave6_hpke_receiver(enc, sk_r_copy, pk_r, pk_s_copy), aad, ct1),
+    msg,
+  )
+  let ct1_bad = ct1.to_array()
+  ct1_bad[ct1_bad.length() - 1] = (ct1_bad[ct1_bad.length() - 1].to_int() ^ 1).to_byte()
+  let forged1 = Bytes::from_array(ct1_bad[:])
+  wave5_pair_opt(
+    "hpke_open forged",
+    hpke_open(
+      wave6_hpke_receiver(enc, sk_r_copy, pk_r, pk_s_copy),
+      aad,
+      forged1,
+    ),
+    hpke_open_or(
+      wave6_hpke_receiver(enc, sk_r_copy, pk_r, pk_s_copy),
+      aad,
+      forged1,
+    ),
+    msg,
+  )
+  // one nonce per call: the same context must open ct1 then ct2 in order
+  let seq_ctx = wave6_hpke_receiver(enc, sk_r_copy, pk_r, pk_s_copy)
+  match hpke_open_or(seq_ctx, aad, ct1) {
+    Ok(pt) => assert_true(bytes_equal(pt, msg), msg="hpke open ct1 plaintext")
+    Err(e) => assert_true(false, msg="hpke open ct1 rejected: " + e)
+  }
+  match hpke_open_or(seq_ctx, aad, ct2) {
+    Ok(pt) =>
+      assert_true(bytes_equal(pt, b"second"), msg="hpke open ct2 plaintext")
+    Err(e) => assert_true(false, msg="hpke open ct2 rejected: " + e)
+  }
+  // and a third open of ct1 must now fail: the sequence moved on
+  match hpke_open_or(seq_ctx, aad, ct1) {
+    Ok(_) => assert_true(false, msg="hpke replayed ct1 at sequence 2")
+    Err(_) => ()
+  }
+  let mut joined = ""
+  for f in wave5_fails {
+    joined = joined + " | " + f
+  }
+  assert_true(
+    wave5_fails.length() == 0,
+    msg="twin/legacy mismatches (" +
+      wave5_fails.length().to_string() +
+      "):" +
+      joined,
+  )
+}

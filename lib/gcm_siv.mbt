@@ -200,20 +200,31 @@ pub fn aes_gcm_siv_encrypt(
 /// AEAD_AES_GCM_SIV decryption: verifies the tag over the decrypted
 /// plaintext and returns `None` on mismatch (constant-time tag compare).
 /// v0.39.0.
-pub fn aes_gcm_siv_decrypt(
+
+///|
+/// The one message `aes_gcm_siv_decrypt_or` gives when the SIV tag does not
+/// verify (or the input is too short to carry one); shared with the projection
+/// in `aes_gcm_siv_decrypt`. See `aes_gcm_auth_failed`.
+let aes_gcm_siv_auth_failed : String = "aes_gcm_siv_decrypt: tag verification failed"
+
+///|
+/// `aes_gcm_siv_decrypt` as a `Result` instead of an `Option`: `Err` for a
+/// wrong-shape key/nonce (the same texts the aborting form uses), one uniform
+/// `Err` for a short input or a tag that does not verify. v0.90.0.
+pub fn aes_gcm_siv_decrypt_or(
   key : Bytes,
   nonce : Bytes,
   aad : Bytes,
   ct_and_tag : Bytes,
-) -> Bytes? {
+) -> Result[Bytes, String] {
   if key.length() != 16 && key.length() != 32 {
-    abort("aes_gcm_siv_decrypt: key must be 16 or 32 bytes")
+    return Err("aes_gcm_siv_decrypt: key must be 16 or 32 bytes")
   }
   if nonce.length() != 12 {
-    abort("aes_gcm_siv_decrypt: nonce must be 12 bytes")
+    return Err("aes_gcm_siv_decrypt: nonce must be 12 bytes")
   }
   if ct_and_tag.length() < 16 {
-    return None
+    return Err(aes_gcm_siv_auth_failed)
   }
   let ct_len = ct_and_tag.length() - 16
   let ct = bytes_sub(ct_and_tag, 0, ct_len)
@@ -241,8 +252,24 @@ pub fn aes_gcm_siv_decrypt(
   ss[15] = ss[15] & 0x7f
   let expected = encrypt_block(Bytes::from_array(ss[:]), rk_enc, nr_enc)
   if bytes_equal(expected, tag) {
-    Some(pt)
+    Ok(pt)
   } else {
-    None
+    Err(aes_gcm_siv_auth_failed)
+  }
+}
+
+///|
+/// AES-GCM-SIV decrypt — `Some(plaintext)`, or `None` when the SIV tag does not
+/// verify. A wrong-shape key or nonce aborts, as before; prefer
+/// `aes_gcm_siv_decrypt_or`.
+pub fn aes_gcm_siv_decrypt(
+  key : Bytes,
+  nonce : Bytes,
+  aad : Bytes,
+  ct_and_tag : Bytes,
+) -> Bytes? {
+  match aes_gcm_siv_decrypt_or(key, nonce, aad, ct_and_tag) {
+    Ok(pt) => Some(pt)
+    Err(msg) => if msg == aes_gcm_siv_auth_failed { None } else { abort(msg) }
   }
 }

@@ -199,15 +199,25 @@ pub fn sm4_gcm_encrypt(
 
 ///|
 /// SM4-GCM decrypt: verifies the tag first; returns (b"", false) on mismatch.
-pub fn sm4_gcm_decrypt(
+
+///|
+/// The one message `sm4_gcm_decrypt_or` gives for a tag that does not verify;
+/// shared with the projection in `sm4_gcm_decrypt`. See `aes_gcm_auth_failed`.
+let sm4_gcm_auth_failed : String = "sm4_gcm_decrypt: tag verification failed"
+
+///|
+/// `sm4_gcm_decrypt` as a `Result`: `Err` for a wrong-shape key/iv/tag (the same
+/// text the aborting form uses) and one uniform `Err` for a tag that does not
+/// verify. v0.90.0.
+pub fn sm4_gcm_decrypt_or(
   ciphertext : Bytes,
   key : Bytes,
   iv : Bytes,
   aad : Bytes,
   tag : Bytes,
-) -> (Bytes, Bool) {
-  guard key.length() == 16 && iv.length() == 12 && tag.length() == 16 else {
-    abort("sm4_gcm_decrypt: key 16 bytes, iv 12 bytes, tag 16 bytes")
+) -> Result[Bytes, String] {
+  if key.length() != 16 || iv.length() != 12 || tag.length() != 16 {
+    return Err("sm4_gcm_decrypt: key 16 bytes, iv 12 bytes, tag 16 bytes")
   }
   let rk = sm4_expand_key(key)
   let h = sm4_encrypt_block(rk, Bytes::make(16, (0).to_byte()), 0)
@@ -228,7 +238,7 @@ pub fn sm4_gcm_decrypt(
   ]
   // constant-time compare (same idiom as aes_gcm_decrypt)
   if !bytes_equal(block_to_bytes(expect_block), tag) {
-    return (b"", false)
+    return Err(sm4_gcm_auth_failed)
   }
   let icb = Array::make(16, (0).to_byte())
   for i in 0..<16 {
@@ -236,7 +246,29 @@ pub fn sm4_gcm_decrypt(
   }
   icb[15] = (2).to_byte()
   let pt = sm4_gctr(rk, Bytes::from_array(icb[:]), ciphertext)
-  (pt, true)
+  Ok(pt)
+}
+
+///|
+/// SM4-GCM decrypt — returns `(plaintext, true)`, or `(b"", false)` when the tag
+/// does not verify. A wrong-shape key / iv / tag aborts, as before; prefer
+/// `sm4_gcm_decrypt_or`.
+pub fn sm4_gcm_decrypt(
+  ciphertext : Bytes,
+  key : Bytes,
+  iv : Bytes,
+  aad : Bytes,
+  tag : Bytes,
+) -> (Bytes, Bool) {
+  match sm4_gcm_decrypt_or(ciphertext, key, iv, aad, tag) {
+    Ok(pt) => (pt, true)
+    Err(msg) =>
+      if msg == sm4_gcm_auth_failed {
+        (b"", false)
+      } else {
+        abort(msg)
+      }
+  }
 }
 
 ///|

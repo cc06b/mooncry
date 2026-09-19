@@ -9,7 +9,7 @@ verified against official standard vectors.
 - **Correct** — every algorithm is checked against FIPS / NIST / RFC test
   vectors, and cross-validated against reference implementations
   (pycryptodome, cryptography, hashlib, libsodium, zlib) plus randomized
-  differential testing. 1176 tests, run with `moon test --deny-warn`.
+  differential testing. 1177 tests, run with `moon test --deny-warn`.
 - **Broad** — MD5, **SHA-1**, the SHA-2 and SHA-3 families (incl. **SHA-512/224
   and SHA-512/256**), **Keccak-256**,
   SHAKE/**cSHAKE** XOFs, **KMAC128/256**, BLAKE2b, **BLAKE2s**, BLAKE3,
@@ -340,7 +340,7 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `sm2_sign_with_k(sk, msg, id, k) -> Bytes` | SM2 sign with explicit nonce (deterministic; aborts on degenerate k) |
 | `sm2_verify(pk, msg, id, sig) -> Bool` | SM2 verify (rejects off-curve keys and out-of-range r/s) |
 | `sm4_ctr(key, iv, data) / sm4_cbc_encrypt / sm4_cbc_decrypt` | SM4 modes (CTR 128-bit BE counter; CBC raw, no padding) |
-| `sm4_gcm_encrypt(pt, key, iv, aad)` / `sm4_gcm_decrypt(ct, key, iv, aad, tag)` | SM4-GCM AEAD (12-byte IV, 16-byte tag; RFC 8998 TLS building block) |
+| `sm4_gcm_encrypt(pt, key, iv, aad)` / `sm4_gcm_decrypt(ct, key, iv, aad, tag)` | SM4-GCM AEAD (12-byte IV, 16-byte tag; RFC 8998 TLS building block); `sm4_gcm_decrypt_or` reports the reason as `Err` |
 | `zuc_init(key, iv) -> ZucState` / `zuc_next_word(st)` | ZUC-128 core: 16-byte key/IV, then one 32-bit keystream word per call |
 | `zuc_keystream(key, iv, nwords) -> Bytes` | ZUC-128 keystream as 4*nwords big-endian bytes |
 | `zuc_xor(key, iv, data) -> Bytes` | ZUC-128 in raw stream mode (any length, no padding); not the 3GPP mode |
@@ -352,7 +352,7 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `zuc256_mac_verify(key, iv, macbits, nbits, data, mac) -> Bool` | Constant-time check; false (not a trap) on a wrong-length tag |
 | `hmac_sm3(key, msg) -> Bytes` | HMAC-SM3 (RFC 2104, 64-byte block, 32-byte MAC) |
 | `sm2_encrypt(pk, msg, rand) / sm2_encrypt_with_k(pk, msg, k)` | SM2 encryption (GB/T 32918.4), raw C1\|\|C3\|\|C2; `sm2_encrypt_or` / `sm2_encrypt_with_k_or` for a peer-supplied `pk` |
-| `sm2_decrypt(sk, ct) -> (Bytes, Bool)` | SM2 decryption (false on tamper/wrong key, GCM convention) |
+| `sm2_decrypt(sk, ct) -> (Bytes, Bool)` / `sm2_decrypt_or(sk, ct)` | SM2 decryption (false / `Err` on tamper or wrong key, GCM convention); the `_or` form carries one uniform message for all six rejection reasons |
 | `sm2_ct_to_der(ct) / sm2_ct_from_der(der)` | openssl-compatible ASN.1 DER ciphertext conversion; the decoder is strict DER (see below), and `sm2_ct_to_der_or` / `sm2_ct_from_der_or` report a malformed encoding instead of aborting or returning a bare flag |
 | `sm2_sig_to_der(sig) / sm2_sig_from_der(der)` | SM2 signature raw r\|\|s <-> DER SEQUENCE{r,s}; the decoder is strict DER (see below), `sm2_sig_to_der_or` / `sm2_sig_from_der_or` never trap |
 | `hkdf_sm3(ikm, salt, info, out_len)` / `hkdf_sm3_extract` / `hkdf_sm3_expand` | HKDF-SM3 (RFC 5869) |
@@ -367,7 +367,7 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `cmac_aes(data, key : Bytes) -> Bytes` | AES-CMAC (NIST SP 800-38B), 16-byte tag |
 | `aes_encrypt_cbc / aes_decrypt_cbc(data, key, iv) -> Bytes` | AES-CBC (IV prepended, PKCS#7) |
 | `aes_gcm_encrypt(pt, key, iv, aad) -> (Bytes, Bytes)` | AES-GCM encrypt → (ct, 16-byte tag) |
-| `aes_gcm_decrypt(ct, key, iv, aad, tag) -> (Bytes, Bool)` | AES-GCM decrypt, constant-time tag verify |
+| `aes_gcm_decrypt(ct, key, iv, aad, tag) -> (Bytes, Bool)` / `aes_gcm_decrypt_or(...)` | AES-GCM decrypt, constant-time tag verify; the `_or` form returns `Result` and never aborts |
 | `aes_ccm_encrypt(pt, key, nonce, aad, mac_len) -> Bytes` | AES-CCM AEAD (SP 800-38C) → ct ‖ tag |
 | `aes_ccm_decrypt(input, key, nonce, aad, mac_len) -> Bytes` | AES-CCM decrypt, aborts on tag mismatch |
 | `gmac(key, iv, aad) -> Bytes` | GMAC (SP 800-38D), 16-byte tag |
@@ -464,7 +464,7 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `ml_kem_{512,768,1024}_hybrid_open_or(dk, blob, aad)` | the open path as `Result` instead of `Option`; one uniform message for a malformed blob, a wrong-length `dk` and an authentication failure |
 | `poly1305_new / poly1305_update / poly1305_finalize` | incremental Poly1305 |
 | `aes_gcm_siv_encrypt(key, nonce, aad, pt)` | AES-GCM-SIV (RFC 8452, nonce-misuse-resistant) |
-| `aes_gcm_siv_decrypt(key, nonce, aad, ct) -> Option[Bytes]` | AES-GCM-SIV decryption |
+| `aes_gcm_siv_decrypt(key, nonce, aad, ct) -> Option[Bytes]` | AES-GCM-SIV decryption; `aes_gcm_siv_decrypt_or` returns `Result` |
 | `xwing_keygen(seed) -> (pk, sk)` | X-Wing hybrid KEM keygen (ML-KEM-768 + X25519) |
 | `xwing_encaps(pk, eseed) -> (ss, ct)` | X-Wing encapsulation (derandomized) |
 | `xwing_decaps(ct, sk) -> Bytes` | X-Wing decapsulation |
@@ -472,7 +472,7 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `kangaroo_twelve_128(m, c, out_len)` | KangarooTwelve KT128 (tree hash + customization) |
 | `turbo_shake_256 / kangaroo_twelve_256` | 256-bit capacity variants |
 | `hpke_setup_s(suite, mode, pk_r, ikm_e, info, psk, psk_id, sk_s)` | HPKE sender setup (RFC 9180, all 4 modes) |
-| `hpke_seal(ctx, aad, pt) / hpke_open(ctx, aad, ct)` | HPKE authenticated encryption (auto sequence numbers) |
+| `hpke_seal(ctx, aad, pt) / hpke_open(ctx, aad, ct)` | HPKE authenticated encryption (auto sequence numbers); `hpke_open_or` returns `Result` and advances the sequence number exactly once, in the twin |
 | `hpke_export(ctx, exporter_context, len)` | HPKE exporter |
 | `hpke_x25519_* / hpke_p256_* / hpke_p521_* / hpke_x448_*` | HPKE cipher-suite selectors (all RFC-vectored suites) |
 | `hpke_p384_hkdf_sha384_aes256gcm` | DHKEM(P-384) suite (differential vectors) |
@@ -572,17 +572,22 @@ reports failure must be `foo_or -> Result[_, String]`.
 Everything else either cannot fail on well-formed caller input (it `abort`s —
 see the two-tier contract above) or just returns a value.
 
-**Ten of these fifteen legacy entry points now have a `Result` twin** (v0.89.0):
-the three `ml_kem_*_hybrid_open_or`, `sm2_open_or`, `sm2_ct_from_der_or`,
-`sm2_sig_from_der_or`, `sm2_pkcs8_der_to_sk_or`, `sm2_spki_der_to_pk_or`,
-`sm2_sk_from_pem_or` and `sm2_pk_from_pem_or`. Each wraps its original, so the
-two cannot disagree — a test pins exactly that, on round trips and on hostile
-inputs alike. Prefer the twin in new code: it is where 1.0 will land. The five
-that still have no twin (`aes_gcm_decrypt`, `sm4_gcm_decrypt`,
-`aes_gcm_siv_decrypt`, `hpke_open`, `sm2_decrypt`) are the ones that *mix* an
-`abort` on caller shape with a failure value, so giving them a twin means
-splitting their bodies into a shared core first — recorded in the maintainer
-plan rather than half-done.
+**All fifteen of these legacy entry points now have a `Result` twin.** Ten came
+in v0.89.0 (the three `ml_kem_*_hybrid_open_or`, `sm2_open_or`,
+`sm2_ct_from_der_or`, `sm2_sig_from_der_or`, `sm2_pkcs8_der_to_sk_or`,
+`sm2_spki_der_to_pk_or`, `sm2_sk_from_pem_or`, `sm2_pk_from_pem_or`); the five
+that mix an `abort` on caller shape with a failure value for hostile input came
+in v0.90.0 (`aes_gcm_decrypt_or`, `sm4_gcm_decrypt_or`,
+`aes_gcm_siv_decrypt_or`, `hpke_open_or`, `sm2_decrypt_or`), by moving each body
+into the twin and leaving the original as a projection: `Ok` becomes the old
+success value, and the twin's *uniform* failure message becomes the old failure
+value while any other message still aborts. The two sides share that one message
+through a `let`, so they cannot drift, and C2 sees the delegation.
+
+Prefer the twin in new code: it is where 1.0 will land, and the legacy shapes
+are frozen (rule C4) rather than maintained. For `hpke_open` the sequence number
+advances inside the twin, so one call to either form burns exactly one nonce —
+but calling both forms for the same message burns two, as it always did.
 
 Two rules follow, and C4 enforces both:
 
@@ -1493,7 +1498,7 @@ keys with 0/1/2 AD entries, AES-KW, AES-CBC (including the PKCS#7 full extra
 padding block on exact multiples of 16) and CTR, SM4-CBC/CTR, the sealed box,
 the ML-KEM hybrid envelope and the SM2 GM/T 0009 envelope.
 
-**1176 tests.**
+**1177 tests.**
 
 ## Development
 

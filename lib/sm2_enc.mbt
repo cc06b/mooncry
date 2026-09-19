@@ -215,20 +215,36 @@ pub fn sm2_encrypt_or(
 /// on any malformed input or C3 mismatch (corruption, tampering, or wrong
 /// key) — same convention as aes_gcm_decrypt. Aborts only on a wrong-length
 /// secret key (caller error).
-pub fn sm2_decrypt(sk : Bytes, ct : Bytes) -> (Bytes, Bool) {
-  guard sk.length() == 32 else { abort("sm2_decrypt: sk must be 32 bytes") }
+
+///|
+/// The one message `sm2_decrypt_or` gives for a ciphertext that does not
+/// decrypt: too short, not an uncompressed point, off-curve, a point at
+/// infinity, an all-zero KDF output, or a C3 hash that does not match. Six
+/// distinct checks, one message -- which of them failed is exactly what a peer
+/// probing the recipient key would want to know. Shared with the projection in
+/// `sm2_decrypt`. v0.90.0.
+let sm2_decrypt_failed : String = "sm2_decrypt: rejected (malformed ciphertext, off-curve point, or hash mismatch)"
+
+///|
+/// `sm2_decrypt` as a `Result`: `Err` for a wrong-length `sk` (the caller's key,
+/// same text the aborting form uses) and one uniform `Err` for everything a peer
+/// can get wrong about the ciphertext.
+pub fn sm2_decrypt_or(sk : Bytes, ct : Bytes) -> Result[Bytes, String] {
+  if sk.length() != 32 {
+    return Err("sm2_decrypt: sk must be 32 bytes")
+  }
   if ct.length() < 65 + 32 + 1 {
-    return (b"", false)
+    return Err(sm2_decrypt_failed)
   }
   let d = ec_be_to_int(sk)
   let c1 = ec_slice(ct, 0, 65)
   if c1[0] != (4).to_byte() {
-    return (b"", false)
+    return Err(sm2_decrypt_failed)
   }
   let x1 = ec_be_to_int(ec_slice(c1, 1, 32))
   let y1 = ec_be_to_int(ec_slice(c1, 33, 32))
   if !sm2_on_curve(x1, y1) {
-    return (b"", false)
+    return Err(sm2_decrypt_failed)
   }
   let shared = ec_scalar_mult(sm2_curve, d, EcPoint::{
     x: x1,
@@ -236,7 +252,7 @@ pub fn sm2_decrypt(sk : Bytes, ct : Bytes) -> (Bytes, Bool) {
     inf: false,
   })
   if shared.inf {
-    return (b"", false)
+    return Err(sm2_decrypt_failed)
   }
   let x2 = ec_int_to_be(shared.x, 32)
   let y2 = ec_int_to_be(shared.y, 32)
@@ -244,7 +260,7 @@ pub fn sm2_decrypt(sk : Bytes, ct : Bytes) -> (Bytes, Bool) {
   let c2 = ec_slice(ct, 97, ct.length() - 97)
   let t = sm2_kdf(concat_bytes(x2, y2), c2.length())
   if sm2_all_zero(t) {
-    return (b"", false)
+    return Err(sm2_decrypt_failed)
   }
   let msg = Array::make(c2.length(), (0).to_byte())
   for i in 0..<c2.length() {
@@ -254,9 +270,25 @@ pub fn sm2_decrypt(sk : Bytes, ct : Bytes) -> (Bytes, Bool) {
   m_acc = concat_bytes(m_acc, Bytes::from_array(msg[:]))
   m_acc = concat_bytes(m_acc, y2)
   if !bytes_equal(sm3(m_acc), c3) {
-    return (b"", false)
+    return Err(sm2_decrypt_failed)
   }
-  (Bytes::from_array(msg[:]), true)
+  Ok(Bytes::from_array(msg[:]))
+}
+
+///|
+/// SM2 decryption (GB/T 32918) — returns `(plaintext, true)`, or `(b"", false)`
+/// for a ciphertext that does not decrypt. A wrong-length `sk` aborts, as
+/// before; prefer `sm2_decrypt_or`.
+pub fn sm2_decrypt(sk : Bytes, ct : Bytes) -> (Bytes, Bool) {
+  match sm2_decrypt_or(sk, ct) {
+    Ok(pt) => (pt, true)
+    Err(msg) =>
+      if msg == sm2_decrypt_failed {
+        (b"", false)
+      } else {
+        abort(msg)
+      }
+  }
 }
 
 // ==================== DER interop (openssl ASN.1 form) ====================

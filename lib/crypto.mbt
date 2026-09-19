@@ -1240,22 +1240,33 @@ pub fn aes_gcm_encrypt(
 }
 
 ///|
-/// AES-GCM decrypt — verifies tag, returns (plaintext, true) or (b"", false)
-pub fn aes_gcm_decrypt(
+/// The one message `aes_gcm_decrypt_or` gives for a tag that does not verify.
+/// Shared with `aes_gcm_decrypt` so the projection below can tell "the peer's
+/// ciphertext was forged" from "the caller's key/iv/tag had the wrong shape"
+/// without comparing hand-written literals that could drift. v0.90.0.
+let aes_gcm_auth_failed : String = "aes_gcm_decrypt: tag verification failed"
+
+///|
+/// AES-GCM decrypt as a `Result`: `Err` for a wrong-shape key/iv/tag (the
+/// caller's bug, with the same texts `aes_gcm_decrypt` aborts with) and one
+/// uniform `Err` for a tag that does not verify -- a forged ciphertext is
+/// peer input, and telling it apart from anything else through the error text
+/// would be an authentication oracle. v0.90.0.
+pub fn aes_gcm_decrypt_or(
   ciphertext : Bytes,
   key : Bytes,
   iv : Bytes,
   aad : Bytes,
   tag : Bytes,
-) -> (Bytes, Bool) {
+) -> Result[Bytes, String] {
   if key.length() != 16 && key.length() != 24 && key.length() != 32 {
-    abort("aes_gcm_decrypt: key length must be 16, 24, or 32 bytes")
+    return Err("aes_gcm_decrypt: key length must be 16, 24, or 32 bytes")
   }
   if iv.length() != 12 {
-    abort("aes_gcm_decrypt: iv/nonce length must be 12 bytes (96 bits)")
+    return Err("aes_gcm_decrypt: iv/nonce length must be 12 bytes (96 bits)")
   }
   if tag.length() != 16 {
-    abort("aes_gcm_decrypt: tag length must be 16 bytes (128 bits)")
+    return Err("aes_gcm_decrypt: tag length must be 16 bytes (128 bits)")
   }
   let nr = if key.length() == 16 {
     10
@@ -1304,7 +1315,7 @@ pub fn aes_gcm_decrypt(
 
   // Verify tag in constant time
   if !bytes_equal(expected_tag, tag) {
-    return (b"", false)
+    return Err(aes_gcm_auth_failed)
   }
 
   // Decrypt: P = GCTR(K, inc32(J0), C)
@@ -1312,7 +1323,30 @@ pub fn aes_gcm_decrypt(
   inc32(inc_j0)
   let plaintext = gctr(round_keys, nr, inc_j0, ciphertext)
 
-  (plaintext, true)
+  Ok(plaintext)
+}
+
+///|
+/// AES-GCM decrypt — verifies the tag and returns `(plaintext, true)`, or
+/// `(b"", false)` when it does not verify. A wrong-shape key / iv / tag is a
+/// caller bug and aborts, exactly as before; the `_or` twin reports both as
+/// `Err` and is what new code should use.
+pub fn aes_gcm_decrypt(
+  ciphertext : Bytes,
+  key : Bytes,
+  iv : Bytes,
+  aad : Bytes,
+  tag : Bytes,
+) -> (Bytes, Bool) {
+  match aes_gcm_decrypt_or(ciphertext, key, iv, aad, tag) {
+    Ok(pt) => (pt, true)
+    Err(msg) =>
+      if msg == aes_gcm_auth_failed {
+        (b"", false)
+      } else {
+        abort(msg)
+      }
+  }
 }
 
 // ==================== HMAC-SHA512 (RFC 2104) ====================

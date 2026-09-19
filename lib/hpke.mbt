@@ -969,47 +969,84 @@ pub fn hpke_seal(ctx : HpkeContext, aad : Bytes, pt : Bytes) -> Bytes {
 ///|
 /// HPKE Open: decrypts and authenticates `ct`; `None` on tag mismatch.
 /// Increments the sequence counter either way. v0.37.0.
-pub fn hpke_open(ctx : HpkeContext, aad : Bytes, ct : Bytes) -> Bytes? {
+
+///|
+/// The one message `hpke_open_or` gives for a ciphertext that does not open:
+/// shorter than a tag, a failed AEAD tag, or an unsupported suite AEAD. Shared
+/// with the projection in `hpke_open`. v0.90.0.
+let hpke_open_failed : String = "hpke_open: rejected (malformed ciphertext or authentication failure)"
+
+///|
+/// HPKE Open for the two AES-GCM suites (aead_id 1 and 2). They were written
+/// out twice with identical bodies; one body serves both.
+fn hpke_open_gcm(
+  ctx : HpkeContext,
+  nonce : Bytes,
+  aad : Bytes,
+  ct : Bytes,
+) -> Result[Bytes, String] {
+  if ct.length() < 16 {
+    return Err(hpke_open_failed)
+  }
+  let body = Bytes::from_array(ct.to_array()[0:ct.length() - 16])
+  let tag = Bytes::from_array(ct.to_array()[ct.length() - 16:])
+  match aes_gcm_decrypt_or(body, ctx.key, nonce, aad, tag) {
+    Ok(pt) => Ok(pt)
+    // A shape error here means the suite's own key is the wrong length, which
+    // is a construction bug rather than a forged ciphertext: keep it distinct
+    // so the aborting twin still aborts, exactly as it did before.
+    Err(msg) =>
+      if msg == aes_gcm_auth_failed {
+        Err(hpke_open_failed)
+      } else {
+        Err(msg)
+      }
+  }
+}
+
+///|
+/// `hpke_open` as a `Result`. The sequence number is advanced exactly once per
+/// call, in here -- so the `Option` form delegates rather than the other way
+/// round, and calling both forms for one message would burn two nonces (as it
+/// always did). `Err` is uniform for a short ciphertext, a failed tag and an
+/// unsupported AEAD id. v0.90.0.
+pub fn hpke_open_or(
+  ctx : HpkeContext,
+  aad : Bytes,
+  ct : Bytes,
+) -> Result[Bytes, String] {
   let nonce = hpke_compute_nonce(ctx)
   ctx.seq = ctx.seq + 1L
   match ctx.suite.aead_id {
-    1 => {
-      if ct.length() < 16 {
-        return None
-      }
-      let body = Bytes::from_array(ct.to_array()[0:ct.length() - 16])
-      let tag = Bytes::from_array(ct.to_array()[ct.length() - 16:])
-      match aes_gcm_decrypt(body, ctx.key, nonce, aad, tag) {
-        (pt, true) => Some(pt)
-        (_, false) => None
-      }
-    }
-    2 => {
-      if ct.length() < 16 {
-        return None
-      }
-      let body = Bytes::from_array(ct.to_array()[0:ct.length() - 16])
-      let tag = Bytes::from_array(ct.to_array()[ct.length() - 16:])
-      match aes_gcm_decrypt(body, ctx.key, nonce, aad, tag) {
-        (pt, true) => Some(pt)
-        (_, false) => None
-      }
-    }
+    1 => hpke_open_gcm(ctx, nonce, aad, ct)
+    2 => hpke_open_gcm(ctx, nonce, aad, ct)
     3 =>
       if ct.length() < 16 {
-        None
+        Err(hpke_open_failed)
       } else {
         let body = Bytes::from_array(ct.to_array()[0:ct.length() - 16])
         let tag = Bytes::from_array(ct.to_array()[ct.length() - 16:])
         let otk = chacha20_poly1305_otk(ctx.key, nonce)
         let expected = poly1305(otk, poly1305_mac_data(aad, body))
         if bytes_equal(expected, tag) {
-          Some(chacha20_xor(body, ctx.key, nonce, 1U))
+          Ok(chacha20_xor(body, ctx.key, nonce, 1U))
         } else {
-          None
+          Err(hpke_open_failed)
         }
       }
-    _ => abort("hpke: unsupported aead_id")
+    _ => Err("hpke: unsupported aead_id")
+  }
+}
+
+///|
+/// HPKE Open (RFC 9180 §5.2): decrypts one message with the context's current
+/// sequence number and advances it. `Some(plaintext)`, or `None` when the
+/// ciphertext does not open; an unsupported suite AEID aborts, as before.
+/// Prefer `hpke_open_or`.
+pub fn hpke_open(ctx : HpkeContext, aad : Bytes, ct : Bytes) -> Bytes? {
+  match hpke_open_or(ctx, aad, ct) {
+    Ok(pt) => Some(pt)
+    Err(msg) => if msg == hpke_open_failed { None } else { abort(msg) }
   }
 }
 
