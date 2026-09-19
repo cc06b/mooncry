@@ -22,6 +22,13 @@ Expectations are computed at run time wherever an independent oracle exists:
     them (that variant derives every expectation at run time, WSL included).
   * rejection paths (forged AEAD tag, wrong-length MAC) -> must be false/Err
 
+It also checks the one property that a unit test inside this repository cannot
+see: that `cc06b/mooncry/internal` really is unimportable from a downstream
+module. The Falcon layer moved there in v0.88.0 and the isolation is a compiler
+rule, so this pins it against toolchain changes -- and it distinguishes
+"blocked by the internal visibility rule" from "the registry did not ship the
+package", which would look similar and mean the opposite.
+
 Exit code 0 = every check passed.
 """
 import argparse
@@ -78,6 +85,45 @@ fn main {
 def sh(argv, cwd=None, timeout=900):
     r = subprocess.run(argv, cwd=cwd, capture_output=True, text=True, timeout=timeout)
     return r.returncode, r.stdout + r.stderr
+
+
+def check_internal_isolated(version):
+    """A downstream module must NOT be able to import cc06b/mooncry/internal.
+
+    Separate project on purpose: a package that fails to solve poisons the whole
+    module's build plan, which would break the positive checks above.
+    """
+    root = tempfile.mkdtemp(prefix="mooncry-leak-")
+    try:
+        os.makedirs(os.path.join(root, "leak"))
+        with open(os.path.join(root, "moon.mod"), "w") as f:
+            f.write('name = "probe/leak"\nversion = "0.1.0"\n')
+        with open(os.path.join(root, "leak", "moon.pkg"), "w") as f:
+            f.write('import {\n  "cc06b/mooncry/internal",\n}\n\n'
+                    'pkgtype(kind: "executable")\n')
+        with open(os.path.join(root, "leak", "main.mbt"), "w") as f:
+            f.write("fn main {\n  println(@internal.fp_of(3).to_string())\n}\n")
+        want = ("cc06b/mooncry@" + version) if version else "cc06b/mooncry"
+        rc, out = sh(["moon", "add", want], cwd=root, timeout=300)
+        if rc != 0:
+            print("== internal isolation: moon add FAILED ==\n" + out[-800:])
+            return False
+        rc, out = sh(["moon", "check"], cwd=root, timeout=600)
+        blocked = "internal visibility rules" in out
+        missing = "Cannot find import" in out
+        print("== importing cc06b/mooncry/internal from a consumer ==")
+        if blocked:
+            print("   OK    refused by the compiler (internal visibility rules)")
+            return True
+        if rc == 0:
+            print("   FAIL  the internal package IMPORTED AND BUILT")
+            return False
+        print("   FAIL  refused, but not by the visibility rule%s" %
+              (" -- the registry did not ship the package" if missing else ""))
+        print(out[-800:])
+        return False
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
 
 
 def main():
@@ -151,6 +197,9 @@ def main():
             print("   FAIL: no output for %s" % sorted(missing))
             fails += len(missing)
         print("\n%d checks, %d failed" % (len(expect), fails))
+        if not check_internal_isolated(args.version):
+            fails += 1
+        print("%s" % ("all checks passed" if not fails else "FAILURES: %d" % fails))
         return 1 if fails else 0
     finally:
         if not args.keep:
