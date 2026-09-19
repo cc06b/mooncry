@@ -27,6 +27,14 @@ Three checks, all static, all seconds:
       (public and never documented) over-reports, because the table uses
       grouped forms like `ml_kem_512/768/1024_encaps_or`.
 
+  C4  the four channels through which a failure is reported are frozen:
+      `Bool` for verifiers, `(Bytes, Bool)` and `Option` for the pre-`_or`
+      legacy entries, `Result[_, String]` for everything new. A public function
+      returning Result must be named `*_or` or be listed in LEGACY_RESULT; a new
+      `(Bytes, Bool)` or `Option` entry point fails outright; a name ending in
+      `_verify` / `_check` must return `Bool`. The legacy lists are the point:
+      growing one is a review decision, not a default.
+
 Exit code is non-zero if any check fails; violations are also emitted as
 GitHub workflow annotations.
 """
@@ -50,6 +58,42 @@ ALLOWED_NON_DELEGATING = {
         "Err. Making one delegate to the other would change a documented "
         "behaviour; the README steers untrusted ciphertext to the _or twin."
     ),
+}
+
+
+# The four channels through which this library reports "that did not work",
+# and the exact set of names allowed to use each. Everything in these lists is
+# FROZEN: a new entry point that reports failure must be `foo_or ->
+# Result[_, String]`. Adding a name here is a deliberate decision that shows up
+# in review, not a default -- which is the whole point of C4.
+#
+# Why four and not one: Bool is the right shape for a verifier (there is
+# nothing to return on failure, and an error string would be an oracle);
+# (Bytes, Bool) and Option predate the `_or` family and stay for source
+# compatibility; Result is the target shape because it can carry a reason.
+LEGACY_RESULT = {
+    "aes_kw_unwrap",       # graceful from the start, no aborting twin
+    "aes_siv_decrypt",     # same
+    "sealed_box_open",     # same
+}
+LEGACY_BYTES_BOOL = {
+    "aes_gcm_decrypt",
+    "sm4_gcm_decrypt",
+    "sm2_decrypt",
+    "sm2_open",
+    "sm2_ct_from_der",
+    "sm2_sig_from_der",
+    "sm2_pkcs8_der_to_sk",
+    "sm2_spki_der_to_pk",
+    "sm2_sk_from_pem",
+    "sm2_pk_from_pem",
+}
+LEGACY_OPTION = {
+    "aes_gcm_siv_decrypt",
+    "hpke_open",
+    "ml_kem_512_hybrid_open",
+    "ml_kem_768_hybrid_open",
+    "ml_kem_1024_hybrid_open",
 }
 
 
@@ -139,14 +183,11 @@ def parse_functions(clean):
         name = m.group(1)
         i = m.end()
         after_params = -1
-        while i < len(clean) and clean[i] != "{":
-            if clean[i] == "(":
-                j = match_delim(clean, i, "(", ")")
-                if j < 0:
-                    break
-                after_params = j
-                i = j
-                continue
+        # skip an optional generic parameter list, then EXACTLY ONE paren group.
+        # Skipping every group loses tuple return types: for `-> (Bytes, Bool)`
+        # the tuple looks like a second parameter list and the tail comes out
+        # empty, which is how the first inventory missed all ten of them.
+        while i < len(clean) and clean[i] in " \n\t\r[":
             if clean[i] == "[":
                 j = match_delim(clean, i, "[", "]")
                 if j < 0:
@@ -154,12 +195,18 @@ def parse_functions(clean):
                 i = j
                 continue
             i += 1
-        sig = " ".join(clean[m.start():i].split())
-        tail = clean[after_params:i] if after_params > 0 else clean[m.end():i]
+        if i < len(clean) and clean[i] == "(":
+            after_params = match_delim(clean, i, "(", ")")
+            i = after_params
+        j = i
+        while j < len(clean) and clean[j] != "{":
+            j += 1
+        sig = " ".join(clean[m.start():j].split())
+        tail = clean[after_params:j] if after_params > 0 else clean[m.end():j]
         rm = re.search(r"->\s*(.+)$", " ".join(tail.split()))
         ret = rm.group(1).strip() if rm else ""
-        end = match_delim(clean, i, "{", "}")
-        body = clean[i:end] if end > 0 else ""
+        end = match_delim(clean, j, "{", "}")
+        body = clean[j:end] if end > 0 else ""
         yield name, sig, ret, body
 
 
@@ -186,15 +233,17 @@ def callees(body):
 
 
 def source_files(*dirs):
-    """Non-test sources of every package directory that exists. `internal/` is
-    part of the module: its names are not importable downstream, but they are
-    still names the README may mention, so C3 has to know them."""
+    """Non-test sources of every package directory that exists, as paths
+    relative to the repo root. `internal/` is part of the module: its names are
+    not importable downstream, but they are still names the README may mention,
+    so C3 has to know them."""
     for d in dirs:
         if not os.path.isdir(d):
             continue
         for f in sorted(os.listdir(d)):
             if f.endswith(".mbt") and not f.endswith("_test.mbt"):
-                yield f, io.open(os.path.join(d, f), encoding="utf-8").read()
+                yield os.path.relpath(os.path.join(d, f), ROOT), io.open(
+                    os.path.join(d, f), encoding="utf-8").read()
 
 
 # --------------------------------------------------------------------------
@@ -366,6 +415,59 @@ def main():
                  "+".join(os.path.basename(d) for d in dirs), c3))
     else:
         print("C3  skipped (no README.md at %s)" % ROOT)
+
+    # ---- C4: the four reporting channels are frozen ----
+    c4 = 0
+    chans = {"Bool": [], "Result": [], "(Bytes,Bool)": [], "Option": []}
+    same_type_tuples = []
+    # C4 is about the *public API*, so the channel census counts lib/ only;
+    # internal/'s return types are nobody's contract.
+    for n in sorted(x for x in funcs if funcs[x][0].startswith("lib")):
+        ret = "".join(funcs[n][2].split())
+        if ret.startswith("Result["):
+            chans["Result"].append(n)
+            if not n.endswith("_or") and n not in LEGACY_RESULT:
+                c4 += 1
+                problems.append(
+                    "C4 %s returns %s but is not named *_or: a new graceful "
+                    "entry point must be `foo_or -> Result[_, String]` (or the "
+                    "name goes in LEGACY_RESULT with a reason)" % (n, ret))
+        elif ret == "(Bytes,Bool)":
+            chans["(Bytes,Bool)"].append(n)
+            if n not in LEGACY_BYTES_BOOL:
+                c4 += 1
+                problems.append(
+                    "C4 %s adds a new (Bytes, Bool) entry point; that channel is "
+                    "frozen at %d names -- use `foo_or -> Result` instead"
+                    % (n, len(LEGACY_BYTES_BOOL)))
+        elif ret.endswith("?") or ret.startswith("Option["):
+            chans["Option"].append(n)
+            if n not in LEGACY_OPTION:
+                c4 += 1
+                problems.append(
+                    "C4 %s adds a new Option-returning entry point; that channel "
+                    "is frozen at %d names -- use `foo_or -> Result` instead"
+                    % (n, len(LEGACY_OPTION)))
+        elif ret == "Bool":
+            chans["Bool"].append(n)
+        elif ret.startswith("(") and ret.endswith(")"):
+            inner = [x.strip() for x in ret[1:-1].split(",")]
+            if len(inner) > 1 and len(set(inner)) == 1:
+                same_type_tuples.append("%s -> %s" % (n, ret))
+        if (n.endswith("_verify") or n.endswith("_check")) and ret != "Bool":
+            c4 += 1
+            problems.append(
+                "C4 %s is named like a verifier but returns %s, not Bool"
+                % (n, ret or "<nothing>"))
+    print("C4  reporting channels: Bool %d, Result %d (%d of them not *_or), "
+          "(Bytes,Bool) %d, Option %d -- frozen set respected: %s"
+          % (len(chans["Bool"]), len(chans["Result"]), len(LEGACY_RESULT),
+             len(chans["(Bytes,Bool)"]), len(chans["Option"]),
+             "yes" if not c4 else "NO (%d)" % c4))
+    print("    %d same-type tuples (1.0 will decide whether these become "
+          "structs): %s" % (len(same_type_tuples),
+                            ", ".join(same_type_tuples[:4]) +
+                            (" ..." if len(same_type_tuples) > 4 else "")))
 
     for p in problems:
         print("::error::%s" % p)

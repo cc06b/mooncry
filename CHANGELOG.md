@@ -11,6 +11,7 @@ this clone's history and are one-line summaries.
 
 - consume_check now verifies the internal package is unimportable
 - robust-kem's mutated-dk assertion was wrong about ML-KEM's z
+- freeze the four error channels, and print the tuple list
 
 ## 0.88.0
 

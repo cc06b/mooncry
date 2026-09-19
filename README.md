@@ -550,6 +550,37 @@ AES-CBC/GCM/CTR keys may be 128, 192, or 256 bits; the nonce for GCM and
 ChaCha20 is 96 bits (12 bytes), the recommended length per spec. Wrong lengths
 cause an `abort` with a descriptive message.
 
+### Which channel reports a failure
+
+Four shapes coexist. Which one a function uses is frozen and machine-checked
+(`.github/scripts/api_contract_check.py`, rule C4): a **new** entry point that
+reports failure must be `foo_or -> Result[_, String]`.
+
+| Channel | Count | Used by | On failure |
+| --- | --- | --- | --- |
+| `Bool` | 39 | every `*_verify` / `*_check`: signature, MAC and AEAD-tag verification, plus `bytes_equal`, `hpke_valid_pk`, `dh_shared_is_zero` | `false`. There is nothing to hand back, and a distinguishable error would be an authentication oracle |
+| `(Bytes, Bool)` | 10 | `aes_gcm_decrypt`, `sm4_gcm_decrypt`, `sm2_decrypt`, `sm2_open`, and the six SM2 DER/PEM decoders | the `Bytes` are meaningless — read the flag |
+| `Option` (`Bytes?`) | 5 | `aes_gcm_siv_decrypt`, `hpke_open`, `ml_kem_512/768/1024_hybrid_open` | `None`; no reason is available |
+| `Result[_, String]` | 47 | the 44 `_or` twins, plus `aes_kw_unwrap`, `aes_siv_decrypt` and `sealed_box_open` | `Err(msg)`. The RSA decryption family returns one uniform message for every padding failure, so the text is not a Bleichenbacher/Manger oracle |
+
+Everything else either cannot fail on well-formed caller input (it `abort`s —
+see the two-tier contract above) or just returns a value.
+
+Two rules follow, and C4 enforces both:
+
+- **new graceful entry points are `foo_or -> Result[_, String]`**, and they
+  share one guard with their aborting twin rather than keeping a copy (rule C2);
+- the three legacy shapes are **frozen by name**. Growing one is a deliberate
+  act: the name has to be added to a list in the checker, which is where a
+  reviewer will see it.
+
+`Result` is the target shape because it can carry a reason; `(Bytes, Bool)` and
+`Option` predate the `_or` family and stay for source compatibility.
+Unifying them is a breaking change reserved for 1.0, together with the 19
+same-type tuples — `(shared_secret, enc)`, `(pk, sk)`, `(ct, tag)` — whose
+element order the compiler cannot check. The checker prints that list on every
+run so it cannot quietly grow.
+
 ### Public but internal: what `pub` owes you here
 
 MoonBit compiles `*_test.mbt` as a *blackbox* package, so a test can only reach
