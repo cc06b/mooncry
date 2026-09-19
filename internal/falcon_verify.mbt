@@ -4,7 +4,7 @@
 // produced by the C reference (see falcon_m3_test.mbt).
 
 ///|
-let falcon_q : Int = 12289
+pub let falcon_q : Int = 12289
 
 ///|
 let falcon_q0i : Int = 12287
@@ -13,11 +13,11 @@ let falcon_q0i : Int = 12287
 let falcon_r_mont : Int = 4091
 
 ///|
-let falcon_r2 : Int = 10952
+pub let falcon_r2 : Int = 10952
 
 ///|
 /// Montgomery multiply mod q (16-bit window, wrapping Int32 like C u32).
-fn mq_montymul(x : Int, y : Int) -> Int {
+pub fn mq_montymul(x : Int, y : Int) -> Int {
   let z = x * y
   let w = ((z * falcon_q0i) & 0xFFFF) * falcon_q
   let mut zr = (z + w) >> 16
@@ -134,7 +134,7 @@ pub fn falcon_is_short(s1 : Array[Int], s2 : Array[Int], logn : Int) -> Bool {
 ///|
 /// verify_raw: reconstruct -s1 = s2*h - c0 (mod phi, mod q), normalize
 /// to [-q/2, q/2], then is_short(-s1, s2).
-fn falcon_verify_raw(
+pub fn falcon_verify_raw(
   c0 : Array[Int],
   s2 : Array[Int],
   h : Array[Int],
@@ -167,7 +167,7 @@ fn falcon_verify_raw(
 
 ///|
 /// Reduce a small signed integer (in [-q/2, q/2]) modulo q.
-fn mq_conv_small(x : Int) -> Int {
+pub fn mq_conv_small(x : Int) -> Int {
   let mut y = x
   y = y + (falcon_q & (y >> 31))
   y
@@ -175,7 +175,7 @@ fn mq_conv_small(x : Int) -> Int {
 
 ///|
 /// x / y mod q via y^(q-2) (addition chain, Montgomery domain).
-fn falcon_mq_div(x : Int, y : Int) -> Int {
+pub fn falcon_mq_div(x : Int, y : Int) -> Int {
   let y0 = mq_montymul(y, falcon_r2)
   let y1 = mq_montymul(y0, y0)
   let y2 = mq_montymul(y1, y0)

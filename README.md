@@ -553,14 +553,38 @@ cause an `abort` with a descriptive message.
 ### Public but internal: what `pub` owes you here
 
 MoonBit compiles `*_test.mbt` as a *blackbox* package, so a test can only reach
-items marked `pub`. That forces a layer of internals to be public so the
-layered and differential tests can probe them. They are **not** part of the
-supported API: no stability promise, and they may change or vanish in any
-release.
+items marked `pub` — and a call across a package boundary needs `pub` too. That
+forces some internals to be public so the layered and differential tests can
+probe them. Since v0.88.0 they come in two tiers.
+
+**Compiler-enforced: `cc06b/mooncry/internal`.** The Falcon low-level layer —
+the FFT (`falcon_fft` / `falcon_ifft` / `falcon_poly_*_fft`), the modular NTT
+and its `modp_*` field, the `zint_*` bignum helpers, `fp_of`, the constant
+tables (`falcon_gauss_tab`, `falcon_primes_*`, the `falcon_max_*` bounds), the
+Merkle tree, `falcon_mq_ntt` / `falcon_mq_intt`, `falcon_to_ntt_monty`,
+`falcon_is_short`, `falcon_compute_public` and the NTRU solver — is its own
+package: 81 names. MoonBit applies the Go-style rule to a path component named
+`internal`, so a downstream consumer cannot import it at all:
+
+```
+Cannot import internal package cc06b/mooncry/internal ...
+  due to internal visibility rules
+```
+
+Its layered tests stay in `lib/` and reach it through those `pub` items, which
+is why they are `pub` at all. The package has no imports of its own and the
+dependency runs one way (`lib` → `internal`), because MoonBit rejects import
+cycles — that rule is also what keeps the second tier below in `lib`.
+
+**Documented only: still `pub` in `lib`.** These could not move. The Falcon XOF
+wraps this library's own public SHA-3 streaming state (`Sha3Hasher`,
+`shake_finalize`), so `falcon_common.mbt` must stay in `lib`, and everything
+that calls it stays with it.
 
 | Group | Names | Why it is public |
 | --- | --- | --- |
-| Falcon internals | `falcon_xof_*`, `falcon_hash_to_point`, `falcon_{modq,trim,comp}_{encode,decode}`, `falcon_fft` / `falcon_ifft` / `falcon_poly_*_fft`, `falcon_mkgauss`, `modp_*`, `zint_*`, `fp_*`, `falcon_prng_init`, `prng_get_u64` / `prng_get_u8`, `falcon_gaussian0_sampler`, `falcon_sampler*`, `falcon_mq_ntt` / `falcon_mq_intt`, `falcon_to_ntt_monty`, `falcon_is_short`, `falcon_compute_public` | the port was verified layer by layer against the C reference (XOF, codecs, FFT, the NTRU solver, the sampler); those tests still run and need the layer boundaries visible |
+| Falcon XOF and codecs | `falcon_xof_*`, `falcon_hash_to_point`, `falcon_{modq,trim,comp}_{encode,decode}` | needs `lib`'s SHA-3 state, so it cannot live below `lib` |
+| Falcon samplers | `falcon_mkgauss`, `falcon_prng_init`, `prng_get_u64` / `prng_get_u8`, `fp_floor` / `fp_trunc` / `fp_sqrt` / `fp_expm_p63` / `fp_invsqrt2` / `fp_invsqrt8`, `falcon_gaussian0_sampler`, `falcon_sampler*` | same reason; the port was verified layer by layer against the C reference and those tests need the boundaries visible |
 | P-256 debug probes | `p256_dbg_mul` / `p256_dbg_ref_mul` / `p256_dbg_gmul` / `p256_dbg_ref_gmul` | the differential test of the native field against the reference one (`lib/p256_dbg_test.mbt`) |
 | Test RNG | `falcon_test_rng_init` / `_bytes` / `_set_ctr` | a deterministic SHAKE256 stream so the Falcon KATs reproduce byte for byte |
 | XMSS leaf helper | `xmss_gen_leaf_wots` | lets a test regenerate one leaf without building a whole tree |
@@ -571,7 +595,8 @@ keys, nonces or `ikm` produces material an attacker can recompute. By design
 this library contains no RNG at all: every real key and nonce comes from a
 caller-supplied seed or `rand` callback.
 
-If you consume this package, treat everything in that table as private.
+If you consume this package, treat both tiers as private — the second one is a
+documentation promise only, and it may change or vanish in any release.
 
 ## Security & performance boundaries
 
@@ -1424,12 +1449,16 @@ the ML-KEM hybrid envelope and the SM2 GM/T 0009 envelope.
 ## Development
 
 The CI (`.github/workflows/moonbit-ci.yml`) installs the latest MoonBit
-toolchain and runs three jobs: **check** (wasm32 — `moon check --deny-warn`,
-`moon fmt --check`, `moon info`, `moon test --deny-warn --release`, plus a
-guard that no build artifacts are tracked), **native64** (`moon test --target
-native --release`, where `Int` is 64-bit instead of 32-bit) and **js** (`moon
-test --target js --release`, the browser/node backend). Width-sensitive
-masking and comparison code has to be correct on all three. Run them locally:
+toolchain and runs five job groups: **check** (wasm32 — `moon check
+--deny-warn`, `moon fmt --check`, `moon info`, `moon test --deny-warn
+--release`, a guard that no build artifacts are tracked, and the static
+[API contract check](#security--performance-boundaries)), **native64** (`moon
+test --target native --release`, where `Int` is 64-bit instead of 32-bit),
+**js** and **js-slh-shake** (`moon test --target js --release`, the
+browser/node backend, sharded by file because the SLH-DSA suites dominate it)
+and **fuzz-rotate** (the hostile-input suites re-run three times with freshly
+randomized seeds, on a workspace that is discarded afterwards). Width-sensitive
+masking and comparison code has to be correct on all of them. Run them locally:
 
 ```bash
 moon check --deny-warn
@@ -1442,6 +1471,22 @@ moon bench          # run the benchmark suite
 The module manifest is `moon.mod` (TOML); per-package manifests are `moon.pkg`
 (TOML). Build outputs (`_build/`, generated `.mbti`) are gitignored and must
 not be committed.
+
+**Layout.** Three packages, and the dependency may only point one way:
+
+```
+cmd/main    the NIST vector runner          -> lib
+lib         the public API (490 pub names)  -> internal
+internal    the Falcon low-level layer (81 names), not importable downstream
+```
+
+`internal/` is a package in the compiler-enforced sense (see
+[Public but internal](#public-but-internal-what-pub-owes-you-here)). It has no
+imports of its own; anything that needs the library's own primitives — the
+Falcon XOF wrapping `Sha3Hasher`, say — has to stay in `lib`, because MoonBit
+rejects import cycles (`Import loop detected`). A directory without a
+`moon.pkg` is not a package at all and will not be found, which looks exactly
+like a visibility error.
 
 ## Publishing (maintainers)
 

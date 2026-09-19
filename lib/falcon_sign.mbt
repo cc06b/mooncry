@@ -253,10 +253,10 @@ pub fn fp_sqrt(x : Double) -> Double {
 pub fn fp_expm_p63(x : Double, ccs : Double) -> UInt64 {
   let z0f = fp_trunc(x * 9223372036854775808.0)
   let z = z0f.reinterpret_as_uint64() << 1
-  let mut y = falcon_expm_c[0]
+  let mut y = @internal.falcon_expm_c[0]
   for u = 1; u < 13; u = u + 1 {
     let c = mulhi64(z, y)
-    y = falcon_expm_c[u] - c
+    y = @internal.falcon_expm_c[u] - c
   }
   let z1f = fp_trunc(ccs * 9223372036854775808.0)
   let z1 = z1f.reinterpret_as_uint64() << 1
@@ -291,9 +291,9 @@ pub fn falcon_gaussian0_sampler(p : FalconPrng) -> Int {
   let v2 = u32bits((lo >> 48) | (hi.to_uint64() << 16)).to_int()
   let mut z = 0
   for u = 0; u < 54; u = u + 3 {
-    let w0 = falcon_g0_dist[u + 2]
-    let w1 = falcon_g0_dist[u + 1]
-    let w2 = falcon_g0_dist[u + 0]
+    let w0 = @internal.falcon_g0_dist[u + 2]
+    let w1 = @internal.falcon_g0_dist[u + 1]
+    let w2 = @internal.falcon_g0_dist[u + 0]
     let mut cc = if v0 < w0 { 1 } else { 0 }
     cc = if v1 - w1 - cc < 0 { 1 } else { 0 }
     cc = if v2 - w2 - cc < 0 { 1 } else { 0 }
@@ -346,7 +346,7 @@ pub fn falcon_sampler(
 ) -> Int {
   let s = fp_floor(mu).to_int()
   let r = mu - s.to_double()
-  let dss = fp_half(isigma * isigma)
+  let dss = @internal.fp_half(isigma * isigma)
   let ccs = isigma * ctx.sigma_min
   let mut out = 0
   let mut done = false

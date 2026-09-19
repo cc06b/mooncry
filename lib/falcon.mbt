@@ -43,7 +43,7 @@ pub fn falcon_verify(pk : Bytes, sig : Bytes, msg : Bytes, logn : Int) -> Bool {
   if h.length() != n {
     return false
   }
-  falcon_to_ntt_monty(h, logn)
+  @internal.falcon_to_ntt_monty(h, logn)
   let sig_len = sig.length()
   if sig_len == 0 {
     return false
@@ -95,7 +95,7 @@ pub fn falcon_verify(pk : Bytes, sig : Bytes, msg : Bytes, logn : Int) -> Bool {
     nonce[i] = sig[1 + i]
   }
   let hm = falcon_hash_to_point(Bytes::from_array(nonce), msg, logn)
-  falcon_verify_raw(hm, s2, h, logn)
+  @internal.falcon_verify_raw(hm, s2, h, logn)
 }
 
 ///|
@@ -152,9 +152,9 @@ pub fn falcon512_keypair_from_seed(seed : Bytes) -> (Bytes, Bytes) {
   }
   // sk = 0x59 || trim_i8(f, max_fg_bits) || trim_i8(g) || trim_i8(F, max_FG_bits)
   let sk_arr : Array[Byte] = [(0x59).to_byte()]
-  let ef = falcon_trim_encode(f, 9, falcon_max_fg_bits[9])
-  let eg = falcon_trim_encode(g, 9, falcon_max_fg_bits[9])
-  let eF = falcon_trim_encode(big_f, 9, falcon_max_FG_bits[9])
+  let ef = falcon_trim_encode(f, 9, @internal.falcon_max_fg_bits[9])
+  let eg = falcon_trim_encode(g, 9, @internal.falcon_max_fg_bits[9])
+  let eF = falcon_trim_encode(big_f, 9, @internal.falcon_max_FG_bits[9])
   for part in [ef, eg, eF] {
     for i = 0; i < part.length(); i = i + 1 {
       sk_arr.push(part[i])
@@ -189,9 +189,9 @@ pub fn falcon_sign(
   if sk.length() == 0 || sk[0].to_int() != 0x50 + logn {
     return b""
   }
-  let fb = falcon_max_fg_bits[logn]
+  let fb = @internal.falcon_max_fg_bits[logn]
   let fbits = (n * fb + 7) / 8
-  let bigfb = falcon_max_FG_bits[logn]
+  let bigfb = @internal.falcon_max_FG_bits[logn]
   let fgbits = (n * bigfb + 7) / 8
   if sk.length() != 1 + 2 * fbits + fgbits {
     return b""
@@ -232,7 +232,7 @@ pub fn falcon_sign(
     let p = falcon_prng_init(sc)
     let ctx = falcon_sampler_ctx_make(
       p,
-      falcon_sigma_min_bits[logn].reinterpret_as_double(),
+      @internal.falcon_sigma_min_bits[logn].reinterpret_as_double(),
     )
     ok = falcon_do_sign_dyn(ctx, s2, f, g, big_f, big_g, hm, logn)
   }
@@ -306,9 +306,9 @@ pub fn falcon1024_keypair_from_seed(seed : Bytes) -> (Bytes, Bytes) {
     pk_arr.push(pk_body[i])
   }
   let sk_arr : Array[Byte] = [(0x5A).to_byte()]
-  let ef = falcon_trim_encode(f, 10, falcon_max_fg_bits[10])
-  let eg = falcon_trim_encode(g, 10, falcon_max_fg_bits[10])
-  let eF = falcon_trim_encode(big_f, 10, falcon_max_FG_bits[10])
+  let ef = falcon_trim_encode(f, 10, @internal.falcon_max_fg_bits[10])
+  let eg = falcon_trim_encode(g, 10, @internal.falcon_max_fg_bits[10])
+  let eF = falcon_trim_encode(big_f, 10, @internal.falcon_max_FG_bits[10])
   for part in [ef, eg, eF] {
     for i = 0; i < part.length(); i = i + 1 {
       sk_arr.push(part[i])

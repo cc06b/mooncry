@@ -185,10 +185,16 @@ def callees(body):
     return set(re.findall(r"([A-Za-z0-9_]+)\s*\(", body))
 
 
-def source_files(libdir):
-    for f in sorted(os.listdir(libdir)):
-        if f.endswith(".mbt") and not f.endswith("_test.mbt"):
-            yield f, io.open(os.path.join(libdir, f), encoding="utf-8").read()
+def source_files(*dirs):
+    """Non-test sources of every package directory that exists. `internal/` is
+    part of the module: its names are not importable downstream, but they are
+    still names the README may mention, so C3 has to know them."""
+    for d in dirs:
+        if not os.path.isdir(d):
+            continue
+        for f in sorted(os.listdir(d)):
+            if f.endswith(".mbt") and not f.endswith("_test.mbt"):
+                yield f, io.open(os.path.join(d, f), encoding="utf-8").read()
 
 
 # --------------------------------------------------------------------------
@@ -259,12 +265,16 @@ def main():
         libdir = sys.argv[sys.argv.index("--lib") + 1]
     else:
         libdir = os.path.join(ROOT, "lib")
+    dirs = [libdir]
+    sibling = os.path.join(os.path.dirname(libdir), "internal")
+    if os.path.isdir(sibling):
+        dirs.append(sibling)
     problems = []
 
     funcs = {}          # name -> (file, sig, ret, body)
     graph = {}          # every fn name -> set(callees), for transitive delegation
     public_names = set()
-    for fname, text in source_files(libdir):
+    for fname, text in source_files(*dirs):
         clean = strip_noise(text)
         for name, sig, ret, body in parse_functions(clean):
             funcs.setdefault(name, (fname, sig, ret, body))
@@ -351,8 +361,9 @@ def main():
                 c3 += 1
                 problems.append("C3 README documents `%s`, no such public name "
                                 "in lib/" % t)
-        print("C3  %d documented tokens, %d public names, phantoms: %d"
-              % (len(toks), len(public_names), c3))
+        print("C3  %d documented tokens, %d public names in %s, phantoms: %d"
+              % (len(toks), len(public_names),
+                 "+".join(os.path.basename(d) for d in dirs), c3))
     else:
         print("C3  skipped (no README.md at %s)" % ROOT)
 

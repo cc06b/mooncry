@@ -3,19 +3,28 @@
 
 ///|
 test "falcon-m4b-modp-consts" {
-  inspect(modp_ninv31(falcon_primes_p[5]), content="2147352575")
   inspect(
-    modp_r2(falcon_primes_p[5], modp_ninv31(falcon_primes_p[5])),
+    @internal.modp_ninv31(@internal.falcon_primes_p[5]),
+    content="2147352575",
+  )
+  inspect(
+    @internal.modp_r2(
+      @internal.falcon_primes_p[5],
+      @internal.modp_ninv31(@internal.falcon_primes_p[5]),
+    ),
     content="786425",
   )
-  inspect(modp_r(falcon_primes_p[5]), content="131071")
-  inspect(modp_ninv31(falcon_primes_p[0]), content="2042615807")
-  let p = falcon_primes_p[5]
-  let p0i = modp_ninv31(p)
-  let r2 = modp_r2(p, p0i)
-  inspect(modp_rx(3, p, p0i, r2), content="4587479")
-  inspect(modp_rx(17, p, p0i, r2), content="1075840476")
-  inspect(modp_rx(100, p, p0i, r2), content="351392628")
+  inspect(@internal.modp_r(@internal.falcon_primes_p[5]), content="131071")
+  inspect(
+    @internal.modp_ninv31(@internal.falcon_primes_p[0]),
+    content="2042615807",
+  )
+  let p = @internal.falcon_primes_p[5]
+  let p0i = @internal.modp_ninv31(p)
+  let r2 = @internal.modp_r2(p, p0i)
+  inspect(@internal.modp_rx(3, p, p0i, r2), content="4587479")
+  inspect(@internal.modp_rx(17, p, p0i, r2), content="1075840476")
+  inspect(@internal.modp_rx(100, p, p0i, r2), content="351392628")
 }
 
 ///|
@@ -30,17 +39,17 @@ test "falcon-m4b-modp-ops" {
     2083155037, 353157330, 688562623, 12345670, 97777768, 2076735283, 642055627,
     688562623, 13580237, 106666656, 2070315529, 1367487586, 688562623, 14814804,
   ]
-  let p = falcon_primes_p[5]
-  let p0i = modp_ninv31(p)
+  let p = @internal.falcon_primes_p[5]
+  let p0i = @internal.modp_ninv31(p)
   let got : Array[Int] = []
   for i = 1; i <= 12; i = i + 1 {
     let a = i * 1234567 % p
     let b = i * 7654321 % p
-    got.push(modp_add(a, b, p))
-    got.push(modp_sub(a, b, p))
-    got.push(modp_montymul(a, b, p, p0i))
-    got.push(modp_div(a, b, p, p0i, modp_r(p)))
-    got.push(modp_norm(a, p))
+    got.push(@internal.modp_add(a, b, p))
+    got.push(@internal.modp_sub(a, b, p))
+    got.push(@internal.modp_montymul(a, b, p, p0i))
+    got.push(@internal.modp_div(a, b, p, p0i, @internal.modp_r(p)))
+    got.push(@internal.modp_norm(a, p))
   }
   let mut ok = got.length() == exp_ops.length()
   for i = 0; i < got.length(); i = i + 1 {
@@ -68,11 +77,11 @@ test "falcon-m4b-ntt2" {
     569856430, 806471390, 484245263, 1237436457, 1910048006, 289935408, 377916615,
     1513926064, 550922923,
   ]
-  let p = falcon_primes_p[5]
-  let p0i = modp_ninv31(p)
+  let p = @internal.falcon_primes_p[5]
+  let p0i = @internal.modp_ninv31(p)
   let gm = Array::make(16, 0)
   let igm = Array::make(16, 0)
-  modp_mkgm2(gm, igm, 4, falcon_primes_g[5], p, p0i)
+  @internal.modp_mkgm2(gm, igm, 4, @internal.falcon_primes_g[5], p, p0i)
   let mut ok = true
   for i = 0; i < 16; i = i + 1 {
     if gm[i] != exp_gm[i] || igm[i] != exp_igm[i] {
@@ -85,13 +94,13 @@ test "falcon-m4b-ntt2" {
     a[i] = (i * 37 + 11) % p
     asave[i] = a[i]
   }
-  modp_ntt2(a, gm, 4, p, p0i)
+  @internal.modp_ntt2(a, gm, 4, p, p0i)
   for i = 0; i < 16; i = i + 1 {
     if a[i] != exp_ntt[i] {
       ok = false
     }
   }
-  modp_intt2(a, igm, 4, p, p0i)
+  @internal.modp_intt2(a, igm, 4, p, p0i)
   for i = 0; i < 16; i = i + 1 {
     if a[i] != asave[i] {
       ok = false
@@ -101,9 +110,9 @@ test "falcon-m4b-ntt2" {
   for i = 0; i < 16; i = i + 1 {
     r[i] = (i * 53 + 7) % p
   }
-  let r2 = modp_r2(p, p0i)
+  let r2 = @internal.modp_r2(p, p0i)
   for lg = 4; lg >= 1; lg = lg - 1 {
-    modp_poly_rec_res(r, lg, p, p0i, r2)
+    @internal.modp_poly_rec_res(r, lg, p, p0i, r2)
   }
   if r[0] != 28278973 {
     ok = false
@@ -126,7 +135,7 @@ test "falcon-m4b-zint-basics" {
   for i = 0; i < 3; i = i + 1 {
     z[i] = x[i]
   }
-  if zint_sub(z, y, 3, 1) != 0 {
+  if @internal.zint_sub(z, y, 3, 1) != 0 {
     ok = false
   }
   for i = 0; i < 3; i = i + 1 {
@@ -137,7 +146,7 @@ test "falcon-m4b-zint-basics" {
   for i = 0; i < 3; i = i + 1 {
     z[i] = x[i]
   }
-  if zint_sub(z, y, 3, 0) != 0 {
+  if @internal.zint_sub(z, y, 3, 0) != 0 {
     ok = false
   }
   for i = 0; i < 3; i = i + 1 {
@@ -148,7 +157,7 @@ test "falcon-m4b-zint-basics" {
   for i = 0; i < 3; i = i + 1 {
     z[i] = x[i]
   }
-  if zint_mul_small(z, 3, 12345) != 0 {
+  if @internal.zint_mul_small(z, 3, 12345) != 0 {
     ok = false
   }
   for i = 0; i < 3; i = i + 1 {
@@ -156,13 +165,20 @@ test "falcon-m4b-zint-basics" {
       ok = false
     }
   }
-  let p = falcon_primes_p[5]
-  let p0i = modp_ninv31(p)
-  let r2 = modp_r2(p, p0i)
-  if zint_mod_small_unsigned(x, 3, p, p0i, r2) != 534225878 {
+  let p = @internal.falcon_primes_p[5]
+  let p0i = @internal.modp_ninv31(p)
+  let r2 = @internal.modp_r2(p, p0i)
+  if @internal.zint_mod_small_unsigned(x, 3, p, p0i, r2) != 534225878 {
     ok = false
   }
-  if zint_mod_small_signed(x, 3, p, p0i, r2, modp_rx(3, p, p0i, r2)) !=
+  if @internal.zint_mod_small_signed(
+      x,
+      3,
+      p,
+      p0i,
+      r2,
+      @internal.modp_rx(3, p, p0i, r2),
+    ) !=
     534225878 {
     ok = false
   }
@@ -170,7 +186,7 @@ test "falcon-m4b-zint-basics" {
   for i = 0; i < 3; i = i + 1 {
     z4[i] = x[i]
   }
-  zint_add_mul_small(z4, y, 3, 999)
+  @internal.zint_add_mul_small(z4, y, 3, 999)
   for i = 0; i < 4; i = i + 1 {
     if z4[i] != e_zaddmul[i] {
       ok = false
@@ -179,7 +195,7 @@ test "falcon-m4b-zint-basics" {
   for i = 0; i < 3; i = i + 1 {
     z[i] = x[i]
   }
-  zint_negate(z, 3, 1)
+  @internal.zint_negate(z, 3, 1)
   for i = 0; i < 3; i = i + 1 {
     if z[i] != e_zneg[i] {
       ok = false
@@ -187,7 +203,7 @@ test "falcon-m4b-zint-basics" {
   }
   let m : Array[Int] = [p, 0, 0]
   let w : Array[Int] = [0x7FFFFFF0, 0x7FFFFFF0, 0x40000000]
-  zint_norm_zero(w, m, 3)
+  @internal.zint_norm_zero(w, m, 3)
   for i = 0; i < 3; i = i + 1 {
     if w[i] != e_znorm[i] {
       ok = false
@@ -204,7 +220,7 @@ test "falcon-m4b-zint-bezout" {
   let by : Array[Int] = [987654321, 1]
   let bu = Array::make(2, 0)
   let bv = Array::make(2, 0)
-  let rc = zint_bezout(bu, bv, bx, by, 2)
+  let rc = @internal.zint_bezout(bu, bv, bx, by, 2)
   inspect(rc, content="1")
   let mut ok = true
   for i = 0; i < 2; i = i + 1 {
@@ -221,9 +237,9 @@ test "falcon-m4b-zint-scaled" {
   let e_subsc : Array[Int] = [1, 2, 7, 2147475432, 4, 6]
   let sx : Array[Int] = [1, 2, 3, 4, 5, 6]
   let sy : Array[Int] = [0x70000000, 0x6FFFFFFF, 0x100]
-  zint_add_scaled_mul_small(sx, 6, sy, 3, -7, 1, 5)
+  @internal.zint_add_scaled_mul_small(sx, 6, sy, 3, -7, 1, 5)
   let sz : Array[Int] = [1, 2, 3, 4, 5, 6]
-  zint_sub_scaled(sz, 6, sy, 3, 1, 5)
+  @internal.zint_sub_scaled(sz, 6, sy, 3, 1, 5)
   let mut ok = true
   for i = 0; i < 6; i = i + 1 {
     if sx[i] != e_addsc[i] || sz[i] != e_subsc[i] {
@@ -231,7 +247,7 @@ test "falcon-m4b-zint-scaled" {
     }
   }
   let one : Array[Int] = [0x7FFFFFFF]
-  if zint_one_to_plain(one) != -1 {
+  if @internal.zint_one_to_plain(one) != -1 {
     ok = false
   }
   inspect(ok, content="true")

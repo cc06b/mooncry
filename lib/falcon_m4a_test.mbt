@@ -52,7 +52,7 @@ test "falcon-m4a-compute-public" {
     g[u] = u * 53 % 13 - 6
   }
   let h = Array::make(512, 0)
-  inspect(falcon_compute_public(h, f, g, 9), content="true")
+  inspect(@internal.falcon_compute_public(h, f, g, 9), content="true")
   let mut ok = true
   for u = 0; u < 512; u = u + 1 {
     if h[u] != exp_h[u] {

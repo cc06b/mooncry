@@ -1,0 +1,15 @@
+// The Falcon low-level layer: FFT, the modular NTT, the bignum helpers, the
+// constant tables, the Merkle tree and the verify internals.
+//
+// This package is `internal` in the compiler-enforced sense: MoonBit applies the
+// Go-style rule, so only packages under cc06b/mooncry/ can import it. A
+// downstream consumer writing `import "cc06b/mooncry/internal"` gets
+//   Cannot import internal package cc06b/mooncry/internal ... due to internal
+//   visibility rules
+// which is the point: these 80-odd names are implementation, verified layer by
+// layer against the C reference, and they are free to change.
+//
+// It has no imports of its own -- the layer is self-contained apart from the
+// core prelude. The one Falcon file that needs the library SHAKE XOF
+// (falcon_common.mbt) stays in lib, which keeps the dependency one-way:
+// lib -> internal, never the reverse (MoonBit rejects import cycles).

@@ -25,12 +25,12 @@ pub fn falcon_mkgauss(rng : FalconXof, logn : Int) -> Int {
     let neg = r >> 63
     r = r & 0x7FFFFFFFFFFFFFFFUL
     // (r - t) >> 63 on unsigned == borrow flag == (r < t)
-    let mut f = if r < falcon_gauss_tab[0] { 1 } else { 0 }
+    let mut f = if r < @internal.falcon_gauss_tab[0] { 1 } else { 0 }
     let mut v = 0
     let mut r2 = falcon_get_rng_u64(rng)
     r2 = r2 & 0x7FFFFFFFFFFFFFFFUL
     for k = 1; k < 27; k = k + 1 {
-      let t = if r2 >= falcon_gauss_tab[k] { 1 } else { 0 }
+      let t = if r2 >= @internal.falcon_gauss_tab[k] { 1 } else { 0 }
       v = v | (k & (0 - (t & (f ^ 1))))
       f = f | t
     }
@@ -117,6 +117,6 @@ fn falcon_poly_small_to_fp(
 ) -> Unit {
   let n = 1 << logn
   for u = 0; u < n; u = u + 1 {
-    x[u] = fp_of(f[u])
+    x[u] = @internal.fp_of(f[u])
   }
 }

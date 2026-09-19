@@ -19,33 +19,33 @@ fn falcon_complete_private(
   let t1 = Array::make(n, 0)
   let t2 = Array::make(n, 0)
   for u = 0; u < n; u = u + 1 {
-    t1[u] = mq_conv_small(g[u])
-    t2[u] = mq_conv_small(big_f[u])
+    t1[u] = @internal.mq_conv_small(g[u])
+    t2[u] = @internal.mq_conv_small(big_f[u])
   }
-  falcon_mq_ntt(t1, logn)
-  falcon_mq_ntt(t2, logn)
+  @internal.falcon_mq_ntt(t1, logn)
+  @internal.falcon_mq_ntt(t2, logn)
   // t1 <- monty form then pointwise t1*t2
   for u = 0; u < n; u = u + 1 {
-    t1[u] = mq_montymul(t1[u], falcon_r2)
+    t1[u] = @internal.mq_montymul(t1[u], @internal.falcon_r2)
   }
   for u = 0; u < n; u = u + 1 {
-    t1[u] = mq_montymul(t1[u], t2[u])
+    t1[u] = @internal.mq_montymul(t1[u], t2[u])
   }
   for u = 0; u < n; u = u + 1 {
-    t2[u] = mq_conv_small(f[u])
+    t2[u] = @internal.mq_conv_small(f[u])
   }
-  falcon_mq_ntt(t2, logn)
+  @internal.falcon_mq_ntt(t2, logn)
   for u = 0; u < n; u = u + 1 {
     if t2[u] == 0 {
       return false
     }
-    t1[u] = falcon_mq_div(t1[u], t2[u])
+    t1[u] = @internal.falcon_mq_div(t1[u], t2[u])
   }
-  falcon_mq_intt(t1, logn)
+  @internal.falcon_mq_intt(t1, logn)
   for u = 0; u < n; u = u + 1 {
     let mut w = t1[u]
-    if w >= falcon_q >> 1 {
-      w = w - falcon_q
+    if w >= @internal.falcon_q >> 1 {
+      w = w - @internal.falcon_q
     }
     if w < -127 || w > 127 {
       return false
@@ -63,7 +63,7 @@ pub let fp_invsqrt8 : Double = 4600040671590431693UL.reinterpret_as_double()
 
 ///|
 fn fpr_inv_sigma_at(logn : Int) -> Double {
-  falcon_sigma_inv_bits[logn].reinterpret_as_double()
+  @internal.falcon_sigma_inv_bits[logn].reinterpret_as_double()
 }
 
 ///|
@@ -89,14 +89,14 @@ fn ff_sampling_dyntree(
   let n = 1 << logn
   let hn = n >> 1
   // in-place LDL: g01 <- conj(mu), g11 <- d11 (g00 read-only)
-  falcon_poly_LDL_fft(g00, g01, g11, logn)
+  @internal.falcon_poly_LDL_fft(g00, g01, g11, logn)
   // split g00 and g11
   let g00a = Array::make(hn, 0.0)
   let g00b = Array::make(hn, 0.0)
-  falcon_poly_split_fft(g00a, g00b, g00, logn)
+  @internal.falcon_poly_split_fft(g00a, g00b, g00, logn)
   let g11a = Array::make(hn, 0.0)
   let g11b = Array::make(hn, 0.0)
-  falcon_poly_split_fft(g11a, g11b, g11, logn)
+  @internal.falcon_poly_split_fft(g11a, g11b, g11, logn)
   // packed g01 = [g00a | g11a]
   let pg01 = Array::make(n, 0.0)
   for i = 0; i < hn; i = i + 1 {
@@ -106,7 +106,7 @@ fn ff_sampling_dyntree(
   // z1 = split(t1)
   let z1a = Array::make(hn, 0.0)
   let z1b = Array::make(hn, 0.0)
-  falcon_poly_split_fft(z1a, z1b, t1, logn)
+  @internal.falcon_poly_split_fft(z1a, z1b, t1, logn)
   // child 1: (g11a, g11b, packed-hi = g11a-copy)
   let g11a_hi = Array::make(hn, 0.0)
   for i = 0; i < hn; i = i + 1 {
@@ -115,13 +115,13 @@ fn ff_sampling_dyntree(
   ff_sampling_dyntree(ctx, z1a, z1b, g11a, g11b, g11a_hi, orig_logn, logn - 1)
   // merge z1
   let mz1 = Array::make(n, 0.0)
-  falcon_poly_merge_fft(mz1, z1a, z1b, logn)
+  @internal.falcon_poly_merge_fft(mz1, z1a, z1b, logn)
   // z1diff = t1 - mz1 ; t1 = mz1
   let z1d = Array::make(n, 0.0)
   for i = 0; i < n; i = i + 1 {
     z1d[i] = t1[i]
   }
-  falcon_poly_sub(z1d, mz1, logn)
+  @internal.falcon_poly_sub(z1d, mz1, logn)
   for i = 0; i < n; i = i + 1 {
     t1[i] = mz1[i]
   }
@@ -134,19 +134,19 @@ fn ff_sampling_dyntree(
   for i = 0; i < n; i = i + 1 {
     tmpm[i] = g01[i]
   }
-  falcon_poly_mul_fft(tmpm, z1d, logn)
-  falcon_poly_add(t0, tmpm, logn)
+  @internal.falcon_poly_mul_fft(tmpm, z1d, logn)
+  @internal.falcon_poly_add(t0, tmpm, logn)
   // z0 = split(t0)
   let z0a = Array::make(hn, 0.0)
   let z0b = Array::make(hn, 0.0)
-  falcon_poly_split_fft(z0a, z0b, t0, logn)
+  @internal.falcon_poly_split_fft(z0a, z0b, t0, logn)
   // child 2: (g00a, g00b, packed-lo = g00a copy)
   let pg_lo = Array::make(hn, 0.0)
   for i = 0; i < hn; i = i + 1 {
     pg_lo[i] = pg01[i]
   }
   ff_sampling_dyntree(ctx, z0a, z0b, g00a, g00b, pg_lo, orig_logn, logn - 1)
-  falcon_poly_merge_fft(t0, z0a, z0b, logn)
+  @internal.falcon_poly_merge_fft(t0, z0a, z0b, logn)
 }
 
 ///|
@@ -172,36 +172,36 @@ fn falcon_do_sign_dyn(
   smallints_to_fpr(b00, g, logn)
   smallints_to_fpr(b11, big_f, logn)
   smallints_to_fpr(b10, big_g, logn)
-  falcon_fft(b01, logn)
-  falcon_fft(b00, logn)
-  falcon_fft(b11, logn)
-  falcon_fft(b10, logn)
-  falcon_poly_neg(b01, logn)
-  falcon_poly_neg(b11, logn)
+  @internal.falcon_fft(b01, logn)
+  @internal.falcon_fft(b00, logn)
+  @internal.falcon_fft(b11, logn)
+  @internal.falcon_fft(b10, logn)
+  @internal.falcon_poly_neg(b01, logn)
+  @internal.falcon_poly_neg(b11, logn)
   // Gram matrix
   let t0 = Array::make(n, 0.0)
   let t1 = Array::make(n, 0.0)
   for i = 0; i < n; i = i + 1 {
     t0[i] = b01[i]
   }
-  falcon_poly_mulselfadj_fft(t0, logn)
+  @internal.falcon_poly_mulselfadj_fft(t0, logn)
   for i = 0; i < n; i = i + 1 {
     t1[i] = b00[i]
   }
-  falcon_poly_muladj_fft(t1, b10, logn)
-  falcon_poly_mulselfadj_fft(b00, logn)
-  falcon_poly_add(b00, t0, logn) // g00
+  @internal.falcon_poly_muladj_fft(t1, b10, logn)
+  @internal.falcon_poly_mulselfadj_fft(b00, logn)
+  @internal.falcon_poly_add(b00, t0, logn) // g00
   for i = 0; i < n; i = i + 1 {
     t0[i] = b01[i]
   }
-  falcon_poly_muladj_fft(b01, b11, logn)
-  falcon_poly_add(b01, t1, logn) // g01
-  falcon_poly_mulselfadj_fft(b10, logn)
+  @internal.falcon_poly_muladj_fft(b01, b11, logn)
+  @internal.falcon_poly_add(b01, t1, logn) // g01
+  @internal.falcon_poly_mulselfadj_fft(b10, logn)
   for i = 0; i < n; i = i + 1 {
     t1[i] = b11[i]
   }
-  falcon_poly_mulselfadj_fft(t1, logn)
-  falcon_poly_add(b10, t1, logn) // g11
+  @internal.falcon_poly_mulselfadj_fft(t1, logn)
+  @internal.falcon_poly_add(b10, t1, logn) // g11
   let g00 = b00
   let g01 = b01
   let g11 = b10
@@ -211,8 +211,8 @@ fn falcon_do_sign_dyn(
   // transform phase.
   let b01r = Array::make(n, 0.0)
   smallints_to_fpr(b01r, f, logn)
-  falcon_fft(b01r, logn)
-  falcon_poly_neg(b01r, logn)
+  @internal.falcon_fft(b01r, logn)
+  @internal.falcon_poly_neg(b01r, logn)
   // t0/t1 = FFT(hm) based targets
   let c0 = Array::make(n, 0.0)
   let c1 = Array::make(n, 0.0)
@@ -220,17 +220,17 @@ fn falcon_do_sign_dyn(
     c0[u] = hm[u].to_double()
     c1[u] = 0.0
   }
-  falcon_fft(c0, logn)
+  @internal.falcon_fft(c0, logn)
   let ni = falcon_inv_q_val()
   for i = 0; i < n; i = i + 1 {
     c1[i] = c0[i]
   }
   // C: b01 is REASSIGNED to the mulselfadj(original b01) region here:
   // the hm transform multiplies by f*adj(f), NOT by the Gram g01.
-  falcon_poly_mul_fft(c1, b01r, logn)
-  falcon_poly_mulconst(c1, 0.0 - ni, logn)
-  falcon_poly_mul_fft(c0, b11, logn)
-  falcon_poly_mulconst(c0, ni, logn)
+  @internal.falcon_poly_mul_fft(c1, b01r, logn)
+  @internal.falcon_poly_mulconst(c1, 0.0 - ni, logn)
+  @internal.falcon_poly_mul_fft(c0, b11, logn)
+  @internal.falcon_poly_mulconst(c0, ni, logn)
   // dyntree sampling: t0 arg = c0 (ni*hm*b11), t1 arg = c1
   let z0 = Array::make(n, 0.0)
   let z1 = Array::make(n, 0.0)
@@ -248,42 +248,42 @@ fn falcon_do_sign_dyn(
   smallints_to_fpr(p2b00, g, logn)
   smallints_to_fpr(p2b11, big_f, logn)
   smallints_to_fpr(p2b10, big_g, logn)
-  falcon_fft(p2b01, logn)
-  falcon_fft(p2b00, logn)
-  falcon_fft(p2b11, logn)
-  falcon_fft(p2b10, logn)
-  falcon_poly_neg(p2b01, logn)
-  falcon_poly_neg(p2b11, logn)
+  @internal.falcon_fft(p2b01, logn)
+  @internal.falcon_fft(p2b00, logn)
+  @internal.falcon_fft(p2b11, logn)
+  @internal.falcon_fft(p2b10, logn)
+  @internal.falcon_poly_neg(p2b01, logn)
+  @internal.falcon_poly_neg(p2b11, logn)
   let tx = Array::make(n, 0.0)
   let ty = Array::make(n, 0.0)
   for i = 0; i < n; i = i + 1 {
     tx[i] = z0[i]
     ty[i] = z1[i]
   }
-  falcon_poly_mul_fft(tx, p2b00, logn)
-  falcon_poly_mul_fft(ty, p2b10, logn)
-  falcon_poly_add(tx, ty, logn)
+  @internal.falcon_poly_mul_fft(tx, p2b00, logn)
+  @internal.falcon_poly_mul_fft(ty, p2b10, logn)
+  @internal.falcon_poly_add(tx, ty, logn)
   for i = 0; i < n; i = i + 1 {
     ty[i] = z0[i]
   }
-  falcon_poly_mul_fft(ty, p2b01, logn)
+  @internal.falcon_poly_mul_fft(ty, p2b01, logn)
   let u0 = tx
-  falcon_poly_mul_fft(z1, p2b11, logn)
-  falcon_poly_add(z1, ty, logn)
-  falcon_ifft(u0, logn)
-  falcon_ifft(z1, logn)
+  @internal.falcon_poly_mul_fft(z1, p2b11, logn)
+  @internal.falcon_poly_add(z1, ty, logn)
+  @internal.falcon_ifft(u0, logn)
+  @internal.falcon_ifft(z1, logn)
   // s1 = hm - rint(u0); sqn accumulation
   let mut sqn = 0L
   let s1tmp = Array::make(n, 0)
   for u = 0; u < n; u = u + 1 {
-    let z = hm[u] - fp_rint(u0[u]).to_int()
+    let z = hm[u] - @internal.fp_rint(u0[u]).to_int()
     let zi = z.to_int64()
     sqn = sqn + zi * zi
     s1tmp[u] = z
   }
   let s2tmp = Array::make(n, 0)
   for u = 0; u < n; u = u + 1 {
-    s2tmp[u] = 0 - fp_rint(z1[u]).to_int()
+    s2tmp[u] = 0 - @internal.fp_rint(z1[u]).to_int()
   }
   if falcon_is_short_half(sqn, s2tmp, logn) {
     for u = 0; u < n; u = u + 1 {
@@ -310,7 +310,7 @@ fn falcon_is_short_half(sqn0 : Int64, s2 : Array[Int], logn : Int) -> Bool {
     let z = s2[u].to_int64()
     sqn = sqn + z * z
   }
-  sqn <= falcon_l2bound[logn].to_int64()
+  sqn <= @internal.falcon_l2bound[logn].to_int64()
 }
 
 ///|

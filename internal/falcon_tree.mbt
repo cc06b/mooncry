@@ -9,7 +9,7 @@ let fp_two31 : Double = 2147483648.0
 
 ///|
 /// Strided forward NTT mod p (elements at a[off + i*stride]).
-fn modp_ntt2_ext(
+pub fn modp_ntt2_ext(
   a : Array[Int],
   off : Int,
   stride : Int,
@@ -47,7 +47,7 @@ fn modp_ntt2_ext(
 
 ///|
 /// Strided inverse NTT mod p.
-fn modp_intt2_ext(
+pub fn modp_intt2_ext(
   a : Array[Int],
   off : Int,
   stride : Int,
@@ -236,7 +236,7 @@ fn poly_big_to_fp(
 ///|
 /// One-limb-per-coefficient big -> int8 with range check; false if any
 /// coefficient exceeds ±lim.
-fn poly_big_to_small(
+pub fn poly_big_to_small(
   d : Array[Int],
   s : Array[Int],
   soff : Int,
@@ -398,7 +398,7 @@ fn poly_sub_scaled_ntt(
 
 ///|
 /// mkgm2 writing gm/igm into slices of one array.
-fn modp_mkgm2_slice(
+pub fn modp_mkgm2_slice(
   gm : Array[Int],
   gm_off : Int,
   igm : Array[Int],

@@ -15,7 +15,7 @@ let fp_mask31 : Int = 0x7FFFFFFF
 // ---------------------------------------------------------------------------
 
 ///|
-fn modp_set(x : Int, p : Int) -> Int {
+pub fn modp_set(x : Int, p : Int) -> Int {
   let mut w = x
   if w < 0 {
     w = w + p

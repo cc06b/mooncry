@@ -12,7 +12,7 @@ fn fgm(k : Int) -> Double {
 ///|
 /// fpr_half: divide by 2 via exponent decrement, with the C zero
 /// special case (bit trick, not x*0.5 — keeps subnormal behaviour).
-fn fp_half(x : Double) -> Double {
+pub fn fp_half(x : Double) -> Double {
   let b = x.reinterpret_as_uint64() - (1UL << 52)
   let t = (((b >> 52) & 0x7FFUL) + 1UL) >> 11
   (b & (t - 1UL)).reinterpret_as_double()
@@ -98,7 +98,11 @@ pub fn falcon_ifft(f : Array[Double], logn : Int) -> Unit {
 
 ///|
 /// a += b (coefficient or FFT domain).
-fn falcon_poly_add(a : Array[Double], b : Array[Double], logn : Int) -> Unit {
+pub fn falcon_poly_add(
+  a : Array[Double],
+  b : Array[Double],
+  logn : Int,
+) -> Unit {
   let n = 1 << logn
   for u = 0; u < n; u = u + 1 {
     a[u] = a[u] + b[u]
@@ -107,7 +111,11 @@ fn falcon_poly_add(a : Array[Double], b : Array[Double], logn : Int) -> Unit {
 
 ///|
 /// a -= b.
-fn falcon_poly_sub(a : Array[Double], b : Array[Double], logn : Int) -> Unit {
+pub fn falcon_poly_sub(
+  a : Array[Double],
+  b : Array[Double],
+  logn : Int,
+) -> Unit {
   let n = 1 << logn
   for u = 0; u < n; u = u + 1 {
     a[u] = a[u] - b[u]
@@ -116,7 +124,7 @@ fn falcon_poly_sub(a : Array[Double], b : Array[Double], logn : Int) -> Unit {
 
 ///|
 /// a = -a.
-fn falcon_poly_neg(a : Array[Double], logn : Int) -> Unit {
+pub fn falcon_poly_neg(a : Array[Double], logn : Int) -> Unit {
   let n = 1 << logn
   for u = 0; u < n; u = u + 1 {
     a[u] = 0.0 - a[u]
@@ -125,7 +133,7 @@ fn falcon_poly_neg(a : Array[Double], logn : Int) -> Unit {
 
 ///|
 /// Conjugate in FFT domain (negate imaginary halves).
-fn falcon_poly_adj_fft(a : Array[Double], logn : Int) -> Unit {
+pub fn falcon_poly_adj_fft(a : Array[Double], logn : Int) -> Unit {
   let n = 1 << logn
   for u = n >> 1; u < n; u = u + 1 {
     a[u] = 0.0 - a[u]
@@ -153,7 +161,7 @@ pub fn falcon_poly_mul_fft(
 
 ///|
 /// a *= conj(b) in FFT domain.
-fn falcon_poly_muladj_fft(
+pub fn falcon_poly_muladj_fft(
   a : Array[Double],
   b : Array[Double],
   logn : Int,
@@ -172,7 +180,7 @@ fn falcon_poly_muladj_fft(
 
 ///|
 /// a *= conj(a): real slots get |a|^2, imaginary slots zeroed.
-fn falcon_poly_mulselfadj_fft(a : Array[Double], logn : Int) -> Unit {
+pub fn falcon_poly_mulselfadj_fft(a : Array[Double], logn : Int) -> Unit {
   let n = 1 << logn
   let hn = n >> 1
   for u = 0; u < hn; u = u + 1 {
@@ -185,7 +193,7 @@ fn falcon_poly_mulselfadj_fft(a : Array[Double], logn : Int) -> Unit {
 
 ///|
 /// a *= x (all slots).
-fn falcon_poly_mulconst(a : Array[Double], x : Double, logn : Int) -> Unit {
+pub fn falcon_poly_mulconst(a : Array[Double], x : Double, logn : Int) -> Unit {
   let n = 1 << logn
   for u = 0; u < n; u = u + 1 {
     a[u] = a[u] * x
@@ -194,7 +202,7 @@ fn falcon_poly_mulconst(a : Array[Double], x : Double, logn : Int) -> Unit {
 
 ///|
 /// d[u] = 1 / (|a|^2 + |b|^2) per complex slot (real output in low half).
-fn falcon_poly_invnorm2_fft(
+pub fn falcon_poly_invnorm2_fft(
   d : Array[Double],
   a : Array[Double],
   b : Array[Double],
@@ -243,7 +251,7 @@ fn falcon_poly_add_muladj_fft(
 
 ///|
 /// a *= b where b is auto-adjoint (real slots only).
-fn falcon_poly_mul_autoadj_fft(
+pub fn falcon_poly_mul_autoadj_fft(
   a : Array[Double],
   b : Array[Double],
   logn : Int,
@@ -259,7 +267,7 @@ fn falcon_poly_mul_autoadj_fft(
 
 ///|
 /// a /= b where b is auto-adjoint (real slots only).
-fn falcon_poly_div_autoadj_fft(
+pub fn falcon_poly_div_autoadj_fft(
   a : Array[Double],
   b : Array[Double],
   logn : Int,
@@ -275,7 +283,7 @@ fn falcon_poly_div_autoadj_fft(
 
 ///|
 /// In-place LDL decomposition of a 2x2 Gram matrix in FFT domain.
-fn falcon_poly_LDL_fft(
+pub fn falcon_poly_LDL_fft(
   g00 : Array[Double],
   g01 : Array[Double],
   g11 : Array[Double],

@@ -5,11 +5,11 @@
 // the memmove points (identical data flow, no shared-memory hazards).
 
 ///|
-let fp_bnorm_max_bits : UInt64 = 4670353323383631276UL
+pub let fp_bnorm_max_bits : UInt64 = 4670353323383631276UL
 
 ///|
 /// fpr_rint: round-to-nearest-even, exact bit-level port (fpr.h).
-fn fp_rint(x : Double) -> Int64 {
+pub fn fp_rint(x : Double) -> Int64 {
   let xb = x.reinterpret_as_uint64()
   let mut m = ((xb << 10) | (1UL << 62)) & 0x7FFFFFFFFFFFFFFFUL
   let exp11 = (xb >> 52) & 0x7FFUL
@@ -230,7 +230,7 @@ fn zint_rebuild_crt_at(
 // ---------------------------------------------------------------------------
 
 ///|
-fn solve_ntru_deepest_at(
+pub fn solve_ntru_deepest_at(
   logn_top : Int,
   f : Array[Int],
   g : Array[Int],
@@ -275,7 +275,7 @@ fn solve_ntru_deepest_at(
 }
 
 ///|
-fn solve_ntru_intermediate(
+pub fn solve_ntru_intermediate(
   logn_top : Int,
   f : Array[Int],
   g : Array[Int],
@@ -513,7 +513,7 @@ fn solve_ntru_intermediate(
 }
 
 ///|
-fn copy_words(a : Array[Int], src : Int, dst : Int, cnt : Int) -> Unit {
+pub fn copy_words(a : Array[Int], src : Int, dst : Int, cnt : Int) -> Unit {
   let buf = Array::make(cnt, 0)
   for i = 0; i < cnt; i = i + 1 {
     buf[i] = a[src + i]
@@ -524,7 +524,7 @@ fn copy_words(a : Array[Int], src : Int, dst : Int, cnt : Int) -> Unit {
 }
 
 ///|
-fn solve_ntru_depth1(
+pub fn solve_ntru_depth1(
   logn_top : Int,
   f : Array[Int],
   g : Array[Int],

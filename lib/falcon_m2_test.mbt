@@ -18,7 +18,7 @@ fn m2_bits_eq(a : Array[Double], exp : Array[UInt64]) -> Bool {
 fn m2_pattern(len : Int) -> Array[Double] {
   let f : Array[Double] = []
   for i = 0; i < len; i = i + 1 {
-    f.push(fp_of(i * 37 % 251 - 125))
+    f.push(@internal.fp_of(i * 37 % 251 - 125))
   }
   f
 }
@@ -156,7 +156,7 @@ test "falcon-m2-fft-pattern" {
     13851209337541759248UL, 13858026799765080294UL, 4637797275086363726UL, 13863392018299840451UL,
   ]
   let f = m2_pattern(512)
-  falcon_fft(f, 9)
+  @internal.falcon_fft(f, 9)
   inspect(m2_bits_eq(f, exp), content="true")
 }
 
@@ -293,8 +293,8 @@ test "falcon-m2-ifft-roundtrip" {
     4636526185122103297UL, 13861305596860432386UL, 13858701953325858818UL, 13854620566163554306UL,
   ]
   let f = m2_pattern(512)
-  falcon_fft(f, 9)
-  falcon_ifft(f, 9)
+  @internal.falcon_fft(f, 9)
+  @internal.falcon_ifft(f, 9)
   inspect(m2_bits_eq(f, exp), content="true")
 }
 
@@ -384,7 +384,7 @@ test "falcon-m2-fft-impulse" {
   ]
   let f = Array::make(512, 0.0)
   f[0] = 1.0
-  falcon_fft(f, 9)
+  @internal.falcon_fft(f, 9)
   inspect(m2_bits_eq(f, exp), content="true")
 }
 
@@ -523,12 +523,12 @@ test "falcon-m2-mul-fft" {
   let a : Array[Double] = []
   let b : Array[Double] = []
   for i = 0; i < 512; i = i + 1 {
-    a.push(fp_of(i * 13 % 101 - 50))
-    b.push(fp_of(i * 29 % 71 - 35))
+    a.push(@internal.fp_of(i * 13 % 101 - 50))
+    b.push(@internal.fp_of(i * 29 % 71 - 35))
   }
-  falcon_fft(a, 9)
-  falcon_fft(b, 9)
-  falcon_poly_mul_fft(a, b, 9)
+  @internal.falcon_fft(a, 9)
+  @internal.falcon_fft(b, 9)
+  @internal.falcon_poly_mul_fft(a, b, 9)
   inspect(m2_bits_eq(a, exp), content="true")
 }
 
@@ -666,13 +666,13 @@ test "falcon-m2-split-merge-roundtrip" {
   ]
   let c : Array[Double] = []
   for i = 0; i < 512; i = i + 1 {
-    c.push(fp_of(i * 53 % 251 - 125))
+    c.push(@internal.fp_of(i * 53 % 251 - 125))
   }
-  falcon_fft(c, 9)
+  @internal.falcon_fft(c, 9)
   let d0 = Array::make(256, 0.0)
   let d1 = Array::make(256, 0.0)
-  falcon_poly_split_fft(d0, d1, c, 9)
-  falcon_poly_merge_fft(c, d0, d1, 9)
+  @internal.falcon_poly_split_fft(d0, d1, c, 9)
+  @internal.falcon_poly_merge_fft(c, d0, d1, 9)
   inspect(m2_bits_eq(c, exp), content="true")
 }
 

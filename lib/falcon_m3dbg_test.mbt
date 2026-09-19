@@ -205,7 +205,7 @@ test "falcon-m3dbg-stages" {
     9409, 10060,
   ]
   inspect(arr_eq_int(h, exp_hraw), content="true")
-  falcon_to_ntt_monty(h, 9)
+  @internal.falcon_to_ntt_monty(h, 9)
   let mut first_diff = -1
   for i = 0; i < 512; i = i + 1 {
     if h[i] != exp_hntt[i] && first_diff < 0 {
@@ -238,11 +238,11 @@ test "falcon-m3dbg-stages" {
   for u = 0; u < 512; u = u + 1 {
     tt2[u] = tt[u]
   }
-  falcon_mq_ntt(tt2, 9)
+  @internal.falcon_mq_ntt(tt2, 9)
   for u = 0; u < 512; u = u + 1 {
     tt2[u] = mq_montymul_pub(tt2[u], h[u])
   }
-  falcon_mq_intt(tt2, 9)
+  @internal.falcon_mq_intt(tt2, 9)
   for u = 0; u < 512; u = u + 1 {
     tt2[u] = mq_sub_pub(tt2[u], hm[u])
   }
@@ -252,7 +252,7 @@ test "falcon-m3dbg-stages" {
     tt2[u] = w
   }
   inspect(arr_eq_int(tt2, exp_ttf), content="true")
-  inspect(falcon_is_short(tt2, s2, 9), content="true")
+  inspect(@internal.falcon_is_short(tt2, s2, 9), content="true")
 }
 
 ///|
