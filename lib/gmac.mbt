@@ -8,7 +8,7 @@
 /// `iv`. Equivalent to the tag of AES-GCM encrypting an empty
 /// plaintext with the same AAD.
 pub fn gmac(key : Bytes, iv : Bytes, aad : Bytes) -> Bytes {
-  let (_, tag) = aes_gcm_encrypt(b"", key, iv, aad)
+  let { tag, .. } = aes_gcm_encrypt(b"", key, iv, aad)
   tag
 }
 

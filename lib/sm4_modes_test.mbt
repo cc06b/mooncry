@@ -48,7 +48,9 @@ test "sm4-cbc-oracle" {
 test "sm4-gcm-oracle" {
   // openssl (cryptography) SM4-GCM: zero IV / no AAD ...
   let ziv = Bytes::make(12, (0).to_byte())
-  let (ct1, tag1) = sm4_gcm_encrypt(sm4m_pt48(), sm4m_key(), ziv, b"")
+  let kpr1 = sm4_gcm_encrypt(sm4m_pt48(), sm4m_key(), ziv, b"")
+  let ct1 = kpr1.ct
+  let tag1 = kpr1.tag
   inspect(
     bytes_to_hex(ct1),
     content="b3126e074a904e2a476c2462432a4fc2b13400469f1bf14583e4bd0e2cdc5efeba043987d8e1026ab4e59a21542aba15",
@@ -60,7 +62,9 @@ test "sm4-gcm-oracle" {
   let pt = hex_to_bytes(
     "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b",
   )
-  let (ct2, tag2) = sm4_gcm_encrypt(pt, sm4m_key(), iv, aad)
+  let kpr2 = sm4_gcm_encrypt(pt, sm4m_key(), iv, aad)
+  let ct2 = kpr2.ct
+  let tag2 = kpr2.tag
   inspect(
     bytes_to_hex(ct2),
     content="55201a92b5b4af186c8989a0d751685a98e83bbe5444a8a85eadb3348cf00d646924ef79002c1b322f98751b38bca5bf2abe16900f4a3a4cfc73afb4",

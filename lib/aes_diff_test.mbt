@@ -5,13 +5,17 @@ fn aes_cbc_hex(pt : Bytes, key : Bytes, iv : Bytes) -> String {
 
 ///|
 fn aes_gcm_ct_hex(pt : Bytes, key : Bytes, iv : Bytes, aad : Bytes) -> String {
-  let (c, _) = aes_gcm_encrypt(pt, key, iv, aad)
+  let kpr1 = aes_gcm_encrypt(pt, key, iv, aad)
+  let c = kpr1.ct
+  let _ = kpr1.tag
   bytes_to_hex(c)
 }
 
 ///|
 fn aes_gcm_tag_hex(pt : Bytes, key : Bytes, iv : Bytes, aad : Bytes) -> String {
-  let (_, t) = aes_gcm_encrypt(pt, key, iv, aad)
+  let kpr2 = aes_gcm_encrypt(pt, key, iv, aad)
+  let _ = kpr2.ct
+  let t = kpr2.tag
   bytes_to_hex(t)
 }
 

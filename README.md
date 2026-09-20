@@ -337,7 +337,7 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `sm2_sign_with_k(sk, msg, id, k) -> Bytes` | SM2 sign with explicit nonce (deterministic; aborts on degenerate k) |
 | `sm2_verify(pk, msg, id, sig) -> Bool` | SM2 verify (rejects off-curve keys and out-of-range r/s) |
 | `sm4_ctr(key, iv, data) / sm4_cbc_encrypt / sm4_cbc_decrypt` | SM4 modes (CTR 128-bit BE counter; CBC raw, no padding) |
-| `sm4_gcm_encrypt(pt, key, iv, aad)` / `sm4_gcm_decrypt(ct, key, iv, aad, tag) -> Result[Bytes, String]` | SM4-GCM AEAD (12-byte IV, 16-byte tag; RFC 8998 TLS building block); decrypt reports the reason as `Err` |
+| `sm4_gcm_encrypt(pt, key, iv, aad) -> CtTag` / `sm4_gcm_decrypt(ct, key, iv, aad, tag) -> Result[Bytes, String]` | SM4-GCM AEAD (12-byte IV, 16-byte tag; RFC 8998 TLS building block); decrypt reports the reason as `Err` |
 | `zuc_init(key, iv) -> ZucState` / `zuc_next_word(st)` | ZUC-128 core: 16-byte key/IV, then one 32-bit keystream word per call |
 | `zuc_keystream(key, iv, nwords) -> Bytes` | ZUC-128 keystream as 4*nwords big-endian bytes |
 | `zuc_xor(key, iv, data) -> Bytes` | ZUC-128 in raw stream mode (any length, no padding); not the 3GPP mode |
@@ -363,7 +363,7 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `poly1305(key, msg : Bytes) -> Bytes` | Poly1305 MAC (RFC 8439), 16-byte tag |
 | `cmac_aes(data, key : Bytes) -> Bytes` | AES-CMAC (NIST SP 800-38B), 16-byte tag |
 | `aes_encrypt_cbc / aes_decrypt_cbc(data, key, iv) -> Bytes` | AES-CBC (IV prepended, PKCS#7) |
-| `aes_gcm_encrypt(pt, key, iv, aad) -> (Bytes, Bytes)` | AES-GCM encrypt → (ct, 16-byte tag) |
+| `aes_gcm_encrypt(pt, key, iv, aad) -> CtTag` | AES-GCM encrypt → `CtTag { ct, tag }` (16-byte tag) |
 | `aes_gcm_decrypt(ct, key, iv, aad, tag) -> Result[Bytes, String]` | AES-GCM decrypt, constant-time tag verify; never aborts — a wrong-shape key/iv/tag and a forged tag are both `Err` |
 | `aes_ccm_encrypt(pt, key, nonce, aad, mac_len) -> Bytes` | AES-CCM AEAD (SP 800-38C) → ct ‖ tag |
 | `aes_ccm_decrypt(input, key, nonce, aad, mac_len) -> Bytes` | AES-CCM decrypt, aborts on tag mismatch |
@@ -449,7 +449,7 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `x448(scalar, u) -> Bytes` | X448 scalar mult (RFC 7748), DH shared secret |
 | `x448_or(scalar, u) -> Result[Bytes, String]` | X448 without aborting on a wrong-length peer share |
 | `x448_public_key(private_key) -> Bytes` | Derive X448 public key (base u=5) |
-| `ml_kem_512_keygen(d, z) -> (ek, dk)` | ML-KEM-512 keygen (FIPS 203, deterministic in d,z) |
+| `ml_kem_512_keygen(d, z) -> KemKeyPair` | ML-KEM-512 keygen (FIPS 203, deterministic in d,z); `KemKeyPair { ek, dk }` |
 | `ml_kem_512_encaps(ek, m) -> EncapsResult` | ML-KEM-512 encapsulation; `EncapsResult { shared_secret, ct }` |
 | `ml_kem_512_decaps(dk, c) -> Bytes` | ML-KEM-512 decapsulation (implicit rejection) |
 | `ml_kem_768_keygen / encaps / decaps` | ML-KEM-768 (same shapes) |
@@ -461,7 +461,7 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `poly1305_new / poly1305_update / poly1305_finalize` | incremental Poly1305 |
 | `aes_gcm_siv_encrypt(key, nonce, aad, pt)` | AES-GCM-SIV (RFC 8452, nonce-misuse-resistant) |
 | `aes_gcm_siv_decrypt(key, nonce, aad, ct) -> Result[Bytes, String]` | AES-GCM-SIV decryption (returned `Option` before v0.91.0) |
-| `xwing_keygen(seed) -> (pk, sk)` | X-Wing hybrid KEM keygen (ML-KEM-768 + X25519) |
+| `xwing_keygen(seed) -> KeyPair` | X-Wing hybrid KEM keygen (ML-KEM-768 + X25519); `KeyPair { pk, sk }` |
 | `xwing_encaps(pk, eseed) -> EncapsResult` | X-Wing encapsulation (derandomized) |
 | `xwing_decaps(ct, sk) -> Bytes` | X-Wing decapsulation |
 | `turbo_shake_128(data, d, out_len)` | TurboSHAKE128 (RFC 9861, Keccak-p[1600,12]); domain byte `d` 1..=127 |
@@ -472,12 +472,12 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `hpke_export(ctx, exporter_context, len)` | HPKE exporter |
 | `hpke_x25519_* / hpke_p256_* / hpke_p521_* / hpke_x448_*` | HPKE cipher-suite selectors (all RFC-vectored suites) |
 | `hpke_p384_hkdf_sha384_aes256gcm` | DHKEM(P-384) suite (differential vectors) |
-| `hpke_derive_key_pair(suite, ikm) -> (pk, sk)` | DHKEM DeriveKeyPair (rejection-sampling for the NIST curves, up to 255 tries) |
+| `hpke_derive_key_pair(suite, ikm) -> KeyPair` | DHKEM DeriveKeyPair (rejection-sampling for the NIST curves, up to 255 tries) |
 | `hpke_encap / hpke_decap(suite, …)` | DHKEM base Encap/Decap; Encap returns `HpkeEncap { shared_secret, enc }` |
 | `hpke_auth_encap(suite, pk_r, sk_s, ikm_e) / hpke_auth_decap(suite, enc, sk_r, pk_r, pk_s)` | DHKEM auth modes (RFC 9180 §5.1.3), `kem_context = enc ‖ pkRm ‖ pkSm`; same **(shared_secret, enc)** order |
 | `hpke_setup_r(suite, mode, sk_r, pk_r, enc, info, psk, psk_id, pk_s)` | HPKE receiver setup (all 4 modes) |
 | `hmac_sha384 / hkdf_sha384 / hkdf_sha384_extract` | SHA-384 MAC/KDF family |
-| `ml_dsa_44_keygen(seed) -> (pk, sk)` | ML-DSA-44 keygen (FIPS 204, deterministic in seed) |
+| `ml_dsa_44_keygen(seed) -> KeyPair` | ML-DSA-44 keygen (FIPS 204, deterministic in seed); `KeyPair { pk, sk }` |
 | `ml_dsa_44_sign(sk, msg, rnd, ctx) -> Bytes` | ML-DSA-44 sign (pure; rnd = 0^32 = deterministic) |
 | `ml_dsa_44_verify(pk, msg, sig, ctx) -> Bool` | ML-DSA-44 verify |
 | `ml_dsa_65_keygen / sign / verify` | ML-DSA-65 (same shapes) |
@@ -486,7 +486,7 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `ml_dsa_44_verify_prehash(pk, msg, sig, ctx, ph)` | HashML-DSA-44 verify (FIPS 204 Alg 5); 65/87 have the same shape |
 | `ml_dsa_44_sign_mu(sk, mu, rnd) / verify_mu(pk, mu, sig)` | ML-DSA external-mu interface (Alg 7/8); 65/87 have the same shape |
 | `dsa_prehash_variants / dsa_prehash_sha2_256 / ...` | 12 pre-hash selectors (SHA2/SHA3 family + SHAKE-128/256) |
-| `slh_keygen(slh_sha2_128s, sk_seed, sk_prf, pk_seed)` | SLH-DSA keygen (FIPS 205, deterministic in the three seeds) |
+| `slh_keygen(slh_sha2_128s, sk_seed, sk_prf, pk_seed) -> KeyPair` | SLH-DSA keygen (FIPS 205, deterministic in the three seeds) |
 | `slh_sign(params, sk, msg, ctx) / slh_sign_hedged(...)` | SLH-DSA pure signing (deterministic / hedged) |
 | `slh_verify(params, pk, msg, sig, ctx)` | SLH-DSA verification |
 | `slh_sign_prehash / slh_verify_prehash` | HashSLH-DSA (OID-tagged pre-hash, 12 hash functions) |
@@ -498,7 +498,7 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `xmss_params(func, n, full_height, ...)` | XMSS/XMSS^MT parameter sets (RFC 8391): SHA2/SHAKE128/SHAKE256, n in {24,32,64}; d=1 is plain XMSS, d>1 multi-tree |
 | `xmss_keygen_from_seed / xmss_sign / xmss_verify` | XMSS from 48-byte seed; `xmss_set_index` manages the leaf counter; `xmss_public_key` regenerates pk |
 | `xmss_wots_pkgen / xmss_wots_sign / xmss_wots_pk_from_sig` | WOTS+ one-time primitives (exposed for verification tooling) |
-| `falcon512_keypair_from_seed(seed) -> (pk, sk)` | Falcon-512 keygen (NTRU solve; deterministic in the 48-byte seed) |
+| `falcon512_keypair_from_seed(seed) -> KeyPair` | Falcon-512 keygen (NTRU solve; deterministic in the 48-byte seed) |
 | `falcon512_sign(sk, msg, rand) -> Bytes` | Falcon-512 signing (rand supplies nonce+seed like randombytes) |
 | `falcon512_sign_padded(sk, msg, rand) -> Bytes` | Falcon-512 padded form (fixed 666 bytes) |
 | `falcon512_verify(pk, msg, sig) -> Bool` | Falcon-512 verification (compact + padded forms) |
@@ -592,26 +592,34 @@ The rules C4 enforces:
   rot;
 - a name ending in `_verify` / `_check` must return `Bool`.
 
-The last known wart is the **same-type tuple**: both elements are `Bytes`, so
-swapping them compiles and fails silently. Six of the nineteen are gone as of
-v0.93.0 — every encapsulation now returns a struct with named fields:
+**Same-type tuples are gone** (v0.93.0–v0.94.0). A `(Bytes, Bytes)` return is a
+footgun the compiler cannot check — swapping the two elements still compiles —
+so every public function that returned one now returns a struct with named,
+read-only fields:
 
 ```moonbit
+pub struct KeyPair { pk : Bytes, sk : Bytes }                  // ML-DSA, Falcon,
+                                                              // SLH-DSA, X-Wing,
+                                                              // HPKE DeriveKeyPair
+pub struct KemKeyPair { ek : Bytes, dk : Bytes }                // ML-KEM (FIPS 203's names)
 pub struct EncapsResult { shared_secret : Bytes, ct : Bytes }   // ML-KEM, X-Wing
-pub struct HpkeEncap { shared_secret : Bytes, enc : Bytes }      // HPKE Encap/AuthEncap
+pub struct HpkeEncap { shared_secret : Bytes, enc : Bytes }     // HPKE Encap/AuthEncap
+pub struct CtTag { ct : Bytes, tag : Bytes }                    // AES-GCM, SM4-GCM encrypt
 ```
 
-`hpke_encap` is the case that motivated it: this library returned
+`hpke_encap` is the case that motivated all of them: this library returned
 `(shared_secret, enc)` where RFC 9180's pseudocode writes `return enc,
-shared_secret`, and the test that was supposed to pin the order got it backwards
-the first time it was written. Both structs are **read-only outside the
-package** — a consumer can read a result but cannot forge one.
+shared_secret`, and the test written to pin the order got it backwards the first
+time. Destructure with `let { pk, sk } = ml_dsa_65_keygen(seed)`; a *partial*
+pattern needs `..` (`let { sk, .. } = ...`), because MoonBit warns about fields
+left unbound and CI runs `--deny-warn`. MoonBit patterns cannot rename a field,
+so a site that wants different local names binds the struct and reads two fields.
 
-The 13 that remain are the keygens (`(pk, sk)`, `(ek, dk)`) and the two GCM
-encrypts (`(ct, tag)`), where the conventional order makes a swap less likely
-and the first use usually catches it. C4 counts them against a **ratchet**
-(`MAX_SAME_TYPE_TUPLES = 13`), so the list can only shrink: adding a new
-same-type tuple fails the build, and migrating one means lowering the number.
+C4 counts public same-type tuples against a ratchet that is now **0**, so the
+property cannot regress: a new public function returning `(Bytes, Bytes)` fails
+the build. Private helpers are out of scope — `cmac_gen_subkeys`,
+`ml_kem_hybrid_derive` and `xm_treehash` still return pairs, and every caller is
+inside this package.
 
 ### Public but internal: what `pub` owes you here
 

@@ -186,7 +186,7 @@ test "AES-256-CBC: NIST SP 800-38A F.2.5 first block" {
 test "AES-128-GCM: empty plaintext" {
   let key = hex_to_bytes("00000000000000000000000000000000")
   let iv = hex_to_bytes("000000000000000000000000")
-  let (ct, tag) = aes_gcm_encrypt(b"", key, iv, b"")
+  let { ct, tag, } = aes_gcm_encrypt(b"", key, iv, b"")
   assert_true(ct.length() == 0)
   let expected_tag = hex_to_bytes("58e2fccefa7e3061367f1d57a4e7455a")
   assert_true(bytes_equal(expected_tag, tag))
@@ -199,7 +199,7 @@ test "AES-128-GCM: 64-byte plaintext, no AAD" {
   let pt = hex_to_bytes(
     "d9313225f88406e5a55909c5aff5269a86a7a9531534f7da2e4c303d8a318a721c3c0c95956809532fcf0e2449a6b525b16aedf5aa0de657ba637b391aafd255",
   )
-  let (ct, tag) = aes_gcm_encrypt(pt, key, iv, b"")
+  let { ct, tag, } = aes_gcm_encrypt(pt, key, iv, b"")
   let expected_ct = hex_to_bytes(
     "42831ec2217774244b7221b784d0d49ce3aa212f2c02a4e035c17e2329aca12e21d514b25466931c7d8f6a5aac84aa051ba30b396a0aac973d58e091473f5985",
   )
@@ -216,7 +216,7 @@ test "AES-128-GCM: decrypt round-trip with AAD" {
     "d9313225f88406e5a55909c5aff5269a86a7a9531534f7da2e4c303d8a318a721c3c0c95956809532fcf0e2449a6b525b16aedf5aa0de657ba637b39",
   )
   let aad = hex_to_bytes("feedfacedeadbeeffeedfacedeadbeefabaddad2")
-  let (ct, tag) = aes_gcm_encrypt(pt, key, iv, aad)
+  let { ct, tag, } = aes_gcm_encrypt(pt, key, iv, aad)
   let (dec, ok) = bb_flag(aes_gcm_decrypt(ct, key, iv, aad, tag))
   assert_true(ok)
   assert_true(bytes_equal(pt, dec))
@@ -228,7 +228,7 @@ test "AES-128-GCM: tag tamper detection" {
   let iv = hex_to_bytes("cafebabefacedbaddecaf888")
   let pt = b"test message"
   let aad = b"additional data"
-  let (ct, tag) = aes_gcm_encrypt(pt, key, iv, aad)
+  let { ct, tag, } = aes_gcm_encrypt(pt, key, iv, aad)
   let bad_tag_arr = Array::make(tag.length(), b'\x00')
   for i in 0..<tag.length() {
     bad_tag_arr[i] = tag[i]
@@ -245,7 +245,7 @@ test "AES-256-GCM: NIST TC13 (empty plaintext, no AAD)" {
     "0000000000000000000000000000000000000000000000000000000000000000",
   )
   let iv = hex_to_bytes("000000000000000000000000")
-  let (ct, tag) = aes_gcm_encrypt(b"", key, iv, b"")
+  let { ct, tag, } = aes_gcm_encrypt(b"", key, iv, b"")
   assert_true(ct.length() == 0)
   let expected_tag = hex_to_bytes("530f8afbc74536b9a963b4f1c4cb738b")
   assert_true(bytes_equal(expected_tag, tag))
@@ -258,7 +258,7 @@ test "AES-256-GCM: NIST TC14 (single zero block, no AAD)" {
   )
   let iv = hex_to_bytes("000000000000000000000000")
   let pt = hex_to_bytes("00000000000000000000000000000000")
-  let (ct, tag) = aes_gcm_encrypt(pt, key, iv, b"")
+  let { ct, tag, } = aes_gcm_encrypt(pt, key, iv, b"")
   let expected_ct = hex_to_bytes("cea7403d4d606b6e074ec5d3baf39d18")
   let expected_tag = hex_to_bytes("d0d1c8a799996bf0265b98b5d48ab919")
   assert_true(bytes_equal(expected_ct, ct))

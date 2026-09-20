@@ -31,7 +31,7 @@ pub fn sealed_box_seal(
     abort("sealed_box_seal: nonce must be 12 bytes")
   }
   let key = hkdf_sha256(context, master_key, sealed_box_info, 32)
-  let (ct, tag) = aes_gcm_encrypt(plaintext, key, nonce, aad)
+  let { ct, tag, } = aes_gcm_encrypt(plaintext, key, nonce, aad)
   // version(1) || nonce(12) || ct || tag(16)
   let total = 1 + 12 + ct.length() + 16
   let env = Array::make(total, b'\x00')

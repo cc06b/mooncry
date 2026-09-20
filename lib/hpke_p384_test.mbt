@@ -14,7 +14,9 @@ test "HPKE P-384 derive/encap/decap differential" {
     "303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f5051525354555657" +
     "58595a5b5c5d5e5f",
   )
-  let (pk_r, sk_r) = hpke_derive_key_pair(suite, ikm_r)
+  let kpr1 = hpke_derive_key_pair(suite, ikm_r)
+  let pk_r = kpr1.pk
+  let sk_r = kpr1.sk
   assert_true(
     bytes_equal(
       pk_r,

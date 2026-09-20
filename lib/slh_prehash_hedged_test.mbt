@@ -57,7 +57,7 @@ fn slhph_seed(n : Int, tag : Int) -> Bytes {
 
 ///|
 fn slhph_key(p : SlhParams, n : Int) -> (Bytes, Bytes) {
-  let (pk, sk) = slh_keygen(
+  let { pk, sk, } = slh_keygen(
     p,
     slhph_seed(n, 1),
     slhph_seed(n, 2),
@@ -89,7 +89,7 @@ test "slh-prehash-verify" {
   let msg = b"hash-slh-dsa message"
   let ctx = b"slh-ctx"
   let p = slh_sha2_128s
-  let (pk, sk) = slh_keygen(p, s1, s2, s3)
+  let { pk, sk, } = slh_keygen(p, s1, s2, s3)
   // ---- four prehash algorithms round-trip: SHA-256 and SHA-512 (SHA2 family,
   // two digest widths), SHA3-512, SHAKE256 (the two XOFs, which the spec sizes
   // differently: 32 bytes for SHAKE128 and 64 for SHAKE256)
@@ -156,7 +156,9 @@ test "slh-prehash-verify" {
     ),
     msg="verify_prehash accepted a flipped signature byte",
   )
-  let (pk2, _) = slh_keygen(p, s3, s2, s1)
+  let kpr1 = slh_keygen(p, s3, s2, s1)
+  let pk2 = kpr1.pk
+  let _ = kpr1.sk
   assert_false(
     slh_verify_prehash(p, pk2, msg, s256, ctx, dsa_prehash_sha2_256),
     msg="verify_prehash accepted a different public key",
@@ -197,7 +199,9 @@ test "slh-prehash-verify" {
     msg="verify_prehash did not reject an over-long context",
   )
   // ---- one SHAKE parameter set, so both hash families inside SLH are hit --
-  let (spk, ssk) = slh_keygen(slh_shake_128s, s2, s3, s1)
+  let kpr2 = slh_keygen(slh_shake_128s, s2, s3, s1)
+  let spk = kpr2.pk
+  let ssk = kpr2.sk
   let ssig = slh_sign_prehash(
     slh_shake_128s, ssk, msg, ctx, dsa_prehash_shake256,
   )

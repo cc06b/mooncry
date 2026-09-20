@@ -196,7 +196,9 @@ fn main {
   // Test Case 1: empty plaintext, empty AAD
   let gcm_k = hex_to_bytes("00000000000000000000000000000000")
   let gcm_iv = hex_to_bytes("000000000000000000000000")
-  let (gcm_c1, gcm_t1) = @lib.aes_gcm_encrypt(b"", gcm_k, gcm_iv, b"")
+  let kpr1 = @lib.aes_gcm_encrypt(b"", gcm_k, gcm_iv, b"")
+  let gcm_c1 = kpr1.ct
+  let gcm_t1 = kpr1.tag
   let tc1_tag_expected = hex_to_bytes("58e2fccefa7e3061367f1d57a4e7455a")
   if !check(
       "AES-GCM Test Case 1 (empty) — ciphertext empty",
@@ -217,7 +219,9 @@ fn main {
 
   // Test Case 2: single zero block, empty AAD
   let zero_block = hex_to_bytes("00000000000000000000000000000000")
-  let (gcm_c2, gcm_t2) = @lib.aes_gcm_encrypt(zero_block, gcm_k, gcm_iv, b"")
+  let kpr2 = @lib.aes_gcm_encrypt(zero_block, gcm_k, gcm_iv, b"")
+  let gcm_c2 = kpr2.ct
+  let gcm_t2 = kpr2.tag
   let tc2_c_expected = hex_to_bytes("0388dace60b6a392f328c2b971b2fe78")
   let tc2_t_expected = hex_to_bytes("ab6e47d42cec13bdf53a67b21257bddf")
   if !check(
@@ -243,7 +247,9 @@ fn main {
   let gcm_p3 = hex_to_bytes(
     "d9313225f88406e5a55909c5aff5269a86a7a9531534f7da2e4c303d8a318a721c3c0c95956809532fcf0e2449a6b525b16aedf5aa0de657ba637b391aafd255",
   )
-  let (gcm_c3, gcm_t3) = @lib.aes_gcm_encrypt(gcm_p3, gcm_k3, gcm_iv3, b"")
+  let kpr3 = @lib.aes_gcm_encrypt(gcm_p3, gcm_k3, gcm_iv3, b"")
+  let gcm_c3 = kpr3.ct
+  let gcm_t3 = kpr3.tag
   let tc3_c_expected = hex_to_bytes(
     "42831ec2217774244b7221b784d0d49ce3aa212f2c02a4e035c17e2329aca12e21d514b25466931c7d8f6a5aac84aa051ba30b396a0aac973d58e091473f5985",
   )
@@ -270,7 +276,9 @@ fn main {
     "d9313225f88406e5a55909c5aff5269a86a7a9531534f7da2e4c303d8a318a721c3c0c95956809532fcf0e2449a6b525b16aedf5aa0de657ba637b39",
   )
   let gcm_a4 = hex_to_bytes("feedfacedeadbeeffeedfacedeadbeefabaddad2")
-  let (gcm_c4, gcm_t4) = @lib.aes_gcm_encrypt(gcm_p4, gcm_k3, gcm_iv3, gcm_a4)
+  let kpr4 = @lib.aes_gcm_encrypt(gcm_p4, gcm_k3, gcm_iv3, gcm_a4)
+  let gcm_c4 = kpr4.ct
+  let gcm_t4 = kpr4.tag
   let tc4_c_expected = hex_to_bytes(
     "42831ec2217774244b7221b784d0d49ce3aa212f2c02a4e035c17e2329aca12e21d514b25466931c7d8f6a5aac84aa051ba30b396a0aac973d58e091",
   )

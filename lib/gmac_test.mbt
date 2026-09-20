@@ -42,7 +42,9 @@ test "GMAC: equals the AES-GCM tag of an empty plaintext" {
   let key = gmac_range_bytes(16)
   let iv = gmac_range_bytes(12)
   let aad = b"authenticated but not encrypted"
-  let (_, gcm_tag) = aes_gcm_encrypt(b"", key, iv, aad)
+  let kpr1 = aes_gcm_encrypt(b"", key, iv, aad)
+  let _ = kpr1.ct
+  let gcm_tag = kpr1.tag
   assert_true(bytes_equal(gcm_tag, gmac(key, iv, aad)))
 }
 

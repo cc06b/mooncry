@@ -10,7 +10,9 @@ test "README Quick start example" {
 
   let key = Bytes::make(32, b'\x00')
   let iv = Bytes::make(12, b'\x00')
-  let (ciphertext, tag) = aes_gcm_encrypt(b"secret data", key, iv, b"aad")
+  let kpr1 = aes_gcm_encrypt(b"secret data", key, iv, b"aad")
+  let ciphertext = kpr1.ct
+  let tag = kpr1.tag
   let (plaintext, ok) = bb_flag(
     aes_gcm_decrypt(ciphertext, key, iv, b"aad", tag),
   )

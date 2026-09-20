@@ -10,7 +10,7 @@ test "ML-KEM-512 keygen official vector 0" {
   let z = hex_to_bytes(
     "1F8CB39E9E30BC458A0DC5408884B1187FB217018DF760FA57317703B844A0A9",
   )
-  let (ek, dk) = ml_kem_512_keygen(d, z)
+  let { ek, dk, } = ml_kem_512_keygen(d, z)
   assert_true(
     bytes_equal(
       ek,
@@ -86,7 +86,7 @@ test "ML-KEM-512 keygen official vector 1" {
   let z = hex_to_bytes(
     "B9958575128F97022525266064F9422E83F75FBDCD0F2BC2648655F0E31A17E5",
   )
-  let (ek, dk) = ml_kem_512_keygen(d, z)
+  let { ek, dk, } = ml_kem_512_keygen(d, z)
   assert_true(
     bytes_equal(
       ek,
@@ -162,7 +162,7 @@ test "ML-KEM-512 keygen official vector 2" {
   let z = hex_to_bytes(
     "C2FE9CB7F49BF7296785A1824CD798C377BFF4E1836473CD4A8C7423BF1D0F13",
   )
-  let (ek, dk) = ml_kem_512_keygen(d, z)
+  let { ek, dk, } = ml_kem_512_keygen(d, z)
   assert_true(
     bytes_equal(
       ek,
@@ -238,7 +238,7 @@ test "ML-KEM-768 keygen official vector 3" {
   let z = hex_to_bytes(
     "1CDACB8740C0B87C4A379575F187B367CBFA3B300BF591B109F79816E9CBE8F0",
   )
-  let (ek, dk) = ml_kem_768_keygen(d, z)
+  let { ek, dk, } = ml_kem_768_keygen(d, z)
   assert_true(
     bytes_equal(
       ek,
@@ -338,7 +338,7 @@ test "ML-KEM-768 keygen official vector 4" {
   let z = hex_to_bytes(
     "012DD6C2F0918B9EB6182474EB86D848F65974759D59CE151A396DEEE4CA10D1",
   )
-  let (ek, dk) = ml_kem_768_keygen(d, z)
+  let { ek, dk, } = ml_kem_768_keygen(d, z)
   assert_true(
     bytes_equal(
       ek,
@@ -438,7 +438,7 @@ test "ML-KEM-768 keygen official vector 5" {
   let z = hex_to_bytes(
     "3A21F601923C559179A3AA5839A148487379EAAD934BF27F3071E1B1FDC21D1A",
   )
-  let (ek, dk) = ml_kem_768_keygen(d, z)
+  let { ek, dk, } = ml_kem_768_keygen(d, z)
   assert_true(
     bytes_equal(
       ek,
@@ -538,7 +538,7 @@ test "ML-KEM-1024 keygen official vector 6" {
   let z = hex_to_bytes(
     "35D2BC43DD1CC879F765BF2A0C5E297889DDE910E57E2BB0EAE417B90AB7A275",
   )
-  let (ek, dk) = ml_kem_1024_keygen(d, z)
+  let { ek, dk, } = ml_kem_1024_keygen(d, z)
   assert_true(
     bytes_equal(
       ek,
@@ -662,7 +662,7 @@ test "ML-KEM-1024 keygen official vector 7" {
   let z = hex_to_bytes(
     "CC96DE9E1F0506BF490A154A6DB46BD2BD1413C3D1DC163190FF171EF0D11E22",
   )
-  let (ek, dk) = ml_kem_1024_keygen(d, z)
+  let { ek, dk, } = ml_kem_1024_keygen(d, z)
   assert_true(
     bytes_equal(
       ek,
@@ -786,7 +786,7 @@ test "ML-KEM-1024 keygen official vector 8" {
   let z = hex_to_bytes(
     "26D7035CD963C74AB142936A91EABD3074C583654945F9F5FDC29F754B06EBF2",
   )
-  let (ek, dk) = ml_kem_1024_keygen(d, z)
+  let { ek, dk, } = ml_kem_1024_keygen(d, z)
   assert_true(
     bytes_equal(
       ek,
@@ -1634,7 +1634,7 @@ test "property: ML-KEM round-trip (keygen -> encaps -> decaps)" {
   let d = rng_bytes(r, 32)
   let z = rng_bytes(r, 32)
   let m = rng_bytes(r, 32)
-  let (ek, dk) = ml_kem_512_keygen(d, z)
+  let { ek, dk, } = ml_kem_512_keygen(d, z)
   let cap7 = ml_kem_512_encaps(ek, m)
   let k1 = cap7.shared_secret
   let c = cap7.ct

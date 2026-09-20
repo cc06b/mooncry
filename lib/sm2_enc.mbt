@@ -582,7 +582,7 @@ pub fn sm2_seal_or(
     Ok(ct) => ct
     Err(e) => return Err(e)
   }
-  let (ct, tag) = sm4_gcm_encrypt(msg, sm4_key, iv, b"")
+  let { ct, tag, } = sm4_gcm_encrypt(msg, sm4_key, iv, b"")
   let mut out = enc_key
   out = concat_bytes(out, iv)
   out = concat_bytes(out, ct)

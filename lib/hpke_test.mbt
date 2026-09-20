@@ -1333,7 +1333,9 @@ test "HPKE X448 round-trip (all modes structure)" {
   let suite = hpke_x448_hkdf_sha512_chacha20poly1305
   let ikm_r = Bytes::make(56, b'B')
   let ikm_e = Bytes::make(56, b'$')
-  let (pk_r, sk_r) = hpke_derive_key_pair(suite, ikm_r)
+  let kpr1 = hpke_derive_key_pair(suite, ikm_r)
+  let pk_r = kpr1.pk
+  let sk_r = kpr1.sk
   let info = b"mooncry x448 round-trip"
   let (enc, ctx_s) = hpke_setup_s(suite, 0, pk_r, ikm_e, info, b"", b"", b"")
   let ctx_r = hpke_setup_r(suite, 0, sk_r, pk_r, enc, info, b"", b"", b"")

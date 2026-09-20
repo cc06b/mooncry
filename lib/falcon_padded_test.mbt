@@ -23,7 +23,7 @@ test "falcon-padded-512-roundtrip" {
   // keypair from the official seed, then padded sign/verify
   let r = falcon_test_rng_init()
   let seed = falcon_test_rng_bytes(r, 48)
-  let (pk, sk) = falcon512_keypair_from_seed(seed)
+  let { pk, sk, } = falcon512_keypair_from_seed(seed)
   let msg = pad_msg(17)
   let sig = falcon512_sign_padded(sk, msg, pad_rand_ctr(1))
   inspect(sig.length(), content="666")

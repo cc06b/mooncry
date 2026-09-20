@@ -107,9 +107,12 @@ LEGACY_OPTION = set()
 
 # Ratchet on same-type tuple returns: `(Bytes, Bytes)` and friends, where
 # swapping the two elements still compiles. 19 before v0.93.0, 13 after it
-# turned the encapsulation results into structs. Lower it as the rest migrate;
-# raising it needs a reason.
-MAX_SAME_TYPE_TUPLES = 13
+# turned the encapsulation results into structs, and 0 since v0.94.0 migrated
+# the keygens (KeyPair, KemKeyPair) and the two GCM encrypts (CtTag). It is now
+# a hard rule: a new public function returning a same-type tuple fails the build.
+# Private helpers are out of scope -- cmac_gen_subkeys, ml_kem_hybrid_derive and
+# xm_treehash still return pairs, and their callers are all inside this package.
+MAX_SAME_TYPE_TUPLES = 0
 
 
 # --------------------------------------------------------------------------

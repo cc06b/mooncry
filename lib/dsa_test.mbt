@@ -6,7 +6,7 @@
 
 ///|
 test "ML-DSA-44 keygen ACVP #1" {
-  let (pk, sk) = ml_dsa_44_keygen(
+  let { pk, sk, } = ml_dsa_44_keygen(
     hex_to_bytes(
       "7194B13C95231010AFD2C909992BD2003BA6F437C3886BDBE3F6B867A14BA161",
     ),
@@ -126,7 +126,7 @@ test "ML-DSA-44 keygen ACVP #1" {
 
 ///|
 test "ML-DSA-44 keygen ACVP #2" {
-  let (pk, sk) = ml_dsa_44_keygen(
+  let { pk, sk, } = ml_dsa_44_keygen(
     hex_to_bytes(
       "2EBE5A4123398DFBCD5BDF0A42EBDD03112BE3BC88A6E9B78D93120AB8D0120E",
     ),
@@ -246,7 +246,7 @@ test "ML-DSA-44 keygen ACVP #2" {
 
 ///|
 test "ML-DSA-65 keygen ACVP #26" {
-  let (pk, sk) = ml_dsa_65_keygen(
+  let { pk, sk, } = ml_dsa_65_keygen(
     hex_to_bytes(
       "A991FD42B071D49C48AE3E75C647459E0DAAD1E1BA356A04801912D3294BCFF8",
     ),
@@ -419,7 +419,7 @@ test "ML-DSA-65 keygen ACVP #26" {
 
 ///|
 test "ML-DSA-65 keygen ACVP #27" {
-  let (pk, sk) = ml_dsa_65_keygen(
+  let { pk, sk, } = ml_dsa_65_keygen(
     hex_to_bytes(
       "494F29AD1C93ABB2B9545BD14CC575A98ECD3062137B439B49EB1A8CC6652FC6",
     ),
@@ -592,7 +592,7 @@ test "ML-DSA-65 keygen ACVP #27" {
 
 ///|
 test "ML-DSA-87 keygen ACVP #51" {
-  let (pk, sk) = ml_dsa_87_keygen(
+  let { pk, sk, } = ml_dsa_87_keygen(
     hex_to_bytes(
       "A16F5B0796703E2D1A0140A35CBF36EFABE70E752BA59B6A9A0E9C4B05302F73",
     ),
@@ -803,7 +803,7 @@ test "ML-DSA-87 keygen ACVP #51" {
 
 ///|
 test "ML-DSA-87 keygen ACVP #52" {
-  let (pk, sk) = ml_dsa_87_keygen(
+  let { pk, sk, } = ml_dsa_87_keygen(
     hex_to_bytes(
       "E46D458A660285930D9656A88D14E751730CAE7A4975B6E4FBE69E80E3F01E7F",
     ),

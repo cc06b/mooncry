@@ -2,7 +2,7 @@
 
 ///|
 test "HashML-DSA-65 sigGen preHash SHA2-512 tr1 #76" {
-  let (_, sk) = ml_dsa_65_keygen(
+  let { sk, .. } = ml_dsa_65_keygen(
     hex_to_bytes(
       "5B27B3CE923964268138F44A3F54D1364EC6717E63EAF8FD70E5BCCC9FAE091E",
     ),
@@ -304,7 +304,7 @@ test "HashML-DSA-65 sigGen preHash SHA2-512 tr1 #76" {
 
 ///|
 test "HashML-DSA-65 sigGen preHash SHA3-384 tr1 #77" {
-  let (_, sk) = ml_dsa_65_keygen(
+  let { sk, .. } = ml_dsa_65_keygen(
     hex_to_bytes(
       "3FA1E68730A816BA822170FF493CEA6D98BFE4CA3DEF32FBCDA638B0AB5306B8",
     ),
@@ -415,7 +415,7 @@ test "HashML-DSA-65 sigGen preHash SHA3-384 tr1 #77" {
 
 ///|
 test "HashML-DSA-65 sigGen preHash SHA2-384 tr1 #78" {
-  let (_, sk) = ml_dsa_65_keygen(
+  let { sk, .. } = ml_dsa_65_keygen(
     hex_to_bytes(
       "79216B34F595CFE5E3D78C42D8995DC7D825DDBA1458B6DD6F0B91607654891A",
     ),
@@ -683,7 +683,7 @@ test "HashML-DSA-65 sigGen preHash SHA2-384 tr1 #78" {
 
 ///|
 test "HashML-DSA-65 sigGen preHash SHA3-512 tr1 #79" {
-  let (_, sk) = ml_dsa_65_keygen(
+  let { sk, .. } = ml_dsa_65_keygen(
     hex_to_bytes(
       "29459D36D9A71B4FE4A201438489235495650A9389DD5DDC0A5C295C14078AE6",
     ),
@@ -928,7 +928,7 @@ test "HashML-DSA-65 sigGen preHash SHA3-512 tr1 #79" {
 
 ///|
 test "HashML-DSA-65 sigGen preHash SHAKE-256 tr1 #80" {
-  let (_, sk) = ml_dsa_65_keygen(
+  let { sk, .. } = ml_dsa_65_keygen(
     hex_to_bytes(
       "B59DF34A686DC8982C96AA41DA10C0F7D926A92EC1BFFE84B01622A01C45BEE9",
     ),
@@ -1230,7 +1230,7 @@ test "HashML-DSA-65 sigGen preHash SHAKE-256 tr1 #80" {
 
 ///|
 test "HashML-DSA-65 sigGen preHash SHA2-512/256 tr1 #81" {
-  let (_, sk) = ml_dsa_65_keygen(
+  let { sk, .. } = ml_dsa_65_keygen(
     hex_to_bytes(
       "7BC1B0E4A7C67A50EDCF3DA10E9C2C6606B648B6EB721C00D2F4B0F97CAC9F96",
     ),
@@ -1451,7 +1451,7 @@ test "HashML-DSA-65 sigGen preHash SHA2-512/256 tr1 #81" {
 
 ///|
 test "HashML-DSA-65 sigGen preHash SHA3-224 tr1 #82" {
-  let (_, sk) = ml_dsa_65_keygen(
+  let { sk, .. } = ml_dsa_65_keygen(
     hex_to_bytes(
       "93B158735E77CC93B43BBE0DE7DB96C28CBA61BC25B5E0B0CD7DD51A9CF0E384",
     ),
@@ -1570,7 +1570,7 @@ test "HashML-DSA-65 sigGen preHash SHA3-224 tr1 #82" {
 
 ///|
 test "HashML-DSA-65 sigGen preHash SHA2-512/224 tr1 #83" {
-  let (_, sk) = ml_dsa_65_keygen(
+  let { sk, .. } = ml_dsa_65_keygen(
     hex_to_bytes(
       "1BF10B8D48C623A7074089800C17A3F24A5FAC1E5744EBE450DED317414A00A3",
     ),
@@ -1827,7 +1827,7 @@ test "HashML-DSA-65 sigGen preHash SHA2-512/224 tr1 #83" {
 
 ///|
 test "HashML-DSA-65 sigGen preHash SHA2-224 tr1 #84" {
-  let (_, sk) = ml_dsa_65_keygen(
+  let { sk, .. } = ml_dsa_65_keygen(
     hex_to_bytes(
       "A52DEE322E1064EEF05D755A11B05FA40812E6EAB2311C290A9436F8F5D0445E",
     ),
@@ -1991,7 +1991,7 @@ test "HashML-DSA-65 sigGen preHash SHA2-224 tr1 #84" {
 
 ///|
 test "HashML-DSA-65 sigGen preHash SHA3-256 tr1 #85" {
-  let (_, sk) = ml_dsa_65_keygen(
+  let { sk, .. } = ml_dsa_65_keygen(
     hex_to_bytes(
       "A1A51446E0B85E959243018C0FD0EC180F5527193668019C21A81D467BF147A6",
     ),
@@ -2157,7 +2157,7 @@ test "HashML-DSA-65 sigGen preHash SHA3-256 tr1 #85" {
 
 ///|
 test "HashML-DSA-65 sigGen preHash SHA2-512/224 tr1 #86" {
-  let (_, sk) = ml_dsa_65_keygen(
+  let { sk, .. } = ml_dsa_65_keygen(
     hex_to_bytes(
       "03E6925069F7D2B91EAAB2A3BEE5DD26D76FDA286979F1CD88707E0BB91C9A79",
     ),
@@ -2340,7 +2340,7 @@ test "HashML-DSA-65 sigGen preHash SHA2-512/224 tr1 #86" {
 
 ///|
 test "HashML-DSA-65 sigGen preHash SHA3-256 tr1 #87" {
-  let (_, sk) = ml_dsa_65_keygen(
+  let { sk, .. } = ml_dsa_65_keygen(
     hex_to_bytes(
       "DEBB979626279AB6ED53733928884BA09ECD664B714B4A13482AFB98FF78B3AF",
     ),
@@ -2555,7 +2555,7 @@ test "HashML-DSA-65 sigGen preHash SHA3-256 tr1 #87" {
 
 ///|
 test "HashML-DSA-65 sigGen preHash SHAKE-128 tr1 #88" {
-  let (_, sk) = ml_dsa_65_keygen(
+  let { sk, .. } = ml_dsa_65_keygen(
     hex_to_bytes(
       "713B16FB909070B18EAEC908723D574950C5881968974BCE6A7180A60249CBFF",
     ),
@@ -2841,7 +2841,7 @@ test "HashML-DSA-65 sigGen preHash SHAKE-128 tr1 #88" {
 
 ///|
 test "HashML-DSA-65 sigGen preHash SHA2-512 tr1 #89" {
-  let (_, sk) = ml_dsa_65_keygen(
+  let { sk, .. } = ml_dsa_65_keygen(
     hex_to_bytes(
       "49A1528268782DD029477F78C5873EFBD3B61D5A5F26D34F889B71DCB04E1502",
     ),
@@ -3002,7 +3002,7 @@ test "HashML-DSA-65 sigGen preHash SHA2-512 tr1 #89" {
 
 ///|
 test "HashML-DSA-65 sigGen preHash SHA2-256 tr1 #90" {
-  let (_, sk) = ml_dsa_65_keygen(
+  let { sk, .. } = ml_dsa_65_keygen(
     hex_to_bytes(
       "3FD3838241C522E8E58F5A3DFA43BDAB8C913831C50A3BF70E33F9D6B40964FE",
     ),

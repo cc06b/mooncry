@@ -801,7 +801,7 @@ test "ML-KEM hybrid round-trips (empty / exact blocks / awkward sizes)" {
   let z = Bytes::make(32, b'\x24')
   let m = Bytes::make(32, b'\x66')
   let aad = b"round-trip aad"
-  let (ek, dk) = ml_kem_768_keygen(d, z)
+  let { ek, dk, } = ml_kem_768_keygen(d, z)
   let msgs : Array[Bytes] = [
     b"",
     Bytes::make(64, b'A'),
@@ -825,7 +825,7 @@ test "ML-KEM hybrid rejects tampering and truncation" {
   let z = Bytes::make(32, b'\x24')
   let m = Bytes::make(32, b'\x66')
   let aad = b"tamper aad"
-  let (ek, dk) = ml_kem_768_keygen(d, z)
+  let { ek, dk, } = ml_kem_768_keygen(d, z)
   let msg = Bytes::make(300, b'X')
   let blob = ml_kem_768_hybrid_seal(ek, m, aad, msg)
   // flip one ciphertext byte
@@ -856,10 +856,12 @@ test "ML-KEM hybrid rejects tampering and truncation" {
     Err(_) => ()
   }
   // wrong key
-  let (_, dk2) = ml_kem_768_keygen(
+  let kpr1 = ml_kem_768_keygen(
     Bytes::make(32, b'\x11'),
     Bytes::make(32, b'\x22'),
   )
+  let _ = kpr1.ek
+  let dk2 = kpr1.dk
   match ml_kem_768_hybrid_open(dk2, blob, aad) {
     Ok(_) => assert_true(false, msg="rejected ciphertext opened")
     Err(_) => ()
@@ -872,7 +874,7 @@ test "ML-KEM hybrid streaming equals one-shot (awkward chunking)" {
   let z = Bytes::make(32, b'\x24')
   let m = Bytes::make(32, b'\x66')
   let aad = b"stream aad"
-  let (ek, dk) = ml_kem_768_keygen(d, z)
+  let { ek, dk, } = ml_kem_768_keygen(d, z)
   let msg = Bytes::make(777, b'S')
   let one_shot = ml_kem_768_hybrid_seal(ek, m, aad, msg)
   let (c, st) = ml_kem_768_hybrid_seal_init(ek, m, aad)
@@ -906,13 +908,17 @@ test "ML-KEM 512/1024 hybrid round-trips" {
   let m = Bytes::make(32, b'\x55')
   let aad = b""
   let msg = Bytes::make(500, b'Q')
-  let (ek5, dk5) = ml_kem_512_keygen(d, z)
+  let kpr2 = ml_kem_512_keygen(d, z)
+  let ek5 = kpr2.ek
+  let dk5 = kpr2.dk
   let b5 = ml_kem_512_hybrid_seal(ek5, m, aad, msg)
   match ml_kem_512_hybrid_open(dk5, b5, aad) {
     Ok(pt) => assert_true(bytes_equal(pt, msg))
     Err(_) => assert_true(false)
   }
-  let (ek10, dk10) = ml_kem_1024_keygen(d, z)
+  let kpr3 = ml_kem_1024_keygen(d, z)
+  let ek10 = kpr3.ek
+  let dk10 = kpr3.dk
   let b10 = ml_kem_1024_hybrid_seal(ek10, m, aad, msg)
   match ml_kem_1024_hybrid_open(dk10, b10, aad) {
     Ok(pt) => assert_true(bytes_equal(pt, msg))

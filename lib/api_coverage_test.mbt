@@ -177,8 +177,12 @@ test "sm4_decrypt_block inverts and matches the key API" {
 test "hpke auth-mode KEM twins agree and reject hostile input" {
   let r = rb_rng(0x48504B45415554UL)
   let s = hpke_x25519_hkdf_sha256_aes128gcm
-  let (pk_r, sk_r) = hpke_derive_key_pair(s, rb_bytes(r, 32))
-  let (pk_s, sk_s) = hpke_derive_key_pair(s, rb_bytes(r, 32))
+  let kpr1 = hpke_derive_key_pair(s, rb_bytes(r, 32))
+  let pk_r = kpr1.pk
+  let sk_r = kpr1.sk
+  let kpr2 = hpke_derive_key_pair(s, rb_bytes(r, 32))
+  let pk_s = kpr2.pk
+  let sk_s = kpr2.sk
   let ikm_e = rb_bytes(r, 32)
   // This library's encap returned (shared_secret, enc) -- the reverse of RFC
   // 9180's `return enc, shared_secret`, both elements Bytes, so getting it
@@ -221,7 +225,9 @@ test "hpke auth-mode KEM twins agree and reject hostile input" {
   )
   // auth mode must bind the sender: decapsulating with the wrong pk_s gives a
   // different secret, not the same one
-  let (pk_other, _) = hpke_derive_key_pair(s, rb_bytes(r, 32))
+  let kpr3 = hpke_derive_key_pair(s, rb_bytes(r, 32))
+  let pk_other = kpr3.pk
+  let _ = kpr3.sk
   match hpke_auth_decap_or(s, enc, sk_r, pk_r, pk_other) {
     Ok(k) =>
       assert_false(
@@ -282,7 +288,9 @@ test "ml_kem hybrid streaming seal_init matches the one-shot seal" {
   let aad = b"stream-aad"
   let msg = rb_bytes(r, 300)
   // 512
-  let (ek5, _) = ml_kem_512_keygen(rb_bytes(r, 32), rb_bytes(r, 32))
+  let kpr4 = ml_kem_512_keygen(rb_bytes(r, 32), rb_bytes(r, 32))
+  let ek5 = kpr4.ek
+  let _ = kpr4.dk
   let (c5, st5) = ml_kem_512_hybrid_seal_init(ek5, m, aad)
   let blob5 = rb_cat5(
     c5,
@@ -294,7 +302,9 @@ test "ml_kem hybrid streaming seal_init matches the one-shot seal" {
     msg="512: streamed seal != one-shot seal",
   )
   // 768
-  let (ek7, _) = ml_kem_768_keygen(rb_bytes(r, 32), rb_bytes(r, 32))
+  let kpr5 = ml_kem_768_keygen(rb_bytes(r, 32), rb_bytes(r, 32))
+  let ek7 = kpr5.ek
+  let _ = kpr5.dk
   let (c7, st7) = ml_kem_768_hybrid_seal_init(ek7, m, aad)
   let blob7 = rb_cat5(
     c7,
@@ -306,7 +316,9 @@ test "ml_kem hybrid streaming seal_init matches the one-shot seal" {
     msg="768: streamed seal != one-shot seal",
   )
   // 1024 (the one that had no test at all)
-  let (ek10, dk10) = ml_kem_1024_keygen(rb_bytes(r, 32), rb_bytes(r, 32))
+  let kpr6 = ml_kem_1024_keygen(rb_bytes(r, 32), rb_bytes(r, 32))
+  let ek10 = kpr6.ek
+  let dk10 = kpr6.dk
   let (c10, st10) = ml_kem_1024_hybrid_seal_init(ek10, m, aad)
   let body = ml_kem_hybrid_stream_update(st10, msg)
   let blob10 = rb_cat5(c10, body, ml_kem_hybrid_stream_final(st10))
@@ -352,7 +364,7 @@ test "falcon1024_sign_padded produces a verifying padded signature" {
   // stream, which is what makes the padded and compact signatures comparable
   let kr0 = falcon_test_rng_init()
   let seed = falcon_test_rng_bytes(kr0, 48)
-  let (pk, sk) = falcon1024_keypair_from_seed(seed)
+  let { pk, sk, } = falcon1024_keypair_from_seed(seed)
   let msg = b"padded falcon-1024 message"
   let kr1 = falcon_test_rng_init()
   let rand = fn(k : Int) -> Bytes { falcon_test_rng_bytes(kr1, k) }
@@ -434,8 +446,12 @@ test "kdf limits and hpke mode guard" {
   )
   // ---- HPKE mode: 0..3 are the RFC's four, anything else is an Err ---------
   let s = hpke_x25519_hkdf_sha256_aes128gcm
-  let (pk_r, sk_r) = hpke_derive_key_pair(s, Bytes::make(32, b'\x01'))
-  let (pk_s, sk_s) = hpke_derive_key_pair(s, Bytes::make(32, b'\x02'))
+  let kpr7 = hpke_derive_key_pair(s, Bytes::make(32, b'\x01'))
+  let pk_r = kpr7.pk
+  let sk_r = kpr7.sk
+  let kpr8 = hpke_derive_key_pair(s, Bytes::make(32, b'\x02'))
+  let pk_s = kpr8.pk
+  let sk_s = kpr8.sk
   let ikm = Bytes::make(32, b'\x03')
   for mode in [0, 2] {
     match hpke_setup_s_or(s, mode, pk_r, ikm, b"info", b"", b"", sk_s) {
@@ -735,10 +751,12 @@ test "the Result twins of the legacy-channel decoders and openers" {
   let short_env = Bytes::make(20, b'\x00')
   wave7_err("sm2_open short", sm2_open(sk, short_env))
   // ---- the Option family: ML-KEM hybrid envelopes ----
-  let (ek5, dk5) = ml_kem_512_keygen(
+  let kpr9 = ml_kem_512_keygen(
     Bytes::make(32, b'\x01'),
     Bytes::make(32, b'\x02'),
   )
+  let ek5 = kpr9.ek
+  let dk5 = kpr9.dk
   let blob5 = ml_kem_512_hybrid_seal(ek5, Bytes::make(32, b'\x03'), b"aad", msg)
   wave7_ok("hybrid_open 512", ml_kem_512_hybrid_open(dk5, blob5, b"aad"), msg)
   wave7_err(
@@ -749,20 +767,24 @@ test "the Result twins of the legacy-channel decoders and openers" {
     "hybrid_open 512 wrong aad",
     ml_kem_512_hybrid_open(dk5, blob5, b"other"),
   )
-  let (ek7, dk7) = ml_kem_768_keygen(
+  let kpr10 = ml_kem_768_keygen(
     Bytes::make(32, b'\x04'),
     Bytes::make(32, b'\x05'),
   )
+  let ek7 = kpr10.ek
+  let dk7 = kpr10.dk
   let blob7 = ml_kem_768_hybrid_seal(ek7, Bytes::make(32, b'\x06'), b"aad", msg)
   wave7_ok("hybrid_open 768", ml_kem_768_hybrid_open(dk7, blob7, b"aad"), msg)
   wave7_err(
     "hybrid_open 768 wrong dk",
     ml_kem_768_hybrid_open(dk5, blob7, b"aad"),
   )
-  let (ek10, dk10) = ml_kem_1024_keygen(
+  let kpr11 = ml_kem_1024_keygen(
     Bytes::make(32, b'\x07'),
     Bytes::make(32, b'\x08'),
   )
+  let ek10 = kpr11.ek
+  let dk10 = kpr11.dk
   let blob10 = ml_kem_1024_hybrid_seal(
     ek10,
     Bytes::make(32, b'\x09'),
@@ -821,7 +843,7 @@ test "the five mixed-semantics twins agree with their aborting originals" {
   let aad = b"wave6 aad"
   let msg = b"wave6 plaintext"
   // ---- AES-GCM ----
-  let (ct, tag) = aes_gcm_encrypt(msg, key32, iv12, aad)
+  let { ct, tag, } = aes_gcm_encrypt(msg, key32, iv12, aad)
   wave7_ok("aes_gcm", aes_gcm_decrypt(ct, key32, iv12, aad, tag), msg)
   let bad_tag = tag.to_array()
   bad_tag[0] = (bad_tag[0].to_int() ^ 1).to_byte()
@@ -835,7 +857,9 @@ test "the five mixed-semantics twins agree with their aborting originals" {
   }
   // ---- SM4-GCM ----
   let k16 = Bytes::make(16, b'\x01')
-  let (sct, stag) = sm4_gcm_encrypt(msg, k16, iv12, aad)
+  let kpr12 = sm4_gcm_encrypt(msg, k16, iv12, aad)
+  let sct = kpr12.ct
+  let stag = kpr12.tag
   wave7_ok("sm4_gcm", sm4_gcm_decrypt(sct, k16, iv12, aad, stag), msg)
   let s_bad_tag = stag.to_array()
   s_bad_tag[3] = (s_bad_tag[3].to_int() ^ 1).to_byte()
@@ -880,8 +904,12 @@ test "the five mixed-semantics twins agree with their aborting originals" {
   // needs its own fresh context; wave6_hpke_receiver builds one from the same
   // deterministic key material and the sender's `enc`.
   let suite = hpke_x25519_hkdf_sha256_aes128gcm
-  let (pk_r, sk_r) = hpke_derive_key_pair(suite, Bytes::make(32, b'\x01'))
-  let (pk_s, sk_s) = hpke_derive_key_pair(suite, Bytes::make(32, b'\x02'))
+  let kpr13 = hpke_derive_key_pair(suite, Bytes::make(32, b'\x01'))
+  let pk_r = kpr13.pk
+  let sk_r = kpr13.sk
+  let kpr14 = hpke_derive_key_pair(suite, Bytes::make(32, b'\x02'))
+  let pk_s = kpr14.pk
+  let sk_s = kpr14.sk
   let ikm = Bytes::make(32, b'\x03')
   let (enc, ctx_s) = hpke_setup_s(suite, 0, pk_r, ikm, b"info", b"", b"", sk_s)
   let ct1 = hpke_seal(ctx_s, aad, msg) // sender sequence 0

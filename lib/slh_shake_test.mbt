@@ -2,7 +2,7 @@
 
 ///|
 test "SLH SLH-DSA-SHAKE-128s keyGen ACVP #11" {
-  let (pk, sk) = slh_keygen(
+  let { pk, sk, } = slh_keygen(
     slh_shake_128s,
     hex_to_bytes("C151951F3811029239B74ADD24C506AF"),
     hex_to_bytes("DD30363E156E6FE936EC6ED0231FEB5C"),
@@ -29,7 +29,7 @@ test "SLH SLH-DSA-SHAKE-128s keyGen ACVP #11" {
 
 ///|
 test "SLH SLH-DSA-SHAKE-128f keyGen ACVP #31" {
-  let (pk, sk) = slh_keygen(
+  let { pk, sk, } = slh_keygen(
     slh_shake_128f,
     hex_to_bytes("3956AB391B4D22FC907AF0740326D061"),
     hex_to_bytes("AB0EB206436F2B86EBE086D77739B3E4"),
@@ -56,7 +56,7 @@ test "SLH SLH-DSA-SHAKE-128f keyGen ACVP #31" {
 
 ///|
 test "SLH SLH-DSA-SHAKE-192s keyGen ACVP #51" {
-  let (pk, sk) = slh_keygen(
+  let { pk, sk, } = slh_keygen(
     slh_shake_192s,
     hex_to_bytes("8732621860E9A6E1887BE55F7AF692B98EB4C10B2599F94A"),
     hex_to_bytes("D5CC9D6470D8B21136158E8B1710F1FBE03ECED37ED4AC68"),
@@ -85,7 +85,7 @@ test "SLH SLH-DSA-SHAKE-192s keyGen ACVP #51" {
 
 ///|
 test "SLH SLH-DSA-SHAKE-192f keyGen ACVP #71" {
-  let (pk, sk) = slh_keygen(
+  let { pk, sk, } = slh_keygen(
     slh_shake_192f,
     hex_to_bytes("FB7A2C2C75CE6C96B5F4328E0AB300476FC6F864CB5B0B99"),
     hex_to_bytes("990ECB726CA822A4E3652DD92EC0AAB7637EA41C0482AE28"),
@@ -114,7 +114,7 @@ test "SLH SLH-DSA-SHAKE-192f keyGen ACVP #71" {
 
 ///|
 test "SLH SLH-DSA-SHAKE-256s keyGen ACVP #91" {
-  let (pk, sk) = slh_keygen(
+  let { pk, sk, } = slh_keygen(
     slh_shake_256s,
     hex_to_bytes(
       "E440E39644A11A6A58E850C09C8F03C273E465237F3BEF7C58DE62281E676CEA",
@@ -150,7 +150,7 @@ test "SLH SLH-DSA-SHAKE-256s keyGen ACVP #91" {
 
 ///|
 test "SLH SLH-DSA-SHAKE-256f keyGen ACVP #111" {
-  let (pk, sk) = slh_keygen(
+  let { pk, sk, } = slh_keygen(
     slh_shake_256f,
     hex_to_bytes(
       "2AC9403858D186B172EDD8DF9C78A11449893681487D3AF0DAD0EC341E8ACA48",

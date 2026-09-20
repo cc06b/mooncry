@@ -239,7 +239,7 @@ fn rb_deep(r : RbRng, n : Int, rounds : Int) -> Array[Bytes] {
 test "robust-ml-dsa-verify" {
   let r = rb_rng(0x4D4C445341UL)
   let seed = rb_bytes(r, 32)
-  let (pk, sk) = ml_dsa_44_keygen(seed)
+  let { pk, sk, } = ml_dsa_44_keygen(seed)
   let sig_sz = 2420
   let msg = b"robustness"
   // hostile pk (any length) x well-formed-length random sig
@@ -278,7 +278,12 @@ test "robust-slh-verify" {
   // outside the library package.
   let n = 16
   let sig_sz = 7856
-  let (pk, sk) = slh_keygen(p, rb_bytes(r, n), rb_bytes(r, n), rb_bytes(r, n))
+  let { pk, sk, } = slh_keygen(
+    p,
+    rb_bytes(r, n),
+    rb_bytes(r, n),
+    rb_bytes(r, n),
+  )
   let _ = sk
   let msg = b"robustness"
   for pk_h in rb_cases(r, pk, 8) {
@@ -603,7 +608,9 @@ test "robust-aead-authenticity" {
     }
   }
   // AES-GCM (Bool convention)
-  let (gct, gtag) = aes_gcm_encrypt(pt, key16, nonce12, aad)
+  let kpr1 = aes_gcm_encrypt(pt, key16, nonce12, aad)
+  let gct = kpr1.ct
+  let gtag = kpr1.tag
   let (got, ok) = bb_flag(aes_gcm_decrypt(gct, key16, nonce12, aad, gtag))
   assert_true(ok)
   assert_true(rb_eq(got, pt))
@@ -620,7 +627,9 @@ test "robust-aead-authenticity" {
     }
   }
   // SM4-GCM
-  let (sct, stag) = sm4_gcm_encrypt(pt, key16, nonce12, aad)
+  let kpr2 = sm4_gcm_encrypt(pt, key16, nonce12, aad)
+  let sct = kpr2.ct
+  let stag = kpr2.tag
   let (sgot, sok) = bb_flag(sm4_gcm_decrypt(sct, key16, nonce12, aad, stag))
   assert_true(sok)
   assert_true(rb_eq(sgot, pt))
@@ -778,9 +787,15 @@ test "robust-kem" {
   let r = rb_rng(0x4B454D524F42UL)
   let d = rb_bytes(r, 32)
   let z = rb_bytes(r, 32)
-  let (ek512, dk512) = ml_kem_512_keygen(d, z)
-  let (ek768, dk768) = ml_kem_768_keygen(d, z)
-  let (ek1024, dk1024) = ml_kem_1024_keygen(d, z)
+  let kpr3 = ml_kem_512_keygen(d, z)
+  let ek512 = kpr3.ek
+  let dk512 = kpr3.dk
+  let kpr4 = ml_kem_768_keygen(d, z)
+  let ek768 = kpr4.ek
+  let dk768 = kpr4.dk
+  let kpr5 = ml_kem_1024_keygen(d, z)
+  let ek1024 = kpr5.ek
+  let dk1024 = kpr5.dk
   let m = rb_bytes(r, 32)
   let cap1 = ml_kem_512_encaps(ek512, m)
   let k512 = cap1.shared_secret
@@ -888,7 +903,9 @@ test "robust-kem" {
     }
   }
   // X-Wing
-  let (xpk, xsk) = xwing_keygen(rb_bytes(r, 32))
+  let kpr6 = xwing_keygen(rb_bytes(r, 32))
+  let xpk = kpr6.pk
+  let xsk = kpr6.sk
   let eseed = rb_bytes(r, 64)
   let cap4 = xwing_encaps(xpk, eseed)
   let xss = cap4.shared_secret
@@ -1193,7 +1210,9 @@ test "robust-hpke" {
   let info = b"info"
   // X25519 suite: round trip, then hostile enc / ciphertext
   let s_x = hpke_x25519_hkdf_sha256_aes128gcm
-  let (pk_r, sk_r) = hpke_derive_key_pair(s_x, rb_bytes(r, 32))
+  let kpr7 = hpke_derive_key_pair(s_x, rb_bytes(r, 32))
+  let pk_r = kpr7.pk
+  let sk_r = kpr7.sk
   assert_true(hpke_valid_pk(s_x, pk_r), msg="hpke: own x25519 pk rejected")
   let (enc, ctx_s) = hpke_setup_s(
     s_x,
@@ -1252,7 +1271,9 @@ test "robust-hpke" {
       (hpke_p521_hkdf_sha512_aes256gcm, 133),
     ] {
     let (s_p, pk_len) = triple
-    let (pk_p, sk_p) = hpke_derive_key_pair(s_p, rb_bytes(r, 32))
+    let kpr8 = hpke_derive_key_pair(s_p, rb_bytes(r, 32))
+    let pk_p = kpr8.pk
+    let sk_p = kpr8.sk
     assert_true(pk_p.length() == pk_len)
     assert_true(hpke_valid_pk(s_p, pk_p), msg="hpke: own nist pk rejected")
     // y+1 is off the curve: exactly the point an invalid-curve attacker sends
@@ -1306,7 +1327,9 @@ test "robust-hpke" {
   // X448 suite: as with X25519 the contract is length-only (RFC 7748), so
   // validity must track the length and nothing else.
   let s_4 = hpke_x448_hkdf_sha512_aes256gcm
-  let (pk_4, _) = hpke_derive_key_pair(s_4, rb_bytes(r, 32))
+  let kpr9 = hpke_derive_key_pair(s_4, rb_bytes(r, 32))
+  let pk_4 = kpr9.pk
+  let _ = kpr9.sk
   assert_true(hpke_valid_pk(s_4, pk_4))
   assert_true(pk_4.length() == 56)
   for p in rb_cases(r, pk_4, 8) {
@@ -1396,7 +1419,7 @@ test "robust-falcon-degenerate" {
   let kr = falcon_test_rng_init()
   let krand = fn(k : Int) -> Bytes { falcon_test_rng_bytes(kr, k) }
   let seed = falcon_test_rng_bytes(kr, 48)
-  let (pk, sk) = falcon512_keypair_from_seed(seed)
+  let { pk, sk, } = falcon512_keypair_from_seed(seed)
   let msg = b"robustness"
   // the happy path still works after the rejection loops were bounded
   let good = falcon512_sign(sk, msg, krand)
@@ -1437,7 +1460,9 @@ test "robust-falcon-degenerate" {
   for i in 0..<4 {
     let s2 = falcon_test_rng_bytes(kr, 48)
     let _ = i
-    let (pk2, sk2) = falcon512_keypair_from_seed(s2)
+    let kpr10 = falcon512_keypair_from_seed(s2)
+    let pk2 = kpr10.pk
+    let sk2 = kpr10.sk
     let sig2 = falcon512_sign(sk2, msg, krand)
     assert_true(sig2.length() > 0, msg="falcon: keygen/sign happy path broke")
     assert_true(
@@ -1746,9 +1771,15 @@ test "robust-kem-seal" {
   // wrong-length ek trapped the process even though `hybrid_open` and
   // `xwing_encaps` were already graceful.
   let r = rb_rng(0x4B454D5345414CUL)
-  let (ek512, dk512) = ml_kem_512_keygen(rb_bytes(r, 32), rb_bytes(r, 32))
-  let (ek768, _) = ml_kem_768_keygen(rb_bytes(r, 32), rb_bytes(r, 32))
-  let (ek1024, _) = ml_kem_1024_keygen(rb_bytes(r, 32), rb_bytes(r, 32))
+  let kpr11 = ml_kem_512_keygen(rb_bytes(r, 32), rb_bytes(r, 32))
+  let ek512 = kpr11.ek
+  let dk512 = kpr11.dk
+  let kpr12 = ml_kem_768_keygen(rb_bytes(r, 32), rb_bytes(r, 32))
+  let ek768 = kpr12.ek
+  let _ = kpr12.dk
+  let kpr13 = ml_kem_1024_keygen(rb_bytes(r, 32), rb_bytes(r, 32))
+  let ek1024 = kpr13.ek
+  let _ = kpr13.dk
   let m = rb_bytes(r, 32)
   let aad = b"aad"
   let msg = rb_bytes(r, 77)

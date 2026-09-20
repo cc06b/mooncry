@@ -1171,13 +1171,23 @@ fn gctr(
 }
 
 ///|
+/// An AEAD result: the ciphertext and the authentication tag, as separate
+/// fields rather than `(Bytes, Bytes)` -- swapping the two used to compile and
+/// then fail only when the recipient rejected the "ciphertext". Read-only
+/// outside this package. v0.94.0.
+pub struct CtTag {
+  ct : Bytes
+  tag : Bytes
+}
+
+///|
 /// AES-GCM encrypt — returns (ciphertext, 16-byte tag)
 pub fn aes_gcm_encrypt(
   plaintext : Bytes,
   key : Bytes,
   iv : Bytes,
   aad : Bytes,
-) -> (Bytes, Bytes) {
+) -> CtTag {
   if key.length() != 16 && key.length() != 24 && key.length() != 32 {
     abort("aes_gcm_encrypt: key length must be 16, 24, or 32 bytes")
   }
@@ -1236,7 +1246,7 @@ pub fn aes_gcm_encrypt(
   tag_block[3] = s[3] ^ e_j0_block[3]
   let tag = block_to_bytes(tag_block)
 
-  (ciphertext, tag)
+  { ct: ciphertext, tag, }
 }
 
 ///|

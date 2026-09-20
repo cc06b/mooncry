@@ -605,17 +605,28 @@ fn kem_kpke_decrypt(params : MlKemParams, dk_pke : Bytes, c : Bytes) -> Bytes {
 // ---------- ML-KEM (Algorithms 16-18) ----------
 
 ///|
+/// An ML-KEM key pair: the encapsulation key `ek` (public) and the
+/// decapsulation key `dk` (secret), named after FIPS 203 rather than pk/sk
+/// because that is what the standard calls them -- and because a KEM's halves are
+/// not the same thing as a signature key pair. Read-only outside this package.
+/// v0.94.0.
+pub struct KemKeyPair {
+  ek : Bytes
+  dk : Bytes
+}
+
+///|
 fn kem_keygen_internal(
   params : MlKemParams,
   d : Bytes,
   z : Bytes,
-) -> (Bytes, Bytes) {
+) -> KemKeyPair {
   if d.length() != 32 || z.length() != 32 {
     abort("ml_kem keygen: d and z must be 32 bytes")
   }
   let (ek, dk_pke) = kem_kpke_keygen(params, d)
   let dk = concat_bytes(concat_bytes(concat_bytes(dk_pke, ek), kem_h(ek)), z)
-  (ek, dk)
+  { ek, dk, }
 }
 
 ///|
@@ -758,7 +769,7 @@ fn kem_decaps_internal(params : MlKemParams, dk : Bytes, c : Bytes) -> Bytes {
 ///|
 /// ML-KEM-512 key generation (FIPS 203): deterministic from the caller's
 /// 32-byte randomness pair (d, z) — supply CSPRNG output. Returns (ek, dk).
-pub fn ml_kem_512_keygen(d : Bytes, z : Bytes) -> (Bytes, Bytes) {
+pub fn ml_kem_512_keygen(d : Bytes, z : Bytes) -> KemKeyPair {
   kem_keygen_internal(mlkem_512, d, z)
 }
 
@@ -778,7 +789,7 @@ pub fn ml_kem_512_decaps(dk : Bytes, c : Bytes) -> Bytes {
 
 ///|
 /// ML-KEM-768 key generation. See `ml_kem_512_keygen`.
-pub fn ml_kem_768_keygen(d : Bytes, z : Bytes) -> (Bytes, Bytes) {
+pub fn ml_kem_768_keygen(d : Bytes, z : Bytes) -> KemKeyPair {
   kem_keygen_internal(mlkem_768, d, z)
 }
 
@@ -796,7 +807,7 @@ pub fn ml_kem_768_decaps(dk : Bytes, c : Bytes) -> Bytes {
 
 ///|
 /// ML-KEM-1024 key generation. See `ml_kem_512_keygen`.
-pub fn ml_kem_1024_keygen(d : Bytes, z : Bytes) -> (Bytes, Bytes) {
+pub fn ml_kem_1024_keygen(d : Bytes, z : Bytes) -> KemKeyPair {
   kem_keygen_internal(mlkem_1024, d, z)
 }
 

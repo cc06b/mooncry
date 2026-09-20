@@ -368,7 +368,9 @@ test "robust-stream-aead" {
   // the ML-KEM hybrid envelope: streaming seal == one-shot seal
   let d = rb_bytes(r, 32)
   let z = rb_bytes(r, 32)
-  let (ek, _dk) = ml_kem_512_keygen(d, z)
+  let kpr1 = ml_kem_512_keygen(d, z)
+  let ek = kpr1.ek
+  let _dk = kpr1.dk
   let m = rb_bytes(r, 32)
   let msg = rb_bytes(r, 500)
   for step in [1, 7, 64, 65, 128, 499, 500] {

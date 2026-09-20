@@ -165,7 +165,7 @@ pub fn sm4_gcm_encrypt(
   key : Bytes,
   iv : Bytes,
   aad : Bytes,
-) -> (Bytes, Bytes) {
+) -> CtTag {
   guard key.length() == 16 && iv.length() == 12 else {
     abort("sm4_gcm_encrypt: key must be 16 bytes, iv 12 bytes")
   }
@@ -194,7 +194,7 @@ pub fn sm4_gcm_encrypt(
     tag[i * 4 + 2] = ((w >> 8) & 0xFFU).to_byte()
     tag[i * 4 + 3] = (w & 0xFFU).to_byte()
   }
-  (ct, Bytes::from_array(tag[:]))
+  { ct, tag: Bytes::from_array(tag[:]), }
 }
 
 ///|

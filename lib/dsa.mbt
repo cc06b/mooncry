@@ -757,7 +757,7 @@ fn dsa_mat_vec_mul(
 // ---------- key / signature encode & decode ----------
 
 ///|
-fn dsa_keygen_internal(params : DsaParams, seed : Bytes) -> (Bytes, Bytes) {
+fn dsa_keygen_internal(params : DsaParams, seed : Bytes) -> KeyPair {
   if seed.length() != 32 {
     abort("ml_dsa keygen: seed must be 32 bytes")
   }
@@ -858,7 +858,7 @@ fn dsa_keygen_internal(params : DsaParams, seed : Bytes) -> (Bytes, Bytes) {
     dsa_pack_t0_poly(sk, off, t0[i])
     off = off + 416
   }
-  (pk_b, Bytes::from_array(sk[:]))
+  { pk: pk_b, sk: Bytes::from_array(sk[:]), }
 }
 
 ///|
@@ -1549,7 +1549,7 @@ fn dsa_verify_internal(
 ///|
 /// ML-DSA-44 key generation (FIPS 204): deterministic from a 32-byte seed.
 /// Returns (pk, sk).
-pub fn ml_dsa_44_keygen(seed : Bytes) -> (Bytes, Bytes) {
+pub fn ml_dsa_44_keygen(seed : Bytes) -> KeyPair {
   dsa_keygen_internal(dsa_44, seed)
 }
 
@@ -1585,7 +1585,7 @@ pub fn ml_dsa_44_verify(
 
 ///|
 /// ML-DSA-65 key generation. See `ml_dsa_44_keygen`.
-pub fn ml_dsa_65_keygen(seed : Bytes) -> (Bytes, Bytes) {
+pub fn ml_dsa_65_keygen(seed : Bytes) -> KeyPair {
   dsa_keygen_internal(dsa_65, seed)
 }
 
@@ -1619,7 +1619,7 @@ pub fn ml_dsa_65_verify(
 
 ///|
 /// ML-DSA-87 key generation. See `ml_dsa_44_keygen`.
-pub fn ml_dsa_87_keygen(seed : Bytes) -> (Bytes, Bytes) {
+pub fn ml_dsa_87_keygen(seed : Bytes) -> KeyPair {
   dsa_keygen_internal(dsa_87, seed)
 }
 

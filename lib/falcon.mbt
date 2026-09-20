@@ -129,7 +129,7 @@ pub fn falcon_test_rng_bytes(r : FalconTestRng, n : Int) -> Bytes {
 /// Falcon-512 keypair from an explicit 48-byte seed (the seed feeds
 /// SHAKE256 exactly as PQClean's crypto_sign_keypair does with the
 /// output of randombytes).
-pub fn falcon512_keypair_from_seed(seed : Bytes) -> (Bytes, Bytes) {
+pub fn falcon512_keypair_from_seed(seed : Bytes) -> KeyPair {
   // a shorter seed is silently absorbed as-is, which yields full-length but
   // non-standard keys: no other implementation derives the same pair from it
   if seed.length() != 48 {
@@ -161,7 +161,7 @@ pub fn falcon512_keypair_from_seed(seed : Bytes) -> (Bytes, Bytes) {
     }
   }
   ignore(n)
-  (Bytes::from_array(pk_arr), Bytes::from_array(sk_arr))
+  { pk: Bytes::from_array(pk_arr), sk: Bytes::from_array(sk_arr), }
 }
 
 ///|
@@ -288,7 +288,7 @@ pub fn falcon1024_sign(sk : Bytes, msg : Bytes, rand : (Int) -> Bytes) -> Bytes 
 
 ///|
 /// Falcon-1024 keypair from an explicit 48-byte seed.
-pub fn falcon1024_keypair_from_seed(seed : Bytes) -> (Bytes, Bytes) {
+pub fn falcon1024_keypair_from_seed(seed : Bytes) -> KeyPair {
   if seed.length() != 48 {
     abort(
       "falcon1024_keypair_from_seed: seed must be 48 bytes (got " +
@@ -314,7 +314,7 @@ pub fn falcon1024_keypair_from_seed(seed : Bytes) -> (Bytes, Bytes) {
       sk_arr.push(part[i])
     }
   }
-  (Bytes::from_array(pk_arr), Bytes::from_array(sk_arr))
+  { pk: Bytes::from_array(pk_arr), sk: Bytes::from_array(sk_arr), }
 }
 
 ///|

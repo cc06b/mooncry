@@ -5,7 +5,7 @@ test "X-Wing official vector 1: keygen/encaps/decaps" {
   let seed = hex_to_bytes(
     "7f9c2ba4e88f827d616045507605853ed73b8093f6efbc88eb1a6eacfa66ef26",
   )
-  let (pk, sk) = xwing_keygen(seed)
+  let { pk, sk, } = xwing_keygen(seed)
   assert_true(
     bytes_equal(
       pk,
@@ -104,7 +104,7 @@ test "X-Wing official vector 2: keygen/encaps/decaps" {
   let seed = hex_to_bytes(
     "badfd6dfaac359a5efbb7bcc4b59d538df9a04302e10c8bc1cbf1a0b3a5120ea",
   )
-  let (pk, sk) = xwing_keygen(seed)
+  let { pk, sk, } = xwing_keygen(seed)
   assert_true(
     bytes_equal(
       pk,
@@ -203,7 +203,7 @@ test "X-Wing official vector 3: keygen/encaps/decaps" {
   let seed = hex_to_bytes(
     "ef58538b8d23f87732ea63b02b4fa0f4873360e2841928cd60dd4cee8cc0d4c9",
   )
-  let (pk, sk) = xwing_keygen(seed)
+  let { pk, sk, } = xwing_keygen(seed)
   assert_true(
     bytes_equal(
       pk,
@@ -300,7 +300,7 @@ test "X-Wing official vector 3: keygen/encaps/decaps" {
 ///|
 test "X-Wing decapsulation of a tampered ciphertext yields a different secret" {
   let seed = Bytes::make(32, b'w')
-  let (pk, sk) = xwing_keygen(seed)
+  let { pk, sk, } = xwing_keygen(seed)
   let eseed = Bytes::make(64, b'Z')
   let cap4 = xwing_encaps(pk, eseed)
   let ss = cap4.shared_secret

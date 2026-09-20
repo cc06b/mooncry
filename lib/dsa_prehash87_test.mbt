@@ -2,7 +2,7 @@
 
 ///|
 test "HashML-DSA-87 sigGen preHash SHAKE-128 tr1 #136" {
-  let (_, sk) = ml_dsa_87_keygen(
+  let { sk, .. } = ml_dsa_87_keygen(
     hex_to_bytes(
       "A52F55C2ADEB340108AC9B6BC2B56B6AD7BF0AA8E42C504917A6C9D170187E9E",
     ),
@@ -157,7 +157,7 @@ test "HashML-DSA-87 sigGen preHash SHAKE-128 tr1 #136" {
 
 ///|
 test "HashML-DSA-87 sigGen preHash SHAKE-256 tr1 #137" {
-  let (_, sk) = ml_dsa_87_keygen(
+  let { sk, .. } = ml_dsa_87_keygen(
     hex_to_bytes(
       "50C82D191EC45E3EF96BFE25D5987504896A9BA6496E18EFFD5616FCE0780C4E",
     ),
@@ -326,7 +326,7 @@ test "HashML-DSA-87 sigGen preHash SHAKE-256 tr1 #137" {
 
 ///|
 test "HashML-DSA-87 sigGen preHash SHA2-384 tr1 #138" {
-  let (_, sk) = ml_dsa_87_keygen(
+  let { sk, .. } = ml_dsa_87_keygen(
     hex_to_bytes(
       "7ECDF07FABE821E6A329185FF0106CF19865D82B15E375FD3FE501823BB5A660",
     ),
@@ -605,7 +605,7 @@ test "HashML-DSA-87 sigGen preHash SHA2-384 tr1 #138" {
 
 ///|
 test "HashML-DSA-87 sigGen preHash SHA3-224 tr1 #139" {
-  let (_, sk) = ml_dsa_87_keygen(
+  let { sk, .. } = ml_dsa_87_keygen(
     hex_to_bytes(
       "FA40F05532D310B085F585DC7B651403114F23192ACD7F6E03ED613C5D1D545F",
     ),
@@ -906,7 +906,7 @@ test "HashML-DSA-87 sigGen preHash SHA3-224 tr1 #139" {
 
 ///|
 test "HashML-DSA-87 sigGen preHash SHA3-256 tr1 #140" {
-  let (_, sk) = ml_dsa_87_keygen(
+  let { sk, .. } = ml_dsa_87_keygen(
     hex_to_bytes(
       "F3402E512763EF3D4E0ECF886B14E33888A5EC04503C924CE52FC76A4F24FE74",
     ),
@@ -1192,7 +1192,7 @@ test "HashML-DSA-87 sigGen preHash SHA3-256 tr1 #140" {
 
 ///|
 test "HashML-DSA-87 sigGen preHash SHA2-224 tr1 #141" {
-  let (_, sk) = ml_dsa_87_keygen(
+  let { sk, .. } = ml_dsa_87_keygen(
     hex_to_bytes(
       "9FB68C7B55B9074B222AEE0BF9B515546E2EFD4CAE410BE47464235733AC8920",
     ),
@@ -1328,7 +1328,7 @@ test "HashML-DSA-87 sigGen preHash SHA2-224 tr1 #141" {
 
 ///|
 test "HashML-DSA-87 sigGen preHash SHA2-512/224 tr1 #142" {
-  let (_, sk) = ml_dsa_87_keygen(
+  let { sk, .. } = ml_dsa_87_keygen(
     hex_to_bytes(
       "41FA0F7EC2658B10DAC99F801FCA2058D8967B0A62B2AC1DC5D65A099F24C704",
     ),
@@ -1677,7 +1677,7 @@ test "HashML-DSA-87 sigGen preHash SHA2-512/224 tr1 #142" {
 
 ///|
 test "HashML-DSA-87 sigGen preHash SHA3-512 tr1 #143" {
-  let (_, sk) = ml_dsa_87_keygen(
+  let { sk, .. } = ml_dsa_87_keygen(
     hex_to_bytes(
       "0CBF39186054127D480FEF8E701723372365A2F7316E2CD3774C8E9C769031DB",
     ),
@@ -1873,7 +1873,7 @@ test "HashML-DSA-87 sigGen preHash SHA3-512 tr1 #143" {
 
 ///|
 test "HashML-DSA-87 sigGen preHash SHA2-512 tr1 #144" {
-  let (_, sk) = ml_dsa_87_keygen(
+  let { sk, .. } = ml_dsa_87_keygen(
     hex_to_bytes(
       "5BA592EB3E8403C09736887E605EE24F36C32C1D56975BC3168D3CBAA4C5AAEF",
     ),
@@ -2081,7 +2081,7 @@ test "HashML-DSA-87 sigGen preHash SHA2-512 tr1 #144" {
 
 ///|
 test "HashML-DSA-87 sigGen preHash SHA3-512 tr1 #145" {
-  let (_, sk) = ml_dsa_87_keygen(
+  let { sk, .. } = ml_dsa_87_keygen(
     hex_to_bytes(
       "EC0869DCC0F3352A3F8CA129DDAA80EEB06FA3ECD59C66481EA8D8DBB61FC549",
     ),
@@ -2354,7 +2354,7 @@ test "HashML-DSA-87 sigGen preHash SHA3-512 tr1 #145" {
 
 ///|
 test "HashML-DSA-87 sigGen preHash SHA2-256 tr1 #146" {
-  let (_, sk) = ml_dsa_87_keygen(
+  let { sk, .. } = ml_dsa_87_keygen(
     hex_to_bytes(
       "06AE6C3B2C3326AFDB89431A4E359BE9759FB24E09655823ABAD68899DE68DF4",
     ),
@@ -2533,7 +2533,7 @@ test "HashML-DSA-87 sigGen preHash SHA2-256 tr1 #146" {
 
 ///|
 test "HashML-DSA-87 sigGen preHash SHA3-384 tr1 #147" {
-  let (_, sk) = ml_dsa_87_keygen(
+  let { sk, .. } = ml_dsa_87_keygen(
     hex_to_bytes(
       "0D763976B8C34F94426DE1F47189A7AA5C5B4106C52E0601817FDAD8255A5F03",
     ),
@@ -2795,7 +2795,7 @@ test "HashML-DSA-87 sigGen preHash SHA3-384 tr1 #147" {
 
 ///|
 test "HashML-DSA-87 sigGen preHash SHA2-512/256 tr1 #148" {
-  let (_, sk) = ml_dsa_87_keygen(
+  let { sk, .. } = ml_dsa_87_keygen(
     hex_to_bytes(
       "07FF9B939C7B365292063497316E4649AD7607FA1229DB110FC9C05210AFAA0C",
     ),
@@ -2966,7 +2966,7 @@ test "HashML-DSA-87 sigGen preHash SHA2-512/256 tr1 #148" {
 
 ///|
 test "HashML-DSA-87 sigGen preHash SHA2-384 tr1 #149" {
-  let (_, sk) = ml_dsa_87_keygen(
+  let { sk, .. } = ml_dsa_87_keygen(
     hex_to_bytes(
       "C1E338529DA27EA0502AD8CC0D7E836A54DF83208845DCA7A8836F412E9214B7",
     ),
@@ -3170,7 +3170,7 @@ test "HashML-DSA-87 sigGen preHash SHA2-384 tr1 #149" {
 
 ///|
 test "HashML-DSA-87 sigGen preHash SHA2-224 tr1 #150" {
-  let (_, sk) = ml_dsa_87_keygen(
+  let { sk, .. } = ml_dsa_87_keygen(
     hex_to_bytes(
       "F454F8DD9C6F0FD103BD922E9829F52ED9096A8C0B7278675994047EA8998C30",
     ),

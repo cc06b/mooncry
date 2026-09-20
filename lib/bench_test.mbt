@@ -55,7 +55,7 @@ test "bench aes_gcm_encrypt 1KiB (AES-256)" (it : @bench.T) {
   let iv = bench_input(12)
   let aad = bench_input(16)
   it.bench(fn() {
-    let (ct, tag) = aes_gcm_encrypt(data, key, iv, aad)
+    let { ct, tag, } = aes_gcm_encrypt(data, key, iv, aad)
     it.keep(ct)
     it.keep(tag)
   })
@@ -224,7 +224,7 @@ test "bench ml_dsa_65 sign" (it : @bench.T) {
   let rnd = bench_input(32)
   let msg = bench_input(64)
   let kps = ml_dsa_65_keygen(seed)
-  it.bench(fn() { it.keep(ml_dsa_65_sign(kps.1, msg, rnd, b"")) })
+  it.bench(fn() { it.keep(ml_dsa_65_sign(kps.sk, msg, rnd, b"")) })
 }
 
 ///|
@@ -233,8 +233,8 @@ test "bench ml_dsa_65 verify" (it : @bench.T) {
   let rnd = bench_input(32)
   let msg = bench_input(64)
   let kps = ml_dsa_65_keygen(seed)
-  let sig = ml_dsa_65_sign(kps.1, msg, rnd, b"")
-  it.bench(fn() { it.keep(ml_dsa_65_verify(kps.0, msg, sig, b"")) })
+  let sig = ml_dsa_65_sign(kps.sk, msg, rnd, b"")
+  it.bench(fn() { it.keep(ml_dsa_65_verify(kps.pk, msg, sig, b"")) })
 }
 
 ///|
@@ -250,7 +250,7 @@ test "bench ml_kem_768 encaps" (it : @bench.T) {
   let z = bench_input(32)
   let m = bench_input(32)
   let kp = ml_kem_768_keygen(d, z)
-  it.bench(fn() { it.keep(ml_kem_768_encaps(kp.0, m)) })
+  it.bench(fn() { it.keep(ml_kem_768_encaps(kp.ek, m)) })
 }
 
 ///|
@@ -259,6 +259,6 @@ test "bench ml_kem_768 decaps" (it : @bench.T) {
   let z = bench_input(32)
   let m = bench_input(32)
   let kp = ml_kem_768_keygen(d, z)
-  let ct = ml_kem_768_encaps(kp.0, m).ct // (shared, ct)
-  it.bench(fn() { it.keep(ml_kem_768_decaps(kp.1, ct)) })
+  let ct = ml_kem_768_encaps(kp.ek, m).ct
+  it.bench(fn() { it.keep(ml_kem_768_decaps(kp.dk, ct)) })
 }

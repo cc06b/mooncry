@@ -18,7 +18,9 @@ fn xwing_expand(sk : Bytes) -> (Bytes, Bytes, Bytes, Bytes) {
   let expanded = shake_256(sk, 96)
   let d = bytes_sub(expanded, 0, 32)
   let z = bytes_sub(expanded, 32, 32)
-  let (pk_m, sk_m) = ml_kem_768_keygen(d, z)
+  let kp_m = ml_kem_768_keygen(d, z)
+  let pk_m = kp_m.ek
+  let sk_m = kp_m.dk
   let sk_x = bytes_sub(expanded, 64, 32)
   let pk_x = x25519_public_key(sk_x)
   (sk_m, sk_x, pk_m, pk_x)
@@ -38,14 +40,14 @@ fn xwing_combiner(
 /// X-Wing key generation (derandomized): expands the 32-byte seed into
 /// the ML-KEM-768 and X25519 components. Returns (pk, sk) where pk is
 /// 1216 bytes and sk is the 32-byte seed itself. v0.35.0.
-pub fn xwing_keygen(seed : Bytes) -> (Bytes, Bytes) {
+pub fn xwing_keygen(seed : Bytes) -> KeyPair {
   if seed.length() != 32 {
     abort("xwing_keygen: seed must be 32 bytes")
   }
   let (sk_m, sk_x, pk_m, pk_x) = xwing_expand(seed)
   let _ = sk_m
   let _ = sk_x
-  (concat_bytes(pk_m, pk_x), seed)
+  { pk: concat_bytes(pk_m, pk_x), sk: seed, }
 }
 
 ///|

@@ -375,7 +375,7 @@ fn hpke_p256_point_deserialize(pk : Bytes) -> (BigInt, BigInt) {
 
 ///|
 /// (Nsk bytes). Returns (pk, sk). v0.37.0.
-pub fn hpke_derive_key_pair(s : HpkeSuite, ikm : Bytes) -> (Bytes, Bytes) {
+pub fn hpke_derive_key_pair(s : HpkeSuite, ikm : Bytes) -> KeyPair {
   let (_, nsk) = hpke_kem_params(s)
   let dkp_prk = hpke_labeled_extract(s, true, b"", b"dkp_prk", ikm)
   if s.kem_id == 0x11 {
@@ -408,7 +408,7 @@ pub fn hpke_derive_key_pair(s : HpkeSuite, ikm : Bytes) -> (Bytes, Bytes) {
       sk_int,
       ec_g_point(hpke_p384_curve),
     )
-    (hpke_p384_point_serialize(pt.x, pt.y), sk)
+    { pk: hpke_p384_point_serialize(pt.x, pt.y), sk, }
   } else if s.kem_id == 0x12 {
     // rejection sampling over the P-521 group order (bitmask 0x01)
     let order = hpke_p521_curve.n
@@ -440,7 +440,7 @@ pub fn hpke_derive_key_pair(s : HpkeSuite, ikm : Bytes) -> (Bytes, Bytes) {
       sk_int,
       ec_g_point(hpke_p521_curve),
     )
-    (hpke_p521_point_serialize(pt.x, pt.y), sk)
+    { pk: hpke_p521_point_serialize(pt.x, pt.y), sk, }
   } else if s.kem_id == 0x10 {
     // rejection sampling over the P-256 group order (RFC 9180 section 7.1.3)
     let order = p256_curve.n
@@ -468,7 +468,7 @@ pub fn hpke_derive_key_pair(s : HpkeSuite, ikm : Bytes) -> (Bytes, Bytes) {
     }
     let sk = rsa_i2osp(sk_int, 32)
     let pt = ec_scalar_mult(p256_curve, sk_int, ec_g_point(p256_curve))
-    (hpke_p256_point_serialize(pt.x, pt.y), sk)
+    { pk: hpke_p256_point_serialize(pt.x, pt.y), sk, }
   } else {
     let sk = hpke_labeled_expand(s, true, dkp_prk, b"sk", b"", nsk)
     let pk = match s.kem_id {
@@ -476,7 +476,7 @@ pub fn hpke_derive_key_pair(s : HpkeSuite, ikm : Bytes) -> (Bytes, Bytes) {
       0x21 => x448_public_key(sk)
       _ => abort("hpke: unsupported kem_id")
     }
-    (pk, sk)
+    { pk, sk, }
   }
 }
 
@@ -617,7 +617,9 @@ pub struct HpkeEncap {
 /// HPKE Encap (derandomized: `ikm_e` supplies the ephemeral key
 /// material). Returns (shared_secret, enc). v0.37.0.
 pub fn hpke_encap(s : HpkeSuite, pk_r : Bytes, ikm_e : Bytes) -> HpkeEncap {
-  let (pk_e, sk_e) = hpke_derive_key_pair(s, ikm_e)
+  let kp_e = hpke_derive_key_pair(s, ikm_e)
+  let pk_e = kp_e.pk
+  let sk_e = kp_e.sk
   let dh = hpke_dh(s, sk_e, pk_r)
   let kem_context = concat_bytes(pk_e, pk_r)
   { shared_secret: hpke_extract_and_expand(s, dh, kem_context), enc: pk_e, }
@@ -648,7 +650,9 @@ pub fn hpke_auth_encap(
   sk_s : Bytes,
   ikm_e : Bytes,
 ) -> HpkeEncap {
-  let (pk_e, sk_e) = hpke_derive_key_pair(s, ikm_e)
+  let kp_e = hpke_derive_key_pair(s, ikm_e)
+  let pk_e = kp_e.pk
+  let sk_e = kp_e.sk
   let dh = hpke_dh(s, sk_e, pk_r)
   let dh2 = hpke_dh(s, sk_s, pk_r)
   let pk_s = match s.kem_id {
@@ -972,11 +976,11 @@ pub fn hpke_seal(ctx : HpkeContext, aad : Bytes, pt : Bytes) -> Bytes {
   ctx.seq = ctx.seq + 1L
   match ctx.suite.aead_id {
     1 => {
-      let (ct, tag) = aes_gcm_encrypt(pt, ctx.key, nonce, aad)
+      let { ct, tag, } = aes_gcm_encrypt(pt, ctx.key, nonce, aad)
       concat_bytes(ct, tag)
     }
     2 => {
-      let (ct, tag) = aes_gcm_encrypt(pt, ctx.key, nonce, aad)
+      let { ct, tag, } = aes_gcm_encrypt(pt, ctx.key, nonce, aad)
       concat_bytes(ct, tag)
     }
     3 => chacha20_poly1305_encrypt(ctx.key, nonce, aad, pt)

@@ -60,7 +60,7 @@ test "property: AES-256-GCM round-trip (many sizes)" {
     let nonce = rng_bytes(r, 12)
     let pt = rng_bytes(r, rng_int(r, 200))
     let aad = rng_bytes(r, rng_int(r, 40))
-    let (ct, tag) = aes_gcm_encrypt(pt, key, nonce, aad)
+    let { ct, tag, } = aes_gcm_encrypt(pt, key, nonce, aad)
     let (rec, ok) = bb_flag(aes_gcm_decrypt(ct, key, nonce, aad, tag))
     assert_true(ok)
     assert_roundtrip("aes-gcm", pt, rec)

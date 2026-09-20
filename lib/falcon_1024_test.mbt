@@ -12415,7 +12415,9 @@ test "falcon-1024-verify-second-key" {
 test "falcon-1024-keypair-byte-exact" {
   let r = falcon_test_rng_init()
   let seed = falcon_test_rng_bytes(r, 48)
-  let (mypk, mysk) = falcon1024_keypair_from_seed(seed)
+  let kpr1 = falcon1024_keypair_from_seed(seed)
+  let mypk = kpr1.pk
+  let mysk = kpr1.sk
   inspect(mypk.length(), content="1793")
   inspect(mysk.length(), content="2305")
   inspect(bytes_equal(mypk, f10_pk()), content="true")

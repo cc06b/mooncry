@@ -99,7 +99,7 @@ test "boundary-aes-gcm-family" {
       let label = "pt=" + pt_len.to_string() + " aad=" + aad_len.to_string()
       // AES-GCM across all three key sizes
       for key in [key16, key24, key32] {
-        let (ct, tag) = aes_gcm_encrypt(pt, key, nonce, aad)
+        let { ct, tag, } = aes_gcm_encrypt(pt, key, nonce, aad)
         assert_true(ct.length() == pt_len, msg="aes_gcm " + label + ": ct len")
         assert_true(tag.length() == 16, msg="aes_gcm " + label + ": tag len")
         let (got, ok) = bb_flag(aes_gcm_decrypt(ct, key, nonce, aad, tag))
@@ -114,12 +114,19 @@ test "boundary-aes-gcm-family" {
         )
         // GMAC is the empty-plaintext GCM tag: it must match
         assert_true(
-          gmac_verify(key, nonce, aad, aes_gcm_encrypt(b"", key, nonce, aad).1),
+          gmac_verify(
+            key,
+            nonce,
+            aad,
+            aes_gcm_encrypt(b"", key, nonce, aad).tag,
+          ),
           msg="gmac " + label,
         )
       }
       // SM4-GCM (128-bit key only)
-      let (sct, stag) = sm4_gcm_encrypt(pt, key16, nonce, aad)
+      let kpr1 = sm4_gcm_encrypt(pt, key16, nonce, aad)
+      let sct = kpr1.ct
+      let stag = kpr1.tag
       assert_true(sct.length() == pt_len, msg="sm4_gcm " + label + ": ct len")
       let (sgot, sok) = bb_flag(sm4_gcm_decrypt(sct, key16, nonce, aad, stag))
       assert_true(sok && rb_eq(sgot, pt), msg="sm4_gcm " + label)
@@ -332,7 +339,7 @@ test "boundary-kem-envelopes" {
   let r = rb_rng(0x424F554E444B45UL)
   let d = rb_bytes(r, 32)
   let z = rb_bytes(r, 32)
-  let (ek, dk) = ml_kem_512_keygen(d, z)
+  let { ek, dk, } = ml_kem_512_keygen(d, z)
   let m = rb_bytes(r, 32)
   let aad = rb_bytes(r, 13)
   for pt_len in rb_pt_lens {

@@ -6,7 +6,9 @@
 test "falcon-m4c-keypair-byte-exact" {
   let r = falcon_test_rng_init()
   let seed = falcon_test_rng_bytes(r, 48)
-  let (mypk, mysk) = falcon512_keypair_from_seed(seed)
+  let kpr1 = falcon512_keypair_from_seed(seed)
+  let mypk = kpr1.pk
+  let mysk = kpr1.sk
   let exp_pk : Array[Byte] = [
     (0x09).to_byte(),
     (0x89).to_byte(),

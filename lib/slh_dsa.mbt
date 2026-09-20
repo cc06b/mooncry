@@ -1111,7 +1111,7 @@ fn slh_keygen_internal(
   sk_seed : Bytes,
   sk_prf : Bytes,
   pk_seed : Bytes,
-) -> (Bytes, Bytes) {
+) -> KeyPair {
   // Without this the seeds are absorbed short and the resulting sk is 4n-1
   // bytes instead of 4n -- a malformed key pair that travels until slh_sign
   // reads past its end. n is 16/24/32 for the 128/192/256 security levels.
@@ -1135,10 +1135,10 @@ fn slh_keygen_internal(
   adrs_set_layer(adrs, p.d - 1)
   let s = slh_suite_new(p, pk_seed)
   let pk_root = slh_xmss_node(s, p, sk_seed, 0, p.hp, adrs)
-  (
-    concat_bytes(pk_seed, pk_root),
-    concat_all([sk_seed, sk_prf, pk_seed, pk_root]),
-  )
+  {
+    pk: concat_bytes(pk_seed, pk_root),
+    sk: concat_all([sk_seed, sk_prf, pk_seed, pk_root]),
+  }
 }
 
 ///|
@@ -1256,13 +1256,13 @@ fn slh_format_prehash(msg : Bytes, ctx : Bytes, ph : DsaPrehash) -> Bytes {
 
 ///|
 /// SLH-DSA key generation (FIPS 205 Algorithm 18), deterministic in the
-/// three n-byte seeds (SK.seed, SK.prf, PK.seed). Returns (pk, sk).
+/// three n-byte seeds (SK.seed, SK.prf, PK.seed). Returns a `KeyPair`.
 pub fn slh_keygen(
   params : SlhParams,
   sk_seed : Bytes,
   sk_prf : Bytes,
   pk_seed : Bytes,
-) -> (Bytes, Bytes) {
+) -> KeyPair {
   slh_keygen_internal(params, sk_seed, sk_prf, pk_seed)
 }
 
