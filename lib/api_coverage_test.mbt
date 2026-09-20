@@ -876,9 +876,9 @@ test "the five mixed-semantics twins agree with their aborting originals" {
   // needs its own fresh context; wave6_hpke_receiver builds one from the same
   // deterministic key material and the sender's `enc`.
   let suite = hpke_x25519_hkdf_sha256_aes128gcm
-  let (pk_r, sk_r) = hpke_derive_key_pair(suite, Bytes::make(32, b''))
-  let (pk_s, sk_s) = hpke_derive_key_pair(suite, Bytes::make(32, b''))
-  let ikm = Bytes::make(32, b'')
+  let (pk_r, sk_r) = hpke_derive_key_pair(suite, Bytes::make(32, b'\x01'))
+  let (pk_s, sk_s) = hpke_derive_key_pair(suite, Bytes::make(32, b'\x02'))
+  let ikm = Bytes::make(32, b'\x03')
   let (enc, ctx_s) = hpke_setup_s(suite, 0, pk_r, ikm, b"info", b"", b"", sk_s)
   let ct1 = hpke_seal(ctx_s, aad, msg) // sender sequence 0
   let ct2 = hpke_seal(ctx_s, aad, b"second") // sender sequence 1

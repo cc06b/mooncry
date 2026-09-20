@@ -63,6 +63,12 @@ jobs:
       #   C1 every `_or` entry point returns Result[_]
       #   C2 every aborting twin shares ONE guard with its `_or` twin
       #   C3 every name in the Public API table exists in lib/
+      # A byte literal written as a raw control byte instead of an `\xNN`
+      # escape compiles, tests green, and still makes the file binary to git and
+      # to `moon fmt --check` -- which is how v0.92.0 shipped two of them.
+      - name: Verify no raw control bytes in sources
+        run: python3 .github/scripts/check_no_control_bytes.py
+
       - name: API contract check
         run: python3 .github/scripts/api_contract_check.py
 
