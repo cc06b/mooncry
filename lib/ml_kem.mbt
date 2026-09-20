@@ -629,11 +629,17 @@ fn kem_lengths(params : MlKemParams) -> (Int, Int, Int) {
 }
 
 ///|
-fn kem_encaps_body(
-  params : MlKemParams,
-  ek : Bytes,
-  m : Bytes,
-) -> (Bytes, Bytes) {
+/// The result of a KEM encapsulation: the shared secret to use, and the
+/// ciphertext to send. A struct rather than `(Bytes, Bytes)` because the two
+/// elements had the same type, so writing them the wrong way round compiled --
+/// and then both sides derived different keys with no error anywhere.
+pub struct EncapsResult {
+  shared_secret : Bytes
+  ct : Bytes
+}
+
+///|
+fn kem_encaps_body(params : MlKemParams, ek : Bytes, m : Bytes) -> EncapsResult {
   let gm = kem_g(concat_bytes(m, kem_h(ek)))
   let k_shared = Array::make(32, b'\x00')
   let r = Array::make(32, b'\x00')
@@ -642,7 +648,7 @@ fn kem_encaps_body(
     r[i] = gm[32 + i]
   }
   let c = kem_kpke_encrypt(params, ek, m, Bytes::from_array(r[:]))
-  (Bytes::from_array(k_shared[:]), c)
+  { shared_secret: Bytes::from_array(k_shared[:]), ct: c, }
 }
 
 ///|
@@ -652,7 +658,7 @@ fn kem_encaps_or(
   params : MlKemParams,
   ek : Bytes,
   m : Bytes,
-) -> Result[(Bytes, Bytes), String] {
+) -> Result[EncapsResult, String] {
   let (ek_len, _, _) = kem_lengths(params)
   if ek.length() != ek_len {
     return Err("ml_kem encaps: ek has the wrong length for this parameter set")
@@ -668,7 +674,7 @@ fn kem_encaps_internal(
   params : MlKemParams,
   ek : Bytes,
   m : Bytes,
-) -> (Bytes, Bytes) {
+) -> EncapsResult {
   match kem_encaps_or(params, ek, m) {
     Ok(pair) => pair
     Err(msg) => abort(msg)
@@ -759,7 +765,7 @@ pub fn ml_kem_512_keygen(d : Bytes, z : Bytes) -> (Bytes, Bytes) {
 ///|
 /// ML-KEM-512 encapsulation: deterministic from the caller's 32-byte m
 /// (CSPRNG output). Returns the (shared key K, ciphertext c) pair.
-pub fn ml_kem_512_encaps(ek : Bytes, m : Bytes) -> (Bytes, Bytes) {
+pub fn ml_kem_512_encaps(ek : Bytes, m : Bytes) -> EncapsResult {
   kem_encaps_internal(mlkem_512, ek, m)
 }
 
@@ -778,7 +784,7 @@ pub fn ml_kem_768_keygen(d : Bytes, z : Bytes) -> (Bytes, Bytes) {
 
 ///|
 /// ML-KEM-768 encapsulation. See `ml_kem_512_encaps`.
-pub fn ml_kem_768_encaps(ek : Bytes, m : Bytes) -> (Bytes, Bytes) {
+pub fn ml_kem_768_encaps(ek : Bytes, m : Bytes) -> EncapsResult {
   kem_encaps_internal(mlkem_768, ek, m)
 }
 
@@ -796,7 +802,7 @@ pub fn ml_kem_1024_keygen(d : Bytes, z : Bytes) -> (Bytes, Bytes) {
 
 ///|
 /// ML-KEM-1024 encapsulation. See `ml_kem_512_encaps`.
-pub fn ml_kem_1024_encaps(ek : Bytes, m : Bytes) -> (Bytes, Bytes) {
+pub fn ml_kem_1024_encaps(ek : Bytes, m : Bytes) -> EncapsResult {
   kem_encaps_internal(mlkem_1024, ek, m)
 }
 
@@ -814,11 +820,11 @@ pub fn ml_kem_1024_decaps(dk : Bytes, c : Bytes) -> Bytes {
 
 ///|
 /// ML-KEM-512 encapsulation without aborting. `Err` on a wrong-length `ek`
-/// (peer-supplied) or `m`; `Ok((K, c))` otherwise.
+/// (peer-supplied) or `m`; `Ok(EncapsResult)` otherwise.
 pub fn ml_kem_512_encaps_or(
   ek : Bytes,
   m : Bytes,
-) -> Result[(Bytes, Bytes), String] {
+) -> Result[EncapsResult, String] {
   kem_encaps_or(mlkem_512, ek, m)
 }
 
@@ -835,7 +841,7 @@ pub fn ml_kem_512_decaps_or(dk : Bytes, c : Bytes) -> Result[Bytes, String] {
 pub fn ml_kem_768_encaps_or(
   ek : Bytes,
   m : Bytes,
-) -> Result[(Bytes, Bytes), String] {
+) -> Result[EncapsResult, String] {
   kem_encaps_or(mlkem_768, ek, m)
 }
 
@@ -850,7 +856,7 @@ pub fn ml_kem_768_decaps_or(dk : Bytes, c : Bytes) -> Result[Bytes, String] {
 pub fn ml_kem_1024_encaps_or(
   ek : Bytes,
   m : Bytes,
-) -> Result[(Bytes, Bytes), String] {
+) -> Result[EncapsResult, String] {
   kem_encaps_or(mlkem_1024, ek, m)
 }
 

@@ -33,7 +33,9 @@ test "HPKE P-384 derive/encap/decap differential" {
       ),
     ),
   )
-  let (ss, enc) = hpke_encap(suite, pk_r, ikm_e)
+  let cap1 = hpke_encap(suite, pk_r, ikm_e)
+  let ss = cap1.shared_secret
+  let enc = cap1.enc
   assert_true(
     bytes_equal(
       enc,

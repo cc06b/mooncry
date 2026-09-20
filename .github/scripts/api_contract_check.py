@@ -105,6 +105,12 @@ LEGACY_BYTES_BOOL = set()
 # this library reports failures through.
 LEGACY_OPTION = set()
 
+# Ratchet on same-type tuple returns: `(Bytes, Bytes)` and friends, where
+# swapping the two elements still compiles. 19 before v0.93.0, 13 after it
+# turned the encapsulation results into structs. Lower it as the rest migrate;
+# raising it needs a reason.
+MAX_SAME_TYPE_TUPLES = 13
+
 
 # --------------------------------------------------------------------------
 # a small MoonBit scanner: strip comments and string/char literals so that
@@ -484,10 +490,21 @@ def main():
                 problems.append(
                     "C4 %s lists %s, which is not a public function any more -- "
                     "prune the list" % (label, n))
-    print("    %d same-type tuples (1.0 will decide whether these become "
-          "structs): %s" % (len(same_type_tuples),
-                            ", ".join(same_type_tuples[:4]) +
-                            (" ..." if len(same_type_tuples) > 4 else "")))
+    # Same-type tuples are the last known footgun: both elements have the same
+    # type, so swapping them compiles and fails silently. v0.93.0 turned the six
+    # encapsulation results into named structs (EncapsResult, HpkeEncap); this
+    # count is a ratchet, so the remaining thirteen can only go down.
+    if len(same_type_tuples) > MAX_SAME_TYPE_TUPLES:
+        c4 += 1
+        extra = [t for t in same_type_tuples]
+        problems.append(
+            "C4 %d same-type tuple returns, above the ratchet of %d -- return a "
+            "struct with named fields instead (see EncapsResult): %s"
+            % (len(same_type_tuples), MAX_SAME_TYPE_TUPLES, ", ".join(extra)))
+    print("    %d same-type tuples (ratchet: <= %d): %s"
+          % (len(same_type_tuples), MAX_SAME_TYPE_TUPLES,
+             ", ".join(t.split(" -> ")[0] for t in same_type_tuples[:6]) +
+             (" ..." if len(same_type_tuples) > 6 else "")))
 
     for p in problems:
         print("::error::%s" % p)

@@ -450,7 +450,7 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `x448_or(scalar, u) -> Result[Bytes, String]` | X448 without aborting on a wrong-length peer share |
 | `x448_public_key(private_key) -> Bytes` | Derive X448 public key (base u=5) |
 | `ml_kem_512_keygen(d, z) -> (ek, dk)` | ML-KEM-512 keygen (FIPS 203, deterministic in d,z) |
-| `ml_kem_512_encaps(ek, m) -> (K, c)` | ML-KEM-512 encapsulation |
+| `ml_kem_512_encaps(ek, m) -> EncapsResult` | ML-KEM-512 encapsulation; `EncapsResult { shared_secret, ct }` |
 | `ml_kem_512_decaps(dk, c) -> Bytes` | ML-KEM-512 decapsulation (implicit rejection) |
 | `ml_kem_768_keygen / encaps / decaps` | ML-KEM-768 (same shapes) |
 | `ml_kem_1024_keygen / encaps / decaps` | ML-KEM-1024 (same shapes) |
@@ -462,7 +462,7 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `aes_gcm_siv_encrypt(key, nonce, aad, pt)` | AES-GCM-SIV (RFC 8452, nonce-misuse-resistant) |
 | `aes_gcm_siv_decrypt(key, nonce, aad, ct) -> Result[Bytes, String]` | AES-GCM-SIV decryption (returned `Option` before v0.91.0) |
 | `xwing_keygen(seed) -> (pk, sk)` | X-Wing hybrid KEM keygen (ML-KEM-768 + X25519) |
-| `xwing_encaps(pk, eseed) -> (ss, ct)` | X-Wing encapsulation (derandomized) |
+| `xwing_encaps(pk, eseed) -> EncapsResult` | X-Wing encapsulation (derandomized) |
 | `xwing_decaps(ct, sk) -> Bytes` | X-Wing decapsulation |
 | `turbo_shake_128(data, d, out_len)` | TurboSHAKE128 (RFC 9861, Keccak-p[1600,12]); domain byte `d` 1..=127 |
 | `kangaroo_twelve_128(m, c, out_len)` | KangarooTwelve KT128 (tree hash + customization) |
@@ -473,7 +473,7 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `hpke_x25519_* / hpke_p256_* / hpke_p521_* / hpke_x448_*` | HPKE cipher-suite selectors (all RFC-vectored suites) |
 | `hpke_p384_hkdf_sha384_aes256gcm` | DHKEM(P-384) suite (differential vectors) |
 | `hpke_derive_key_pair(suite, ikm) -> (pk, sk)` | DHKEM DeriveKeyPair (rejection-sampling for the NIST curves, up to 255 tries) |
-| `hpke_encap / hpke_decap(suite, …)` | DHKEM base Encap/Decap; returns **(shared_secret, enc)** |
+| `hpke_encap / hpke_decap(suite, …)` | DHKEM base Encap/Decap; Encap returns `HpkeEncap { shared_secret, enc }` |
 | `hpke_auth_encap(suite, pk_r, sk_s, ikm_e) / hpke_auth_decap(suite, enc, sk_r, pk_r, pk_s)` | DHKEM auth modes (RFC 9180 §5.1.3), `kem_context = enc ‖ pkRm ‖ pkSm`; same **(shared_secret, enc)** order |
 | `hpke_setup_r(suite, mode, sk_r, pk_r, enc, info, psk, psk_id, pk_s)` | HPKE receiver setup (all 4 modes) |
 | `hmac_sha384 / hkdf_sha384 / hkdf_sha384_extract` | SHA-384 MAC/KDF family |
@@ -521,7 +521,7 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `sm4_cbc_decrypt_or(key, iv, data) -> Result[Bytes, String]` | SM4-CBC decrypt, graceful |
 | `rsa_oaep_decrypt_or / _with_or / _crt_or -> Result[Bytes, String]` | RSA-OAEP decrypt, uniform `Err` for every failure cause |
 | `rsa_pkcs1_v15_decrypt_or / _crt_or -> Result[Bytes, String]` | RSA PKCS#1 v1.5 decrypt, uniform `Err` |
-| `ml_kem_512/768/1024_encaps_or(ek, m) -> Result[(Bytes, Bytes), String]` | ML-KEM encapsulation, `Err` on a wrong-length peer `ek` |
+| `ml_kem_512/768/1024_encaps_or(ek, m) -> Result[EncapsResult, String]` | ML-KEM encapsulation, `Err` on a wrong-length peer `ek` |
 | `ml_kem_512/768/1024_decaps_or(dk, c) -> Result[Bytes, String]` | ML-KEM decapsulation, `Err` on wrong lengths (invalid `c` still gets the implicit-rejection key) |
 | `xwing_encaps_or(pk, eseed) / xwing_decaps_or(ct, sk) -> Result[_, String]` | X-Wing, graceful on wrong-length peer material |
 | `hpke_valid_pk(suite, pk) -> Bool` | Validate a peer HPKE public key / `enc` (length + on-curve for the NIST KEMs) |
@@ -592,11 +592,26 @@ The rules C4 enforces:
   rot;
 - a name ending in `_verify` / `_check` must return `Bool`.
 
-The remaining known wart is the 19 **same-type tuples** — `(pk, sk)`,
-`(shared_secret, enc)`, `(ct, tag)` — whose element order the compiler cannot
-check and which swapping silently survives. C4 prints the list on every run so
-it cannot grow unnoticed; turning them into structs is the one breaking change
-still queued.
+The last known wart is the **same-type tuple**: both elements are `Bytes`, so
+swapping them compiles and fails silently. Six of the nineteen are gone as of
+v0.93.0 — every encapsulation now returns a struct with named fields:
+
+```moonbit
+pub struct EncapsResult { shared_secret : Bytes, ct : Bytes }   // ML-KEM, X-Wing
+pub struct HpkeEncap { shared_secret : Bytes, enc : Bytes }      // HPKE Encap/AuthEncap
+```
+
+`hpke_encap` is the case that motivated it: this library returned
+`(shared_secret, enc)` where RFC 9180's pseudocode writes `return enc,
+shared_secret`, and the test that was supposed to pin the order got it backwards
+the first time it was written. Both structs are **read-only outside the
+package** — a consumer can read a result but cannot forge one.
+
+The 13 that remain are the keygens (`(pk, sk)`, `(ek, dk)`) and the two GCM
+encrypts (`(ct, tag)`), where the conventional order makes a swap less likely
+and the first use usually catches it. C4 counts them against a **ratchet**
+(`MAX_SAME_TYPE_TUPLES = 13`), so the list can only shrink: adding a new
+same-type tuple fails the build, and migrating one means lowering the number.
 
 ### Public but internal: what `pub` owes you here
 

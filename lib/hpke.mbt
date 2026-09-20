@@ -604,13 +604,23 @@ fn hpke_extract_and_expand(
 }
 
 ///|
+/// HPKE Encap's output: the shared secret, and `enc` -- the encapsulated key
+/// that goes to the recipient (RFC 9180 §5.1). Named fields because both were
+/// `Bytes`, and because the RFC's pseudocode lists them in the opposite order,
+/// which is how the swap this struct prevents once happened for real.
+pub struct HpkeEncap {
+  shared_secret : Bytes
+  enc : Bytes
+}
+
+///|
 /// HPKE Encap (derandomized: `ikm_e` supplies the ephemeral key
 /// material). Returns (shared_secret, enc). v0.37.0.
-pub fn hpke_encap(s : HpkeSuite, pk_r : Bytes, ikm_e : Bytes) -> (Bytes, Bytes) {
+pub fn hpke_encap(s : HpkeSuite, pk_r : Bytes, ikm_e : Bytes) -> HpkeEncap {
   let (pk_e, sk_e) = hpke_derive_key_pair(s, ikm_e)
   let dh = hpke_dh(s, sk_e, pk_r)
   let kem_context = concat_bytes(pk_e, pk_r)
-  (hpke_extract_and_expand(s, dh, kem_context), pk_e)
+  { shared_secret: hpke_extract_and_expand(s, dh, kem_context), enc: pk_e, }
 }
 
 ///|
@@ -637,7 +647,7 @@ pub fn hpke_auth_encap(
   pk_r : Bytes,
   sk_s : Bytes,
   ikm_e : Bytes,
-) -> (Bytes, Bytes) {
+) -> HpkeEncap {
   let (pk_e, sk_e) = hpke_derive_key_pair(s, ikm_e)
   let dh = hpke_dh(s, sk_e, pk_r)
   let dh2 = hpke_dh(s, sk_s, pk_r)
@@ -671,7 +681,14 @@ pub fn hpke_auth_encap(
     _ => abort("hpke: unsupported kem_id")
   }
   let kem_context = concat_all([pk_e, pk_r, pk_s])
-  (hpke_extract_and_expand(s, concat_bytes(dh, dh2), kem_context), pk_e)
+  {
+    shared_secret: hpke_extract_and_expand(
+      s,
+      concat_bytes(dh, dh2),
+      kem_context,
+    ),
+    enc: pk_e,
+  }
 }
 
 ///|
@@ -768,12 +785,12 @@ pub fn hpke_setup_s(
     Ok(_) => ()
   }
 
-  let (shared_secret, enc) = if mode == 2 || mode == 3 {
+  let cap = if mode == 2 || mode == 3 {
     hpke_auth_encap(s, pk_r, sk_s, ikm_e)
   } else {
     hpke_encap(s, pk_r, ikm_e)
   }
-  (enc, hpke_key_schedule(s, mode, shared_secret, info, psk, psk_id))
+  (cap.enc, hpke_key_schedule(s, mode, cap.shared_secret, info, psk, psk_id))
 }
 
 ///|
@@ -813,12 +830,12 @@ pub fn hpke_setup_r(
 ///|
 /// HPKE Encap without aborting: `Err` if the recipient's `pk_r` is not a
 /// valid public key for the suite's KEM. On success the `Ok` payload is
-/// **(shared_secret, enc)**, as in `hpke_encap`.
+/// an `HpkeEncap`, as in `hpke_encap`.
 pub fn hpke_encap_or(
   s : HpkeSuite,
   pk_r : Bytes,
   ikm_e : Bytes,
-) -> Result[(Bytes, Bytes), String] {
+) -> Result[HpkeEncap, String] {
   if !hpke_valid_pk(s, pk_r) {
     return Err("hpke: invalid peer public key (pk_r)")
   }
@@ -827,13 +844,14 @@ pub fn hpke_encap_or(
 
 ///|
 /// HPKE AuthEncap without aborting. See `hpke_encap_or`; the `Ok` payload is
-/// **(shared_secret, enc)**, not the RFC's (enc, shared_secret).
+/// an `HpkeEncap`, whose field names settle the order the RFC's
+/// pseudocode leaves ambiguous.
 pub fn hpke_auth_encap_or(
   s : HpkeSuite,
   pk_r : Bytes,
   sk_s : Bytes,
   ikm_e : Bytes,
-) -> Result[(Bytes, Bytes), String] {
+) -> Result[HpkeEncap, String] {
   if !hpke_valid_pk(s, pk_r) {
     return Err("hpke: invalid peer public key (pk_r)")
   }

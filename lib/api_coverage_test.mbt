@@ -180,18 +180,20 @@ test "hpke auth-mode KEM twins agree and reject hostile input" {
   let (pk_r, sk_r) = hpke_derive_key_pair(s, rb_bytes(r, 32))
   let (pk_s, sk_s) = hpke_derive_key_pair(s, rb_bytes(r, 32))
   let ikm_e = rb_bytes(r, 32)
-  // NOTE the tuple order: this library returns (shared_secret, enc), the
-  // reverse of RFC 9180's `return enc, shared_secret`. Both elements are Bytes,
-  // so getting it round compiles fine and fails silently -- this test got it
-  // wrong first time, which is why the order is now spelled out in the
-  // docstrings of all four encap entry points.
-  let (ss_e, enc) = match hpke_auth_encap_or(s, pk_r, sk_s, ikm_e) {
-    Ok(pair) => pair
-    Err(e) => {
-      assert_true(false, msg="auth_encap_or rejected valid input: " + e)
-      (b"", b"")
-    }
+  // This library's encap returned (shared_secret, enc) -- the reverse of RFC
+  // 9180's `return enc, shared_secret`, both elements Bytes, so getting it
+  // round compiled fine and failed silently. This very test got it wrong the
+  // first time. v0.93.0 replaced the tuple with `HpkeEncap`, whose field names
+  // make the swap a type error instead of a wrong key.
+  // The struct's fields are read-only from outside the package -- a consumer can
+  // read a result but cannot forge one -- so the Err arm aborts rather than
+  // building a placeholder value.
+  let cap_e = match hpke_auth_encap_or(s, pk_r, sk_s, ikm_e) {
+    Ok(res) => res
+    Err(e) => abort("auth_encap_or rejected valid input: " + e)
   }
+  let ss_e = cap_e.shared_secret
+  let enc = cap_e.enc
   assert_true(hpke_valid_pk(s, enc), msg="auth enc is not a valid public key")
   let ss_d = match hpke_auth_decap_or(s, enc, sk_r, pk_r, pk_s) {
     Ok(k) => k
@@ -206,7 +208,9 @@ test "hpke auth-mode KEM twins agree and reject hostile input" {
   )
   assert_true(ss_e.length() == 32, msg="X25519 suite shared secret length")
   // the aborting twins must produce the same values
-  let (ss2, enc2) = hpke_auth_encap(s, pk_r, sk_s, ikm_e)
+  let cap1 = hpke_auth_encap(s, pk_r, sk_s, ikm_e)
+  let ss2 = cap1.shared_secret
+  let enc2 = cap1.enc
   assert_true(
     bytes_equal(enc2, enc) && bytes_equal(ss2, ss_e),
     msg="auth_encap twin differs",

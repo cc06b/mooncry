@@ -259,6 +259,6 @@ test "bench ml_kem_768 decaps" (it : @bench.T) {
   let z = bench_input(32)
   let m = bench_input(32)
   let kp = ml_kem_768_keygen(d, z)
-  let ct = ml_kem_768_encaps(kp.0, m).1 // (shared, ct)
+  let ct = ml_kem_768_encaps(kp.0, m).ct // (shared, ct)
   it.bench(fn() { it.keep(ml_kem_768_decaps(kp.1, ct)) })
 }

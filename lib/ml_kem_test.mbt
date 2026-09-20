@@ -926,7 +926,9 @@ test "ML-KEM-512 encaps official vector 9" {
   let m = hex_to_bytes(
     "DCACFE4DE1C115DA106ACD1EEFEAFDC7F0F4E5707453EE2D6B0D69D34CC0EF4A",
   )
-  let (k, c) = ml_kem_512_encaps(ek, m)
+  let cap1 = ml_kem_512_encaps(ek, m)
+  let k = cap1.shared_secret
+  let c = cap1.ct
   assert_true(
     bytes_equal(
       k,
@@ -984,7 +986,9 @@ test "ML-KEM-512 encaps official vector 10" {
   let m = hex_to_bytes(
     "AE20C9EC4338EA981044EF1A50BE66910559525A020E87026BDAA78D3B1AEA5D",
   )
-  let (k, c) = ml_kem_512_encaps(ek, m)
+  let cap2 = ml_kem_512_encaps(ek, m)
+  let k = cap2.shared_secret
+  let c = cap2.ct
   assert_true(
     bytes_equal(
       k,
@@ -1050,7 +1054,9 @@ test "ML-KEM-768 encaps official vector 11" {
   let m = hex_to_bytes(
     "4E77596168711E913965D8175AC3BD76AAB08B7F9385A02AE883CF6C6E17DD81",
   )
-  let (k, c) = ml_kem_768_encaps(ek, m)
+  let cap3 = ml_kem_768_encaps(ek, m)
+  let k = cap3.shared_secret
+  let c = cap3.ct
   assert_true(
     bytes_equal(
       k,
@@ -1123,7 +1129,9 @@ test "ML-KEM-768 encaps official vector 12" {
   let m = hex_to_bytes(
     "C465031F7464614109C7DDB28AB216181DB5002AE54EAF6C5D6A6EEFC4F72B9E",
   )
-  let (k, c) = ml_kem_768_encaps(ek, m)
+  let cap4 = ml_kem_768_encaps(ek, m)
+  let k = cap4.shared_secret
+  let c = cap4.ct
   assert_true(
     bytes_equal(
       k,
@@ -1204,7 +1212,9 @@ test "ML-KEM-1024 encaps official vector 13" {
   let m = hex_to_bytes(
     "2F1E2CA7BD72AF847CAC38CDEFC4D345909D7517543EDF32E2FC491BA05EB5C3",
   )
-  let (k, c) = ml_kem_1024_encaps(ek, m)
+  let cap5 = ml_kem_1024_encaps(ek, m)
+  let k = cap5.shared_secret
+  let c = cap5.ct
   assert_true(
     bytes_equal(
       k,
@@ -1295,7 +1305,9 @@ test "ML-KEM-1024 encaps official vector 14" {
   let m = hex_to_bytes(
     "AE818F586EC2ADADC7AFED63C03344B9DC0C834133D202B43E2372EEED31817B",
   )
-  let (k, c) = ml_kem_1024_encaps(ek, m)
+  let cap6 = ml_kem_1024_encaps(ek, m)
+  let k = cap6.shared_secret
+  let c = cap6.ct
   assert_true(
     bytes_equal(
       k,
@@ -1623,7 +1635,9 @@ test "property: ML-KEM round-trip (keygen -> encaps -> decaps)" {
   let z = rng_bytes(r, 32)
   let m = rng_bytes(r, 32)
   let (ek, dk) = ml_kem_512_keygen(d, z)
-  let (k1, c) = ml_kem_512_encaps(ek, m)
+  let cap7 = ml_kem_512_encaps(ek, m)
+  let k1 = cap7.shared_secret
+  let c = cap7.ct
   let k2 = ml_kem_512_decaps(dk, c)
   assert_true(bytes_equal(k1, k2))
   // tampered ciphertext triggers implicit rejection: decaps returns

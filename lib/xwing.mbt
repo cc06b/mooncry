@@ -52,7 +52,7 @@ pub fn xwing_keygen(seed : Bytes) -> (Bytes, Bytes) {
 /// X-Wing encapsulation (derandomized in the 64-byte `eseed`:
 /// eseed[0:32] is the ML-KEM encapsulation randomness, eseed[32:64] the
 /// X25519 ephemeral scalar). Returns (ss, ct). v0.35.0.
-pub fn xwing_encaps(pk : Bytes, eseed : Bytes) -> (Bytes, Bytes) {
+pub fn xwing_encaps(pk : Bytes, eseed : Bytes) -> EncapsResult {
   match xwing_encaps_or(pk, eseed) {
     Ok(pair) => pair
     Err(msg) => abort(msg)
@@ -61,11 +61,11 @@ pub fn xwing_encaps(pk : Bytes, eseed : Bytes) -> (Bytes, Bytes) {
 
 ///|
 /// X-Wing encapsulation without aborting: `Err` on a wrong-length peer `pk`
-/// (1216 bytes) or `eseed` (64 bytes), `Ok((ss, ct))` otherwise.
+/// (1216 bytes) or `eseed` (64 bytes), `Ok(EncapsResult)` otherwise.
 pub fn xwing_encaps_or(
   pk : Bytes,
   eseed : Bytes,
-) -> Result[(Bytes, Bytes), String] {
+) -> Result[EncapsResult, String] {
   if pk.length() != 1216 {
     return Err("xwing_encaps: pk must be 1216 bytes")
   }
@@ -77,8 +77,11 @@ pub fn xwing_encaps_or(
   let ek_x = bytes_sub(eseed, 32, 32)
   let ct_x = x25519_public_key(ek_x)
   let ss_x = x25519(ek_x, pk_x)
-  let (ss_m, ct_m) = ml_kem_768_encaps(pk_m, bytes_sub(eseed, 0, 32))
-  Ok((xwing_combiner(ss_m, ss_x, ct_x, pk_x), concat_bytes(ct_m, ct_x)))
+  let cap_m = ml_kem_768_encaps(pk_m, bytes_sub(eseed, 0, 32))
+  Ok({
+    shared_secret: xwing_combiner(cap_m.shared_secret, ss_x, ct_x, pk_x),
+    ct: concat_bytes(cap_m.ct, ct_x),
+  })
 }
 
 ///|

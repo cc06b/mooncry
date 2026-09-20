@@ -782,7 +782,9 @@ test "robust-kem" {
   let (ek768, dk768) = ml_kem_768_keygen(d, z)
   let (ek1024, dk1024) = ml_kem_1024_keygen(d, z)
   let m = rb_bytes(r, 32)
-  let (k512, c512) = ml_kem_512_encaps(ek512, m)
+  let cap1 = ml_kem_512_encaps(ek512, m)
+  let k512 = cap1.shared_secret
+  let c512 = cap1.ct
   match ml_kem_512_decaps_or(dk512, c512) {
     Ok(k) => assert_true(rb_eq(k, k512))
     Err(_) => assert_true(false, msg="ml_kem_512: authentic ct rejected")
@@ -809,12 +811,14 @@ test "robust-kem" {
   }
   for ek in rb_cases(r, ek768, 8) {
     match ml_kem_768_encaps_or(ek, m) {
-      Ok(pair) => assert_true(pair.1.length() == 1088)
+      Ok(res) => assert_true(res.ct.length() == 1088)
       Err(_) => assert_false(ek.length() == ek768.length())
     }
   }
   // 768 / 1024 round trips + one hostile pass each
-  let (k768, c768) = ml_kem_768_encaps(ek768, m)
+  let cap2 = ml_kem_768_encaps(ek768, m)
+  let k768 = cap2.shared_secret
+  let c768 = cap2.ct
   match ml_kem_768_decaps_or(dk768, c768) {
     Ok(k) => assert_true(rb_eq(k, k768))
     Err(_) => assert_true(false, msg="ml_kem_768: authentic ct rejected")
@@ -822,7 +826,9 @@ test "robust-kem" {
   for c in rb_cases(r, c768, 6) {
     let _ = ml_kem_768_decaps_or(dk768, c)
   }
-  let (k1024, c1024) = ml_kem_1024_encaps(ek1024, m)
+  let cap3 = ml_kem_1024_encaps(ek1024, m)
+  let k1024 = cap3.shared_secret
+  let c1024 = cap3.ct
   match ml_kem_1024_decaps_or(dk1024, c1024) {
     Ok(k) => assert_true(rb_eq(k, k1024))
     Err(_) => assert_true(false, msg="ml_kem_1024: authentic ct rejected")
@@ -884,7 +890,9 @@ test "robust-kem" {
   // X-Wing
   let (xpk, xsk) = xwing_keygen(rb_bytes(r, 32))
   let eseed = rb_bytes(r, 64)
-  let (xss, xct) = xwing_encaps(xpk, eseed)
+  let cap4 = xwing_encaps(xpk, eseed)
+  let xss = cap4.shared_secret
+  let xct = cap4.ct
   match xwing_decaps_or(xct, xsk) {
     Ok(ss) => assert_true(rb_eq(ss, xss))
     Err(_) => assert_true(false, msg="xwing: authentic ct rejected")
@@ -902,7 +910,7 @@ test "robust-kem" {
   }
   for pk in rb_cases(r, xpk, 8) {
     match xwing_encaps_or(pk, eseed) {
-      Ok(pair) => assert_true(pair.1.length() == 1120)
+      Ok(res) => assert_true(res.ct.length() == 1120)
       Err(_) => assert_false(pk.length() == xpk.length())
     }
   }

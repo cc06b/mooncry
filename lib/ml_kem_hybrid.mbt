@@ -153,10 +153,12 @@ pub fn ml_kem_512_hybrid_seal_or(
   aad : Bytes,
   msg : Bytes,
 ) -> Result[Bytes, String] {
-  let (k, c) = match ml_kem_512_encaps_or(ek, m) {
-    Ok(pair) => pair
+  let cap = match ml_kem_512_encaps_or(ek, m) {
+    Ok(res) => res
     Err(e) => return Err(e)
   }
+  let k = cap.shared_secret
+  let c = cap.ct
   let (key, nonce) = ml_kem_hybrid_derive(c, k)
   let st = ml_kem_hybrid_init(key, nonce, aad)
   let ct = ml_kem_hybrid_stream_update(st, msg)
@@ -231,10 +233,12 @@ pub fn ml_kem_512_hybrid_seal_init_or(
   m : Bytes,
   aad : Bytes,
 ) -> Result[(Bytes, MlKemHybridStream), String] {
-  let (k, c) = match ml_kem_512_encaps_or(ek, m) {
-    Ok(pair) => pair
+  let cap = match ml_kem_512_encaps_or(ek, m) {
+    Ok(res) => res
     Err(e) => return Err(e)
   }
+  let k = cap.shared_secret
+  let c = cap.ct
   let (key, nonce) = ml_kem_hybrid_derive(c, k)
   Ok((c, ml_kem_hybrid_init(key, nonce, aad)))
 }
@@ -270,10 +274,12 @@ pub fn ml_kem_768_hybrid_seal_or(
   aad : Bytes,
   msg : Bytes,
 ) -> Result[Bytes, String] {
-  let (k, c) = match ml_kem_768_encaps_or(ek, m) {
-    Ok(pair) => pair
+  let cap = match ml_kem_768_encaps_or(ek, m) {
+    Ok(res) => res
     Err(e) => return Err(e)
   }
+  let k = cap.shared_secret
+  let c = cap.ct
   let (key, nonce) = ml_kem_hybrid_derive(c, k)
   let st = ml_kem_hybrid_init(key, nonce, aad)
   let ct = ml_kem_hybrid_stream_update(st, msg)
@@ -336,10 +342,12 @@ pub fn ml_kem_768_hybrid_seal_init_or(
   m : Bytes,
   aad : Bytes,
 ) -> Result[(Bytes, MlKemHybridStream), String] {
-  let (k, c) = match ml_kem_768_encaps_or(ek, m) {
-    Ok(pair) => pair
+  let cap = match ml_kem_768_encaps_or(ek, m) {
+    Ok(res) => res
     Err(e) => return Err(e)
   }
+  let k = cap.shared_secret
+  let c = cap.ct
   let (key, nonce) = ml_kem_hybrid_derive(c, k)
   Ok((c, ml_kem_hybrid_init(key, nonce, aad)))
 }
@@ -375,10 +383,12 @@ pub fn ml_kem_1024_hybrid_seal_or(
   aad : Bytes,
   msg : Bytes,
 ) -> Result[Bytes, String] {
-  let (k, c) = match ml_kem_1024_encaps_or(ek, m) {
-    Ok(pair) => pair
+  let cap = match ml_kem_1024_encaps_or(ek, m) {
+    Ok(res) => res
     Err(e) => return Err(e)
   }
+  let k = cap.shared_secret
+  let c = cap.ct
   let (key, nonce) = ml_kem_hybrid_derive(c, k)
   let st = ml_kem_hybrid_init(key, nonce, aad)
   let ct = ml_kem_hybrid_stream_update(st, msg)
@@ -441,10 +451,12 @@ pub fn ml_kem_1024_hybrid_seal_init_or(
   m : Bytes,
   aad : Bytes,
 ) -> Result[(Bytes, MlKemHybridStream), String] {
-  let (k, c) = match ml_kem_1024_encaps_or(ek, m) {
-    Ok(pair) => pair
+  let cap = match ml_kem_1024_encaps_or(ek, m) {
+    Ok(res) => res
     Err(e) => return Err(e)
   }
+  let k = cap.shared_secret
+  let c = cap.ct
   let (key, nonce) = ml_kem_hybrid_derive(c, k)
   Ok((c, ml_kem_hybrid_init(key, nonce, aad)))
 }
