@@ -195,10 +195,15 @@ fn sm2_der_expect(der : Bytes, pos : Int, want : Array[Byte]) -> Int {
 }
 
 ///|
+/// The one message `sm2_pkcs8_der_to_sk` gives when the input is not the one
+/// canonical encoding it requires. v0.92.0.
+let sm2_pkcs8_der_to_sk_rejected : String = "sm2_pkcs8_der_to_sk: not a canonical SM2 PKCS#8 DER encoding"
+
+///|
 /// Decode PKCS#8 DER (SM2) to the 32-byte secret key. Strict: exact OIDs,
 /// exact structure, no trailing bytes. (b"", false) on any mismatch.
-pub fn sm2_pkcs8_der_to_sk(der : Bytes) -> (Bytes, Bool) {
-  let fail = (b"", false)
+pub fn sm2_pkcs8_der_to_sk(der : Bytes) -> Result[Bytes, String] {
+  let fail : Result[Bytes, String] = Err(sm2_pkcs8_der_to_sk_rejected)
   if der.length() < 20 || der[0] != (0x30).to_byte() {
     return fail
   }
@@ -266,24 +271,18 @@ pub fn sm2_pkcs8_der_to_sk(der : Bytes) -> (Bytes, Bool) {
       return fail
     }
   }
-  (sk, true)
+  Ok(sk)
 }
 
 ///|
-/// `sm2_pkcs8_der_to_sk` as a `Result` instead of `(Bytes, Bool)`; one message
-/// for every non-canonical encoding. v0.89.0.
-pub fn sm2_pkcs8_der_to_sk_or(der : Bytes) -> Result[Bytes, String] {
-  match sm2_pkcs8_der_to_sk(der) {
-    (sk, true) => Ok(sk)
-    (_, _) =>
-      Err("sm2_pkcs8_der_to_sk: not a canonical SM2 PKCS#8 DER encoding")
-  }
-}
+/// The one message `sm2_spki_der_to_pk` gives when the input is not the one
+/// canonical encoding it requires. v0.92.0.
+let sm2_spki_der_to_pk_rejected : String = "sm2_spki_der_to_pk: not a canonical SM2 SPKI DER encoding"
 
 ///|
 /// Decode SPKI DER (SM2) to the 65-byte uncompressed public key.
-pub fn sm2_spki_der_to_pk(der : Bytes) -> (Bytes, Bool) {
-  let fail = (b"", false)
+pub fn sm2_spki_der_to_pk(der : Bytes) -> Result[Bytes, String] {
+  let fail : Result[Bytes, String] = Err(sm2_spki_der_to_pk_rejected)
   if der.length() < 20 || der[0] != (0x30).to_byte() {
     return fail
   }
@@ -305,7 +304,7 @@ pub fn sm2_spki_der_to_pk(der : Bytes) -> (Bytes, Bool) {
   if sm2_der_expect(der, p3, [(0).to_byte(), (4).to_byte()]) < 0 {
     return fail
   }
-  (ec_slice(der, p3 + 1, 65), true)
+  Ok(ec_slice(der, p3 + 1, 65))
 }
 
 ///|
@@ -403,37 +402,24 @@ fn sm2_pem_unwrap(pem : String, header : String) -> (Bytes, Bool) {
 }
 
 ///|
-/// `sm2_spki_der_to_pk` as a `Result`. See `sm2_pkcs8_der_to_sk_or`. v0.89.0.
-pub fn sm2_spki_der_to_pk_or(der : Bytes) -> Result[Bytes, String] {
-  match sm2_spki_der_to_pk(der) {
-    (pk, true) => Ok(pk)
-    (_, _) => Err("sm2_spki_der_to_pk: not a canonical SM2 SPKI DER encoding")
-  }
-}
-
-///|
 /// PEM-encode a secret key (PKCS#8, "PRIVATE KEY", 64-char lines).
 pub fn sm2_sk_to_pem(sk : Bytes) -> String {
   sm2_pem_wrap(base64_encode(sm2_sk_to_pkcs8_der(sk)), "PRIVATE KEY")
 }
 
 ///|
-/// Parse a PKCS#8 "PRIVATE KEY" PEM; strict (see sm2_pkcs8_der_to_sk).
-pub fn sm2_sk_from_pem(pem : String) -> (Bytes, Bool) {
-  let (der, ok) = sm2_pem_unwrap(pem, "PRIVATE KEY")
-  if !ok {
-    return (b"", false)
-  }
-  sm2_pkcs8_der_to_sk(der)
-}
+/// The one message `sm2_sk_from_pem` gives when the input is not the one
+/// canonical encoding it requires. v0.92.0.
+let sm2_sk_from_pem_rejected : String = "sm2_sk_from_pem: not a canonical SM2 PRIVATE KEY PEM block"
 
 ///|
-/// `sm2_sk_from_pem` as a `Result`. See `sm2_pkcs8_der_to_sk_or`. v0.89.0.
-pub fn sm2_sk_from_pem_or(pem : String) -> Result[Bytes, String] {
-  match sm2_sk_from_pem(pem) {
-    (sk, true) => Ok(sk)
-    (_, _) => Err("sm2_sk_from_pem: not a canonical SM2 PRIVATE KEY PEM block")
+/// Parse a PKCS#8 "PRIVATE KEY" PEM; strict (see sm2_pkcs8_der_to_sk).
+pub fn sm2_sk_from_pem(pem : String) -> Result[Bytes, String] {
+  let (der, ok) = sm2_pem_unwrap(pem, "PRIVATE KEY")
+  if !ok {
+    return Err(sm2_sk_from_pem_rejected)
   }
+  sm2_pkcs8_der_to_sk(der)
 }
 
 ///|
@@ -462,20 +448,16 @@ pub fn sm2_pk_to_pem_or(pk : Bytes) -> Result[String, String] {
 }
 
 ///|
-/// Parse an SPKI "PUBLIC KEY" PEM; strict (see sm2_spki_der_to_pk).
-pub fn sm2_pk_from_pem(pem : String) -> (Bytes, Bool) {
-  let (der, ok) = sm2_pem_unwrap(pem, "PUBLIC KEY")
-  if !ok {
-    return (b"", false)
-  }
-  sm2_spki_der_to_pk(der)
-}
+/// The one message `sm2_pk_from_pem` gives when the input is not the one
+/// canonical encoding it requires. v0.92.0.
+let sm2_pk_from_pem_rejected : String = "sm2_pk_from_pem: not a canonical SM2 PUBLIC KEY PEM block"
 
 ///|
-/// `sm2_pk_from_pem` as a `Result`. See `sm2_pkcs8_der_to_sk_or`. v0.89.0.
-pub fn sm2_pk_from_pem_or(pem : String) -> Result[Bytes, String] {
-  match sm2_pk_from_pem(pem) {
-    (pk, true) => Ok(pk)
-    (_, _) => Err("sm2_pk_from_pem: not a canonical SM2 PUBLIC KEY PEM block")
+/// Parse an SPKI "PUBLIC KEY" PEM; strict (see sm2_spki_der_to_pk).
+pub fn sm2_pk_from_pem(pem : String) -> Result[Bytes, String] {
+  let (der, ok) = sm2_pem_unwrap(pem, "PUBLIC KEY")
+  if !ok {
+    return Err(sm2_pk_from_pem_rejected)
   }
+  sm2_spki_der_to_pk(der)
 }

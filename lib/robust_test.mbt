@@ -604,28 +604,28 @@ test "robust-aead-authenticity" {
   }
   // AES-GCM (Bool convention)
   let (gct, gtag) = aes_gcm_encrypt(pt, key16, nonce12, aad)
-  let (got, ok) = aes_gcm_decrypt(gct, key16, nonce12, aad, gtag)
+  let (got, ok) = bb_flag(aes_gcm_decrypt(gct, key16, nonce12, aad, gtag))
   assert_true(ok)
   assert_true(rb_eq(got, pt))
   for c in rb_flips(r, gct, 8) {
-    let (_, ok2) = aes_gcm_decrypt(c, key16, nonce12, aad, gtag)
+    let (_, ok2) = bb_flag(aes_gcm_decrypt(c, key16, nonce12, aad, gtag))
     if !rb_eq(c, gct) {
       assert_false(ok2)
     }
   }
   for t in rb_flips(r, gtag, 8) {
-    let (_, ok3) = aes_gcm_decrypt(gct, key16, nonce12, aad, t)
+    let (_, ok3) = bb_flag(aes_gcm_decrypt(gct, key16, nonce12, aad, t))
     if !rb_eq(t, gtag) {
       assert_false(ok3)
     }
   }
   // SM4-GCM
   let (sct, stag) = sm4_gcm_encrypt(pt, key16, nonce12, aad)
-  let (sgot, sok) = sm4_gcm_decrypt(sct, key16, nonce12, aad, stag)
+  let (sgot, sok) = bb_flag(sm4_gcm_decrypt(sct, key16, nonce12, aad, stag))
   assert_true(sok)
   assert_true(rb_eq(sgot, pt))
   for t in rb_flips(r, stag, 6) {
-    let (_, ok4) = sm4_gcm_decrypt(sct, key16, nonce12, aad, t)
+    let (_, ok4) = bb_flag(sm4_gcm_decrypt(sct, key16, nonce12, aad, t))
     if !rb_eq(t, stag) {
       assert_false(ok4)
     }
@@ -1039,11 +1039,11 @@ test "robust-sm2-encryption" {
   let rand = fn(k : Int) -> Bytes { rb_bytes(r, k) }
   let msg = b"robust payload"
   let ct = sm2_encrypt(pk, msg, rand)
-  let (got, ok) = sm2_decrypt(sk, ct)
+  let (got, ok) = bb_flag(sm2_decrypt(sk, ct))
   assert_true(ok)
   assert_true(rb_eq(got, msg))
   for c in rb_cases(r, ct, 12) {
-    let (g, ok2) = sm2_decrypt(sk, c)
+    let (g, ok2) = bb_flag(sm2_decrypt(sk, c))
     if ok2 {
       assert_true(
         rb_eq(c, ct) && rb_eq(g, msg),
@@ -1054,52 +1054,52 @@ test "robust-sm2-encryption" {
     }
   }
   for k in rb_flips(r, sk, 6) {
-    let (_, ok3) = sm2_decrypt(k, ct)
+    let (_, ok3) = bb_flag(sm2_decrypt(k, ct))
     if !rb_eq(k, sk) {
       assert_false(ok3)
     }
   }
   // GM/T 0009 style envelope
   let env = sm2_seal(pk, msg, rand)
-  let (got2, ok4) = sm2_open(sk, env)
+  let (got2, ok4) = bb_flag(sm2_open(sk, env))
   assert_true(ok4)
   assert_true(rb_eq(got2, msg))
   for e in rb_cases(r, env, 12) {
-    let (_, ok5) = sm2_open(sk, e)
+    let (_, ok5) = bb_flag(sm2_open(sk, e))
     if ok5 {
       assert_true(rb_eq(e, env), msg="sm2_open: forged envelope accepted")
     }
   }
   // DER codecs: hostile DER must be (b"", false), never a trap
   let der = sm2_ct_to_der(ct)
-  let (raw, okd) = sm2_ct_from_der(der)
+  let (raw, okd) = bb_flag(sm2_ct_from_der(der))
   assert_true(okd)
   assert_true(rb_eq(raw, ct))
   for e in rb_cases(r, der, 14) {
-    let _ = sm2_ct_from_der(e)
+    let _ = bb_flag(sm2_ct_from_der(e))
   }
   let sig = sm2_sign(sk, msg, b"1234567812345678", rand)
   let sder = sm2_sig_to_der(sig)
-  let (sraw, oks) = sm2_sig_from_der(sder)
+  let (sraw, oks) = bb_flag(sm2_sig_from_der(sder))
   assert_true(oks)
   assert_true(rb_eq(sraw, sig))
   for e in rb_cases(r, sder, 14) {
-    let _ = sm2_sig_from_der(e)
+    let _ = bb_flag(sm2_sig_from_der(e))
   }
   // key serialization
   let p8 = sm2_sk_to_pkcs8_der(sk)
-  let (sk2, okp) = sm2_pkcs8_der_to_sk(p8)
+  let (sk2, okp) = bb_flag(sm2_pkcs8_der_to_sk(p8))
   assert_true(okp)
   assert_true(rb_eq(sk2, sk))
   for e in rb_cases(r, p8, 12) {
-    let _ = sm2_pkcs8_der_to_sk(e)
+    let _ = bb_flag(sm2_pkcs8_der_to_sk(e))
   }
   let spki = sm2_pk_to_spki_der(pk)
-  let (pk2, okq) = sm2_spki_der_to_pk(spki)
+  let (pk2, okq) = bb_flag(sm2_spki_der_to_pk(spki))
   assert_true(okq)
   assert_true(rb_eq(pk2, pk))
   for e in rb_cases(r, spki, 12) {
-    let _ = sm2_spki_der_to_pk(e)
+    let _ = bb_flag(sm2_spki_der_to_pk(e))
   }
 }
 
@@ -1149,16 +1149,16 @@ test "robust-text-decoders" {
   let pk = sm2_public_key(sk)
   let sk_pem = sm2_sk_to_pem(sk)
   let pk_pem = sm2_pk_to_pem(pk)
-  let (sk2, ok1) = sm2_sk_from_pem(sk_pem)
+  let (sk2, ok1) = bb_flag(sm2_sk_from_pem(sk_pem))
   assert_true(ok1)
   assert_true(rb_eq(sk2, sk))
-  let (pk2, ok2) = sm2_pk_from_pem(pk_pem)
+  let (pk2, ok2) = bb_flag(sm2_pk_from_pem(pk_pem))
   assert_true(ok2)
   assert_true(rb_eq(pk2, pk))
   for h in hostile {
-    let (_, a) = sm2_sk_from_pem(h)
+    let (_, a) = bb_flag(sm2_sk_from_pem(h))
     assert_false(a)
-    let (_, b) = sm2_pk_from_pem(h)
+    let (_, b) = bb_flag(sm2_pk_from_pem(h))
     assert_false(b)
   }
   // structurally valid PEM armour around a hostile payload
@@ -1167,12 +1167,12 @@ test "robust-text-decoders" {
     let fake_sk = "-----BEGIN PRIVATE KEY-----\n" +
       body +
       "\n-----END PRIVATE KEY-----\n"
-    let (_, a) = sm2_sk_from_pem(fake_sk)
+    let (_, a) = bb_flag(sm2_sk_from_pem(fake_sk))
     let _ = a
     let fake_pk = "-----BEGIN PUBLIC KEY-----\n" +
       body +
       "\n-----END PUBLIC KEY-----\n"
-    let (_, b) = sm2_pk_from_pem(fake_pk)
+    let (_, b) = bb_flag(sm2_pk_from_pem(fake_pk))
     let _ = b
   }
 }
@@ -1849,7 +1849,7 @@ test "robust-sm2-encrypt-pk" {
       b""
     }
   }
-  let (got, ok) = sm2_decrypt(sk, ct)
+  let (got, ok) = bb_flag(sm2_decrypt(sk, ct))
   assert_true(ok, msg="sm2_encrypt_or: ct did not decrypt")
   assert_true(rb_eq(got, msg), msg="sm2_encrypt_or: round trip")
   // ---- hostile pk: never a trap, and the real key still works -------------
@@ -1860,7 +1860,7 @@ test "robust-sm2-encrypt-pk" {
       // don't assert that as a fact, just check the round trip when it holds
       Ok(c) =>
         if rb_eq(p, pk) {
-          let (g, o) = sm2_decrypt(sk, c)
+          let (g, o) = bb_flag(sm2_decrypt(sk, c))
           assert_true(o && rb_eq(g, msg), msg="sm2: authentic pk gave a bad ct")
         }
       Err(_) =>
@@ -1871,7 +1871,7 @@ test "robust-sm2-encrypt-pk" {
   let k = rb_bytes(r, 32)
   match sm2_encrypt_with_k_or(pk, msg, k) {
     Ok(c) => {
-      let (g, o) = sm2_decrypt(sk, c)
+      let (g, o) = bb_flag(sm2_decrypt(sk, c))
       assert_true(o && rb_eq(g, msg), msg="with_k_or: round trip")
       assert_true(
         rb_eq(sm2_encrypt_with_k(pk, msg, k), c),
@@ -1928,7 +1928,7 @@ test "robust-sm2-encrypt-pk" {
   // ---- the GM/T 0009 envelope ------------------------------------------
   match sm2_seal_or(pk, msg, rand) {
     Ok(env) => {
-      let (g2, ok2) = sm2_open(sk, env)
+      let (g2, ok2) = bb_flag(sm2_open(sk, env))
       assert_true(ok2, msg="sm2_seal_or: envelope did not open")
       assert_true(rb_eq(g2, msg), msg="sm2_seal_or: round trip")
     }
@@ -1938,7 +1938,7 @@ test "robust-sm2-encrypt-pk" {
     match sm2_seal_or(p, msg, rand) {
       Ok(env) =>
         if rb_eq(p, pk) {
-          let (g3, ok3) = sm2_open(sk, env)
+          let (g3, ok3) = bb_flag(sm2_open(sk, env))
           assert_true(ok3 && rb_eq(g3, msg), msg="sm2_seal_or: bad envelope")
         }
       Err(_) =>
@@ -1969,7 +1969,7 @@ test "robust-sm2-encoders" {
       b""
     }
   }
-  let (craw, cok) = sm2_ct_from_der(ctder)
+  let (craw, cok) = bb_flag(sm2_ct_from_der(ctder))
   assert_true(cok, msg="ct DER did not parse back")
   assert_true(rb_eq(craw, ct), msg="ct DER round trip")
   assert_true(rb_eq(sm2_ct_to_der(ct), ctder), msg="ct encoder twins disagree")
@@ -1980,7 +1980,7 @@ test "robust-sm2-encoders" {
       b""
     }
   }
-  let (sraw, sok) = sm2_sig_from_der(sigder)
+  let (sraw, sok) = bb_flag(sm2_sig_from_der(sigder))
   assert_true(sok, msg="sig DER did not parse back")
   assert_true(rb_eq(sraw, sig), msg="sig DER round trip")
   assert_true(
@@ -1994,7 +1994,7 @@ test "robust-sm2-encoders" {
       b""
     }
   }
-  let (praw, pok) = sm2_spki_der_to_pk(spki)
+  let (praw, pok) = bb_flag(sm2_spki_der_to_pk(spki))
   assert_true(pok && rb_eq(praw, pk), msg="spki round trip")
   assert_true(rb_eq(sm2_pk_to_spki_der(pk), spki), msg="spki twins disagree")
   let pem = match sm2_pk_to_pem_or(pk) {
@@ -2004,7 +2004,7 @@ test "robust-sm2-encoders" {
       ""
     }
   }
-  let (ppk, ppok) = sm2_pk_from_pem(pem)
+  let (ppk, ppok) = bb_flag(sm2_pk_from_pem(pem))
   assert_true(ppok && rb_eq(ppk, pk), msg="pem round trip")
   assert_true(pem == sm2_pk_to_pem(pk), msg="pem twins disagree")
   // ---- hostile values: Err exactly when the shape is wrong ---------------

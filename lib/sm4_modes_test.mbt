@@ -67,7 +67,7 @@ test "sm4-gcm-oracle" {
   )
   inspect(bytes_to_hex(tag2), content="cce54938447af8c920031210ec3de57a")
   // decrypt roundtrip + tamper rejection
-  let (rt, ok) = sm4_gcm_decrypt(ct2, sm4m_key(), iv, aad, tag2)
+  let (rt, ok) = bb_flag(sm4_gcm_decrypt(ct2, sm4m_key(), iv, aad, tag2))
   inspect(ok, content="true")
   inspect(bytes_equal(rt, pt), content="true")
   let badtag = Array::make(16, (0).to_byte())
@@ -75,16 +75,12 @@ test "sm4-gcm-oracle" {
     badtag[i] = tag2[i]
   }
   badtag[0] = (badtag[0].to_int() ^ 1).to_byte()
-  let (_, ok2) = sm4_gcm_decrypt(
-    ct2,
-    sm4m_key(),
-    iv,
-    aad,
-    Bytes::from_array(badtag[:]),
+  let (_, ok2) = bb_flag(
+    sm4_gcm_decrypt(ct2, sm4m_key(), iv, aad, Bytes::from_array(badtag[:])),
   )
   inspect(ok2, content="false")
   // AAD tamper rejection
-  let (_, ok3) = sm4_gcm_decrypt(ct2, sm4m_key(), iv, b"other", tag2)
+  let (_, ok3) = bb_flag(sm4_gcm_decrypt(ct2, sm4m_key(), iv, b"other", tag2))
   inspect(ok3, content="false")
 }
 

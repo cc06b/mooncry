@@ -209,7 +209,7 @@ let sm4_gcm_auth_failed : String = "sm4_gcm_decrypt: tag verification failed"
 /// `sm4_gcm_decrypt` as a `Result`: `Err` for a wrong-shape key/iv/tag (the same
 /// text the aborting form uses) and one uniform `Err` for a tag that does not
 /// verify. v0.90.0.
-pub fn sm4_gcm_decrypt_or(
+pub fn sm4_gcm_decrypt(
   ciphertext : Bytes,
   key : Bytes,
   iv : Bytes,
@@ -247,28 +247,6 @@ pub fn sm4_gcm_decrypt_or(
   icb[15] = (2).to_byte()
   let pt = sm4_gctr(rk, Bytes::from_array(icb[:]), ciphertext)
   Ok(pt)
-}
-
-///|
-/// SM4-GCM decrypt — returns `(plaintext, true)`, or `(b"", false)` when the tag
-/// does not verify. A wrong-shape key / iv / tag aborts, as before; prefer
-/// `sm4_gcm_decrypt_or`.
-pub fn sm4_gcm_decrypt(
-  ciphertext : Bytes,
-  key : Bytes,
-  iv : Bytes,
-  aad : Bytes,
-  tag : Bytes,
-) -> (Bytes, Bool) {
-  match sm4_gcm_decrypt_or(ciphertext, key, iv, aad, tag) {
-    Ok(pt) => (pt, true)
-    Err(msg) =>
-      if msg == sm4_gcm_auth_failed {
-        (b"", false)
-      } else {
-        abort(msg)
-      }
-  }
 }
 
 ///|

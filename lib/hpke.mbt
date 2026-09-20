@@ -990,11 +990,11 @@ fn hpke_open_gcm(
   }
   let body = Bytes::from_array(ct.to_array()[0:ct.length() - 16])
   let tag = Bytes::from_array(ct.to_array()[ct.length() - 16:])
-  match aes_gcm_decrypt_or(body, ctx.key, nonce, aad, tag) {
+  match aes_gcm_decrypt(body, ctx.key, nonce, aad, tag) {
     Ok(pt) => Ok(pt)
     // A shape error here means the suite's own key is the wrong length, which
     // is a construction bug rather than a forged ciphertext: keep it distinct
-    // so the aborting twin still aborts, exactly as it did before.
+    // from a forgery so the caller can tell them apart.
     Err(msg) =>
       if msg == aes_gcm_auth_failed {
         Err(hpke_open_failed)

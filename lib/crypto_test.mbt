@@ -217,7 +217,7 @@ test "AES-128-GCM: decrypt round-trip with AAD" {
   )
   let aad = hex_to_bytes("feedfacedeadbeeffeedfacedeadbeefabaddad2")
   let (ct, tag) = aes_gcm_encrypt(pt, key, iv, aad)
-  let (dec, ok) = aes_gcm_decrypt(ct, key, iv, aad, tag)
+  let (dec, ok) = bb_flag(aes_gcm_decrypt(ct, key, iv, aad, tag))
   assert_true(ok)
   assert_true(bytes_equal(pt, dec))
 }
@@ -235,7 +235,7 @@ test "AES-128-GCM: tag tamper detection" {
   }
   bad_tag_arr[0] = (bad_tag_arr[0].to_int() ^ 0x01).to_byte()
   let bad_tag = Bytes::from_array(bad_tag_arr[:])
-  let (_, ok) = aes_gcm_decrypt(ct, key, iv, aad, bad_tag)
+  let (_, ok) = bb_flag(aes_gcm_decrypt(ct, key, iv, aad, bad_tag))
   assert_true(!ok)
 }
 

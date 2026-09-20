@@ -91,24 +91,27 @@ fn rb_der_extras(r : RbRng, data : Bytes) -> Array[Bytes] {
 
 ///|
 /// Hold a (decode, encode) pair to the strict-DER contract on one blob:
-/// never trap, `false` never comes with a payload, and an accepted blob must
-/// re-encode byte-identically.
+/// never trap, and an accepted blob must re-encode byte-identically.
+///
+/// Since v0.92.0 `decode` returns `Result`, so the old "rejected but returned a
+/// payload" assertion is gone -- `Err` cannot carry a payload, which is what
+/// that assertion had to police by hand against the `(Bytes, Bool)` form.
 fn rb_check_identity(
   der : Bytes,
-  decode : (Bytes) -> (Bytes, Bool),
+  decode : (Bytes) -> Result[Bytes, String],
   encode : (Bytes) -> Bytes,
   what : String,
 ) -> Unit {
-  let (raw, ok) = decode(der)
-  if ok {
-    if raw.length() == 0 {
-      abort(what + ": accepted with an empty payload")
+  match decode(der) {
+    Ok(raw) => {
+      if raw.length() == 0 {
+        abort(what + ": accepted with an empty payload")
+      }
+      if !rb_eq(encode(raw), der) {
+        abort(what + ": accepted a non-canonical encoding (malleable)")
+      }
     }
-    if !rb_eq(encode(raw), der) {
-      abort(what + ": accepted a non-canonical encoding (malleable)")
-    }
-  } else if raw.length() != 0 {
-    abort(what + ": rejected but returned a payload")
+    Err(_) => ()
   }
 }
 
@@ -118,24 +121,24 @@ fn rb_check_identity(
 /// re-encodes with it). decode -> encode -> decode must still be stable.
 fn rb_check_stable(
   der : Bytes,
-  decode : (Bytes) -> (Bytes, Bool),
+  decode : (Bytes) -> Result[Bytes, String],
   encode : (Bytes) -> Bytes,
   what : String,
 ) -> Unit {
-  let (raw, ok) = decode(der)
-  if ok {
-    if raw.length() == 0 {
-      abort(what + ": accepted with an empty payload")
+  match decode(der) {
+    Ok(raw) => {
+      if raw.length() == 0 {
+        abort(what + ": accepted with an empty payload")
+      }
+      let raw2 = match decode(encode(raw)) {
+        Ok(r2) => r2
+        Err(_) => abort(what + ": re-encoded form was rejected")
+      }
+      if !rb_eq(raw, raw2) {
+        abort(what + ": decode/encode/decode is not stable")
+      }
     }
-    let (raw2, ok2) = decode(encode(raw))
-    if !ok2 {
-      abort(what + ": re-encoded form was rejected")
-    }
-    if !rb_eq(raw, raw2) {
-      abort(what + ": decode/encode/decode is not stable")
-    }
-  } else if raw.length() != 0 {
-    abort(what + ": rejected but returned a payload")
+    Err(_) => ()
   }
 }
 
@@ -144,7 +147,7 @@ fn rb_check_stable(
 fn rb_der_sweep(
   r : RbRng,
   der : Bytes,
-  decode : (Bytes) -> (Bytes, Bool),
+  decode : (Bytes) -> Result[Bytes, String],
   encode : (Bytes) -> Bytes,
   what : String,
   identity : Bool,
@@ -175,7 +178,7 @@ test "robust-der-signature" {
   let der = sm2_sig_to_der(sig)
   rb_der_sweep(r, der, sm2_sig_from_der, sm2_sig_to_der, "sm2_sig", true)
   // the decoded value must still verify: parsing is not just shape-checking
-  let (raw, ok) = sm2_sig_from_der(der)
+  let (raw, ok) = bb_flag(sm2_sig_from_der(der))
   assert_true(ok && rb_eq(raw, sig), msg="sm2_sig: canonical decode")
   assert_true(sm2_verify(sm2_public_key(sk), b"msg", id, raw))
   // Handcrafted malleability probes: all three are BER-ish re-encodings of a
@@ -195,33 +198,39 @@ test "robust-der-signature" {
     Bytes::from_array([(0x30).to_byte(), outer_len.to_byte()]),
     rb_slice(padded_r, 2, outer_len),
   )
-  let (_, ok_pad) = sm2_sig_from_der(padded)
+  let (_, ok_pad) = bb_flag(sm2_sig_from_der(padded))
   assert_false(ok_pad)
   // 2. one trailing byte inside the SEQUENCE
-  let (_, ok_trail) = sm2_sig_from_der(
-    rb_cat(
-      Bytes::from_array([(0x30).to_byte(), (inner.length() + 1).to_byte()]),
-      rb_cat(inner, Bytes::from_array([(0).to_byte()])),
+  let (_, ok_trail) = bb_flag(
+    sm2_sig_from_der(
+      rb_cat(
+        Bytes::from_array([(0x30).to_byte(), (inner.length() + 1).to_byte()]),
+        rb_cat(inner, Bytes::from_array([(0).to_byte()])),
+      ),
     ),
   )
   assert_false(ok_trail)
   // 3. the long length form for a value that fits in the short form
-  let (_, ok_long) = sm2_sig_from_der(
-    rb_cat(
-      Bytes::from_array([
-        (0x30).to_byte(),
-        (0x81).to_byte(),
-        inner.length().to_byte(),
-      ]),
-      inner,
+  let (_, ok_long) = bb_flag(
+    sm2_sig_from_der(
+      rb_cat(
+        Bytes::from_array([
+          (0x30).to_byte(),
+          (0x81).to_byte(),
+          inner.length().to_byte(),
+        ]),
+        inner,
+      ),
     ),
   )
   assert_false(ok_long)
   // 4. indefinite length (reserved in DER)
-  let (_, ok_indef) = sm2_sig_from_der(
-    rb_cat(
-      Bytes::from_array([(0x30).to_byte(), (0x80).to_byte()]),
-      rb_cat(inner, Bytes::from_array([(0).to_byte(), (0).to_byte()])),
+  let (_, ok_indef) = bb_flag(
+    sm2_sig_from_der(
+      rb_cat(
+        Bytes::from_array([(0x30).to_byte(), (0x80).to_byte()]),
+        rb_cat(inner, Bytes::from_array([(0).to_byte(), (0).to_byte()])),
+      ),
     ),
   )
   assert_false(ok_indef)
@@ -236,9 +245,9 @@ test "robust-der-ciphertext" {
   let ct = sm2_encrypt(pk, b"payload", rand)
   let der = sm2_ct_to_der(ct)
   rb_der_sweep(r, der, sm2_ct_from_der, sm2_ct_to_der, "sm2_ct", true)
-  let (raw, ok) = sm2_ct_from_der(der)
+  let (raw, ok) = bb_flag(sm2_ct_from_der(der))
   assert_true(ok && rb_eq(raw, ct), msg="sm2_ct: canonical decode")
-  let (pt, ok2) = sm2_decrypt(sk, raw)
+  let (pt, ok2) = bb_flag(sm2_decrypt(sk, raw))
   assert_true(ok2 && rb_eq(pt, b"payload"), msg="sm2_ct: decoded ct decrypts")
   // Regression pin: SEQUENCE { INTEGER(6 bytes) } and nothing else — the first
   // INTEGER runs to the end of the buffer, so the parser's next tag read used
@@ -255,7 +264,7 @@ test "robust-der-ciphertext" {
     (0).to_byte(),
     (0x41).to_byte(),
   ])
-  let (_, ok3) = sm2_ct_from_der(trapped)
+  let (_, ok3) = bb_flag(sm2_ct_from_der(trapped))
   assert_false(ok3)
 }
 
@@ -274,9 +283,9 @@ test "robust-der-keys" {
   rb_der_sweep(
     r, p8, sm2_pkcs8_der_to_sk, sm2_sk_to_pkcs8_der, "sm2_pkcs8", false,
   )
-  let (sk2, ok) = sm2_pkcs8_der_to_sk(p8)
+  let (sk2, ok) = bb_flag(sm2_pkcs8_der_to_sk(p8))
   assert_true(ok && rb_eq(sk2, sk), msg="pkcs8: canonical decode")
-  let (pk2, ok2) = sm2_spki_der_to_pk(spki)
+  let (pk2, ok2) = bb_flag(sm2_spki_der_to_pk(spki))
   assert_true(ok2 && rb_eq(pk2, pk), msg="spki: canonical decode")
   // Regression pin: SEQUENCE whose content is exactly the 21-byte
   // AlgorithmIdentifier and nothing else — the BIT STRING tag read used to
@@ -285,10 +294,10 @@ test "robust-der-keys" {
     Bytes::from_array([(0x30).to_byte(), (21).to_byte()]),
     rb_slice(spki, 2, 21),
   )
-  let (_, ok3) = sm2_spki_der_to_pk(trapped)
+  let (_, ok3) = bb_flag(sm2_spki_der_to_pk(trapped))
   assert_false(ok3)
   // the same shape must not confuse the PKCS#8 parser either
-  let (_, ok4) = sm2_pkcs8_der_to_sk(trapped)
+  let (_, ok4) = bb_flag(sm2_pkcs8_der_to_sk(trapped))
   assert_false(ok4)
 }
 
@@ -300,9 +309,9 @@ test "robust-pem-structure" {
   let sk_pem = sm2_sk_to_pem(sk)
   let pk_pem = sm2_pk_to_pem(pk)
   // canonical PEM decodes and re-encodes identically
-  let (sk1, ok1) = sm2_sk_from_pem(sk_pem)
+  let (sk1, ok1) = bb_flag(sm2_sk_from_pem(sk_pem))
   assert_true(ok1 && rb_eq(sk1, sk) && sm2_sk_to_pem(sk1) == sk_pem)
-  let (pk1, ok2) = sm2_pk_from_pem(pk_pem)
+  let (pk1, ok2) = bb_flag(sm2_pk_from_pem(pk_pem))
   assert_true(ok2 && rb_eq(pk1, pk) && sm2_pk_to_pem(pk1) == pk_pem)
   // Hostile armour: every prefix of a canonical PEM. A prefix can still be a
   // complete PEM (dropping only the trailing newline is normal leniency), so
@@ -310,8 +319,8 @@ test "robust-pem-structure" {
   // the real key" — a truncated payload decoding to garbage would be the bug.
   for i = 0; i < sk_pem.length(); i = i + 1 {
     let frag = sk_pem[:i].to_owned()
-    let (sk_f, a) = sm2_sk_from_pem(frag)
-    let (pk_f, b) = sm2_pk_from_pem(frag)
+    let (sk_f, a) = bb_flag(sm2_sk_from_pem(frag))
+    let (pk_f, b) = bb_flag(sm2_pk_from_pem(frag))
     if a {
       assert_true(rb_eq(sk_f, sk), msg="pem: prefix decoded to a wrong key")
     }
@@ -334,15 +343,15 @@ test "robust-pem-structure" {
       ] {
       let (open_, close_) = headers
       let pem = open_ + "\n" + b64 + "\n" + close_ + "\n"
-      let (sk_x, ok_x) = sm2_sk_from_pem(pem)
-      let (pk_x, ok_y) = sm2_pk_from_pem(pem)
+      let (sk_x, ok_x) = bb_flag(sm2_sk_from_pem(pem))
+      let (pk_x, ok_y) = bb_flag(sm2_pk_from_pem(pem))
       // Acceptance with a *different* key is legitimate — a mutated payload can
       // still be structurally perfect DER (e.g. flipping a byte inside the
       // OPTIONAL publicKey field). What must hold is self-consistency: the
       // decoded value re-encodes and decodes back to itself, and an unmodified
       // payload still yields the real key.
       if ok_x {
-        let (sk_again, ok_again) = sm2_sk_from_pem(sm2_sk_to_pem(sk_x))
+        let (sk_again, ok_again) = bb_flag(sm2_sk_from_pem(sm2_sk_to_pem(sk_x)))
         assert_true(
           ok_again && rb_eq(sk_again, sk_x),
           msg="pem: accepted key is not self-consistent",
@@ -355,7 +364,7 @@ test "robust-pem-structure" {
         }
       }
       if ok_y {
-        let (pk_again, ok_b) = sm2_pk_from_pem(sm2_pk_to_pem(pk_x))
+        let (pk_again, ok_b) = bb_flag(sm2_pk_from_pem(sm2_pk_to_pem(pk_x)))
         assert_true(
           ok_b && rb_eq(pk_again, pk_x),
           msg="pem: accepted pk is not self-consistent",
@@ -373,9 +382,9 @@ test "robust-pem-structure" {
     let oneline = "-----BEGIN PRIVATE KEY-----\n" +
       b64 +
       "\n-----END PRIVATE KEY-----\n"
-    let (sk_l, ok_l) = sm2_sk_from_pem(oneline)
+    let (sk_l, ok_l) = bb_flag(sm2_sk_from_pem(oneline))
     if ok_l {
-      let (sk_l2, ok_l2) = sm2_sk_from_pem(sm2_sk_to_pem(sk_l))
+      let (sk_l2, ok_l2) = bb_flag(sm2_sk_from_pem(sm2_sk_to_pem(sk_l)))
       assert_true(
         ok_l2 && rb_eq(sk_l2, sk_l),
         msg="pem: unwrapped-line decode is not self-consistent",

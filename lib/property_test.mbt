@@ -61,7 +61,7 @@ test "property: AES-256-GCM round-trip (many sizes)" {
     let pt = rng_bytes(r, rng_int(r, 200))
     let aad = rng_bytes(r, rng_int(r, 40))
     let (ct, tag) = aes_gcm_encrypt(pt, key, nonce, aad)
-    let (rec, ok) = aes_gcm_decrypt(ct, key, nonce, aad, tag)
+    let (rec, ok) = bb_flag(aes_gcm_decrypt(ct, key, nonce, aad, tag))
     assert_true(ok)
     assert_roundtrip("aes-gcm", pt, rec)
     // tamper: flip a ct byte if ct non-empty -> must fail
@@ -71,12 +71,8 @@ test "property: AES-256-GCM round-trip (many sizes)" {
         bad[i] = ct[i]
       }
       bad[0] = (bad[0].to_int() ^ 0x01).to_byte()
-      let (_, ok2) = aes_gcm_decrypt(
-        Bytes::from_array(bad[:]),
-        key,
-        nonce,
-        aad,
-        tag,
+      let (_, ok2) = bb_flag(
+        aes_gcm_decrypt(Bytes::from_array(bad[:]), key, nonce, aad, tag),
       )
       assert_true(!ok2)
     }

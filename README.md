@@ -42,11 +42,9 @@ verified against official standard vectors.
   `rsa_pkcs1_v15_decrypt_or` (+ `_crt_or`), `ml_kem_*_encaps_or` /
   `ml_kem_*_decaps_or`, `ml_kem_*_hybrid_seal_or` (+ `_seal_init_or`),
   `rsa_oaep_encrypt_or` (+ `_with_or`) / `rsa_pkcs1_v15_encrypt_or`,
-  `sm2_encrypt_or` / `sm2_encrypt_with_k_or` / `sm2_seal_or` / `sm2_open_or`,
-  `sm2_ct_to_der_or` / `sm2_ct_from_der_or` / `sm2_sig_to_der_or` /
-  `sm2_sig_from_der_or` / `sm2_pk_to_spki_der_or` / `sm2_spki_der_to_pk_or` /
-  `sm2_pk_to_pem_or` / `sm2_pk_from_pem_or` / `sm2_pkcs8_der_to_sk_or` /
-  `sm2_sk_from_pem_or`,
+  `sm2_encrypt_or` / `sm2_encrypt_with_k_or` / `sm2_seal_or`,
+  `sm2_ct_to_der_or` / `sm2_sig_to_der_or` / `sm2_pk_to_spki_der_or` /
+  `sm2_pk_to_pem_or`,
   `xwing_encaps_or` / `xwing_decaps_or`, `x25519_or` /
   `x448_or`, and the HPKE `*_or` setup/encap/decap family return `Result` so
   network-facing code never traps on malformed input. The RSA decryption ones
@@ -339,7 +337,7 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `sm2_sign_with_k(sk, msg, id, k) -> Bytes` | SM2 sign with explicit nonce (deterministic; aborts on degenerate k) |
 | `sm2_verify(pk, msg, id, sig) -> Bool` | SM2 verify (rejects off-curve keys and out-of-range r/s) |
 | `sm4_ctr(key, iv, data) / sm4_cbc_encrypt / sm4_cbc_decrypt` | SM4 modes (CTR 128-bit BE counter; CBC raw, no padding) |
-| `sm4_gcm_encrypt(pt, key, iv, aad)` / `sm4_gcm_decrypt(ct, key, iv, aad, tag)` | SM4-GCM AEAD (12-byte IV, 16-byte tag; RFC 8998 TLS building block); `sm4_gcm_decrypt_or` reports the reason as `Err` |
+| `sm4_gcm_encrypt(pt, key, iv, aad)` / `sm4_gcm_decrypt(ct, key, iv, aad, tag) -> Result[Bytes, String]` | SM4-GCM AEAD (12-byte IV, 16-byte tag; RFC 8998 TLS building block); decrypt reports the reason as `Err` |
 | `zuc_init(key, iv) -> ZucState` / `zuc_next_word(st)` | ZUC-128 core: 16-byte key/IV, then one 32-bit keystream word per call |
 | `zuc_keystream(key, iv, nwords) -> Bytes` | ZUC-128 keystream as 4*nwords big-endian bytes |
 | `zuc_xor(key, iv, data) -> Bytes` | ZUC-128 in raw stream mode (any length, no padding); not the 3GPP mode |
@@ -351,14 +349,14 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `zuc256_mac_verify(key, iv, macbits, nbits, data, mac) -> Bool` | Constant-time check; false (not a trap) on a wrong-length tag |
 | `hmac_sm3(key, msg) -> Bytes` | HMAC-SM3 (RFC 2104, 64-byte block, 32-byte MAC) |
 | `sm2_encrypt(pk, msg, rand) / sm2_encrypt_with_k(pk, msg, k)` | SM2 encryption (GB/T 32918.4), raw C1\|\|C3\|\|C2; `sm2_encrypt_or` / `sm2_encrypt_with_k_or` for a peer-supplied `pk` |
-| `sm2_decrypt(sk, ct) -> (Bytes, Bool)` / `sm2_decrypt_or(sk, ct)` | SM2 decryption (false / `Err` on tamper or wrong key, GCM convention); the `_or` form carries one uniform message for all six rejection reasons |
-| `sm2_ct_to_der(ct) / sm2_ct_from_der(der)` | openssl-compatible ASN.1 DER ciphertext conversion; the decoder is strict DER (see below), and `sm2_ct_to_der_or` / `sm2_ct_from_der_or` report a malformed encoding instead of aborting or returning a bare flag |
-| `sm2_sig_to_der(sig) / sm2_sig_from_der(der)` | SM2 signature raw r\|\|s <-> DER SEQUENCE{r,s}; the decoder is strict DER (see below), `sm2_sig_to_der_or` / `sm2_sig_from_der_or` never trap |
+| `sm2_decrypt(sk, ct) -> Result[Bytes, String]` | SM2 decryption; one uniform `Err` for all six ways a ciphertext can be rejected |
+| `sm2_ct_to_der(ct) / sm2_ct_from_der(der) -> Result[Bytes, String]` | openssl-compatible ASN.1 DER ciphertext conversion; the decoder is strict DER (see below) and reports a malformed encoding as `Err`, while `sm2_ct_to_der_or` covers a malformed *raw* ciphertext |
+| `sm2_sig_to_der(sig) / sm2_sig_from_der(der) -> Result[Bytes, String]` | SM2 signature raw r\|\|s <-> DER SEQUENCE{r,s}; the decoder is strict DER (see below), and `sm2_sig_to_der_or` never traps on a bad raw signature |
 | `hkdf_sm3(ikm, salt, info, out_len)` / `hkdf_sm3_extract` / `hkdf_sm3_expand` | HKDF-SM3 (RFC 5869) |
 | `pbkdf2_sm3(password, salt, iterations, dk_len)` | PBKDF2-HMAC-SM3 (RFC 2898) |
-| `sm2_sk_to_pem / sm2_sk_from_pem / sm2_pk_to_pem / sm2_pk_from_pem` | SM2 key PEM (PKCS#8 / SPKI, openssl-identical); `_or` twins for all four (`sm2_pk_to_pem_or`, `sm2_sk_from_pem_or`, `sm2_pk_from_pem_or`, …) when the input is peer-supplied |
-| `sm2_sk_to_pkcs8_der / sm2_pkcs8_der_to_sk / sm2_pk_to_spki_der / sm2_spki_der_to_pk` | SM2 key DER forms; `_or` twins for all four, so a malformed peer encoding is an `Err` rather than a flag |
-| `sm2_seal(pk, msg, rand) / sm2_open(sk, env)` | SM2 sealed envelope: enc_key(125)\|\|iv(12)\|\|SM4-GCM ct\|\|tag(16); `sm2_seal_or` never traps on a bad `pk`, `sm2_open_or` reports a rejected envelope as `Err` |
+| `sm2_sk_to_pem / sm2_pk_to_pem` + `sm2_sk_from_pem / sm2_pk_from_pem -> Result[Bytes, String]` | SM2 key PEM (PKCS#8 / SPKI, openssl-identical); the parsers report a malformed block as `Err`, and `sm2_pk_to_pem_or` covers a malformed *point* |
+| `sm2_sk_to_pkcs8_der / sm2_pk_to_spki_der` + `sm2_pkcs8_der_to_sk / sm2_spki_der_to_pk -> Result[Bytes, String]` | SM2 key DER forms; a malformed peer encoding is an `Err` |
+| `sm2_seal(pk, msg, rand) / sm2_open(sk, env) -> Result[Bytes, String]` | SM2 sealed envelope: enc_key(125)\|\|iv(12)\|\|SM4-GCM ct\|\|tag(16); `sm2_seal_or` never traps on a bad `pk`, and a rejected envelope is an `Err` |
 | `hmac_sha256 / hmac_sha512(key, msg : Bytes) -> Bytes` | HMAC (RFC 2104) |
 | `hmac_sha3_256 / hmac_sha3_512(key, msg : Bytes) -> Bytes` | HMAC over SHA-3 (RFC 2104 + FIPS 202) |
 | `hmac_sha3_224 / hmac_sha3_384(key, msg : Bytes) -> Bytes` | HMAC over SHA3-224/384 (RFC 2104 + FIPS 202) |
@@ -366,7 +364,7 @@ All functions live in the `lib` package (`cc06b/mooncry/lib`), called as
 | `cmac_aes(data, key : Bytes) -> Bytes` | AES-CMAC (NIST SP 800-38B), 16-byte tag |
 | `aes_encrypt_cbc / aes_decrypt_cbc(data, key, iv) -> Bytes` | AES-CBC (IV prepended, PKCS#7) |
 | `aes_gcm_encrypt(pt, key, iv, aad) -> (Bytes, Bytes)` | AES-GCM encrypt → (ct, 16-byte tag) |
-| `aes_gcm_decrypt(ct, key, iv, aad, tag) -> (Bytes, Bool)` / `aes_gcm_decrypt_or(...)` | AES-GCM decrypt, constant-time tag verify; the `_or` form returns `Result` and never aborts |
+| `aes_gcm_decrypt(ct, key, iv, aad, tag) -> Result[Bytes, String]` | AES-GCM decrypt, constant-time tag verify; never aborts — a wrong-shape key/iv/tag and a forged tag are both `Err` |
 | `aes_ccm_encrypt(pt, key, nonce, aad, mac_len) -> Bytes` | AES-CCM AEAD (SP 800-38C) → ct ‖ tag |
 | `aes_ccm_decrypt(input, key, nonce, aad, mac_len) -> Bytes` | AES-CCM decrypt, aborts on tag mismatch |
 | `gmac(key, iv, aad) -> Bytes` | GMAC (SP 800-38D), 16-byte tag |
@@ -556,50 +554,49 @@ cause an `abort` with a descriptive message.
 
 ### Which channel reports a failure
 
-Four shapes coexist — one of them empty as of v0.91.0. Which one a function
-uses is frozen and machine-checked (`.github/scripts/api_contract_check.py`,
-rule C4): a **new** entry point that reports failure must return
-`Result[_, String]`.
+Two shapes are left, and both are frozen and machine-checked
+(`.github/scripts/api_contract_check.py`, rule C4): a **new** entry point that
+reports failure must return `Result[_, String]`.
 
 | Channel | Count | Used by | On failure |
 | --- | --- | --- | --- |
 | `Bool` | 39 | every `*_verify` / `*_check`: signature, MAC and AEAD-tag verification, plus `bytes_equal`, `hpke_valid_pk`, `dh_shared_is_zero` | `false`. There is nothing to hand back, and a distinguishable error would be an authentication oracle |
-| `(Bytes, Bool)` | 10 | `aes_gcm_decrypt`, `sm4_gcm_decrypt`, `sm2_decrypt`, `sm2_open`, and the six SM2 DER/PEM decoders | the `Bytes` are meaningless — read the flag. Each has a `Result` twin (`_or`) |
-| `Option` (`Bytes?`) | **0** | — | **eliminated in v0.91.0**: `aes_gcm_siv_decrypt`, `hpke_open` and the three `ml_kem_*_hybrid_open` now return `Result` themselves. C4 keeps the list empty |
-| `Result[_, String]` | 62 | the 54 `_or` twins, plus `aes_kw_unwrap`, `aes_siv_decrypt`, `sealed_box_open` and the five former `Option` functions | `Err(msg)`. Decryption and opening return **one uniform message** for every way peer input can fail, so the text is not a Bleichenbacher/Manger oracle |
+| `Result[_, String]` | 62 | the 44 `_or` twins, plus the 18 entry points that report failure directly: `aes_gcm_decrypt`, `sm4_gcm_decrypt`, `aes_gcm_siv_decrypt`, `hpke_open`, the three `ml_kem_*_hybrid_open`, the six SM2 DER/PEM decoders, `sm2_decrypt`, `aes_kw_unwrap`, `aes_siv_decrypt`, `sealed_box_open` | `Err(msg)`. Decryption, opening and decoding return **one uniform message** for every way *peer* input can fail, so the text is not a Bleichenbacher/Manger oracle; a wrong-shape *caller* argument gets its own message, because that is not attacker-controlled |
+
+Two channels used to exist and are now empty — and C4 fails the build if either
+gains a member again:
+
+| Retired | Members | Since | Now |
+| --- | --- | --- | --- |
+| `Option` (`Bytes?`) | 5 | v0.91.0 | `aes_gcm_siv_decrypt`, `hpke_open`, `ml_kem_{512,768,1024}_hybrid_open` return `Result` |
+| `(Bytes, Bool)` | 10 | v0.92.0 | `aes_gcm_decrypt`, `sm4_gcm_decrypt`, `sm2_decrypt`, `sm2_open`, and the six SM2 DER/PEM decoders return `Result` |
+
+Both were collapsed the same way: the `_or` twin that the previous release had
+added as a migration path became the function, and the twin's name went away.
+No aborting form survives for these fifteen, deliberately — every one of them
+consumes peer input, and an `abort` is a denial of service any peer can trigger.
+Caller-shape mistakes (a 20-byte AES-GCM key, a 31-byte SM2 `sk`, an 8-byte
+tag) are `Err` too, which is a behaviour change from the old abort and the
+reason this landed in a minor version bump rather than a patch.
 
 Everything else either cannot fail on well-formed caller input (it `abort`s —
 see the two-tier contract above) or just returns a value.
 
-**Migration state.** All ten `(Bytes, Bool)` entry points have a `Result` twin
-(`sm2_open_or`, `sm2_ct_from_der_or`, `sm2_sig_from_der_or`,
-`sm2_pkcs8_der_to_sk_or`, `sm2_spki_der_to_pk_or`, `sm2_sk_from_pem_or`,
-`sm2_pk_from_pem_or`, `aes_gcm_decrypt_or`, `sm4_gcm_decrypt_or`,
-`sm2_decrypt_or`), added in v0.89.0–v0.90.0. The five `Option` ones went
-further in v0.91.0: the `Option` form was **deleted** and the name now returns
-`Result` directly, since an open that reports nothing is strictly less useful
-than one that says why, and there was no aborting variant worth keeping (an
-AEAD open that aborted on a forged tag would be a denial of service).
+The rules C4 enforces:
 
-Prefer the `Result` forms in new code: the `(Bytes, Bool)` shapes are frozen
-(rule C4) rather than maintained, and the twins are where they land. For
-`hpke_open` the sequence number advances inside the function, so one call burns
-exactly one nonce.
+- a function returning `Result` is either named `*_or` — meaning it has an
+  aborting twin, and the two share one guard (rule C2) — or it is listed in
+  `LEGACY_RESULT` with a reason;
+- `Option` and `(Bytes, Bool)` returns fail the build outright, and a stale
+  allowlist entry (a name that no longer exists) fails too, so the lists cannot
+  rot;
+- a name ending in `_verify` / `_check` must return `Bool`.
 
-Two rules follow, and C4 enforces both:
-
-- **new graceful entry points are `foo_or -> Result[_, String]`**, and they
-  share one guard with their aborting twin rather than keeping a copy (rule C2);
-- the three legacy shapes are **frozen by name**. Growing one is a deliberate
-  act: the name has to be added to a list in the checker, which is where a
-  reviewer will see it.
-
-`Result` is the target shape because it can carry a reason; `(Bytes, Bool)` and
-`Option` predate the `_or` family and stay for source compatibility.
-Unifying them is a breaking change reserved for 1.0, together with the 19
-same-type tuples — `(shared_secret, enc)`, `(pk, sk)`, `(ct, tag)` — whose
-element order the compiler cannot check. The checker prints that list on every
-run so it cannot quietly grow.
+The remaining known wart is the 19 **same-type tuples** — `(pk, sk)`,
+`(shared_secret, enc)`, `(ct, tag)` — whose element order the compiler cannot
+check and which swapping silently survives. C4 prints the list on every run so
+it cannot grow unnoticed; turning them into structs is the one breaking change
+still queued.
 
 ### Public but internal: what `pub` owes you here
 

@@ -1252,7 +1252,7 @@ let aes_gcm_auth_failed : String = "aes_gcm_decrypt: tag verification failed"
 /// uniform `Err` for a tag that does not verify -- a forged ciphertext is
 /// peer input, and telling it apart from anything else through the error text
 /// would be an authentication oracle. v0.90.0.
-pub fn aes_gcm_decrypt_or(
+pub fn aes_gcm_decrypt(
   ciphertext : Bytes,
   key : Bytes,
   iv : Bytes,
@@ -1324,29 +1324,6 @@ pub fn aes_gcm_decrypt_or(
   let plaintext = gctr(round_keys, nr, inc_j0, ciphertext)
 
   Ok(plaintext)
-}
-
-///|
-/// AES-GCM decrypt — verifies the tag and returns `(plaintext, true)`, or
-/// `(b"", false)` when it does not verify. A wrong-shape key / iv / tag is a
-/// caller bug and aborts, exactly as before; the `_or` twin reports both as
-/// `Err` and is what new code should use.
-pub fn aes_gcm_decrypt(
-  ciphertext : Bytes,
-  key : Bytes,
-  iv : Bytes,
-  aad : Bytes,
-  tag : Bytes,
-) -> (Bytes, Bool) {
-  match aes_gcm_decrypt_or(ciphertext, key, iv, aad, tag) {
-    Ok(pt) => (pt, true)
-    Err(msg) =>
-      if msg == aes_gcm_auth_failed {
-        (b"", false)
-      } else {
-        abort(msg)
-      }
-  }
 }
 
 // ==================== HMAC-SHA512 (RFC 2104) ====================

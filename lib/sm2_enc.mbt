@@ -229,7 +229,7 @@ let sm2_decrypt_failed : String = "sm2_decrypt: rejected (malformed ciphertext, 
 /// `sm2_decrypt` as a `Result`: `Err` for a wrong-length `sk` (the caller's key,
 /// same text the aborting form uses) and one uniform `Err` for everything a peer
 /// can get wrong about the ciphertext.
-pub fn sm2_decrypt_or(sk : Bytes, ct : Bytes) -> Result[Bytes, String] {
+pub fn sm2_decrypt(sk : Bytes, ct : Bytes) -> Result[Bytes, String] {
   if sk.length() != 32 {
     return Err("sm2_decrypt: sk must be 32 bytes")
   }
@@ -273,22 +273,6 @@ pub fn sm2_decrypt_or(sk : Bytes, ct : Bytes) -> Result[Bytes, String] {
     return Err(sm2_decrypt_failed)
   }
   Ok(Bytes::from_array(msg[:]))
-}
-
-///|
-/// SM2 decryption (GB/T 32918) — returns `(plaintext, true)`, or `(b"", false)`
-/// for a ciphertext that does not decrypt. A wrong-length `sk` aborts, as
-/// before; prefer `sm2_decrypt_or`.
-pub fn sm2_decrypt(sk : Bytes, ct : Bytes) -> (Bytes, Bool) {
-  match sm2_decrypt_or(sk, ct) {
-    Ok(pt) => (pt, true)
-    Err(msg) =>
-      if msg == sm2_decrypt_failed {
-        (b"", false)
-      } else {
-        abort(msg)
-      }
-  }
 }
 
 // ==================== DER interop (openssl ASN.1 form) ====================
@@ -437,10 +421,15 @@ pub fn sm2_ct_to_der(ct : Bytes) -> Bytes {
 }
 
 ///|
+/// The one message `sm2_ct_from_der` gives when the input is not the one
+/// canonical encoding it requires. v0.92.0.
+let sm2_ct_from_der_rejected : String = "sm2_ct_from_der: not a canonical SM2 ciphertext DER encoding"
+
+///|
 /// Decode the openssl/ASN.1 DER form back to raw C1||C3||C2.
 /// Returns (b"", false) on malformed input (strict length checks).
-pub fn sm2_ct_from_der(der : Bytes) -> (Bytes, Bool) {
-  let fail = (b"", false)
+pub fn sm2_ct_from_der(der : Bytes) -> Result[Bytes, String] {
+  let fail : Result[Bytes, String] = Err(sm2_ct_from_der_rejected)
   if der.length() < 10 || der[0] != (0x30).to_byte() {
     return fail
   }
@@ -489,21 +478,7 @@ pub fn sm2_ct_from_der(der : Bytes) -> (Bytes, Bool) {
   for i in 0..<l2 {
     out.push(der[pos5 + i])
   }
-  (Bytes::from_array(out), true)
-}
-
-///|
-/// `sm2_ct_from_der` as a `Result` instead of `(Bytes, Bool)`: `Err` when the
-/// bytes are not the one canonical DER encoding of an SM2 ciphertext. One
-/// message for every malformed shape -- a peer that can distinguish "trailing
-/// bytes" from "non-minimal length" learns which encodings a verifier accepts,
-/// which is the malleability channel the strictness exists to close. v0.89.0.
-pub fn sm2_ct_from_der_or(der : Bytes) -> Result[Bytes, String] {
-  match sm2_ct_from_der(der) {
-    (raw, true) => Ok(raw)
-    (_, _) =>
-      Err("sm2_ct_from_der: not a canonical SM2 ciphertext DER encoding")
-  }
+  Ok(Bytes::from_array(out))
 }
 
 ///|
@@ -541,10 +516,15 @@ pub fn sm2_sig_to_der(sig : Bytes) -> Bytes {
 }
 
 ///|
+/// The one message `sm2_sig_from_der` gives when the input is not the one
+/// canonical encoding it requires. v0.92.0.
+let sm2_sig_from_der_rejected : String = "sm2_sig_from_der: not a canonical SM2 signature DER encoding"
+
+///|
 /// Decode DER SEQUENCE { INTEGER r, INTEGER s } back to raw r||s (64 bytes).
 /// Returns (b"", false) on malformed input (strict length/order checks).
-pub fn sm2_sig_from_der(der : Bytes) -> (Bytes, Bool) {
-  let fail = (b"", false)
+pub fn sm2_sig_from_der(der : Bytes) -> Result[Bytes, String] {
+  let fail : Result[Bytes, String] = Err(sm2_sig_from_der_rejected)
   if der.length() < 8 || der[0] != (0x30).to_byte() {
     return fail
   }
@@ -565,21 +545,10 @@ pub fn sm2_sig_from_der(der : Bytes) -> (Bytes, Bool) {
   if pos2 != der.length() {
     return fail
   }
-  (concat_bytes(r, sv), true)
+  Ok(concat_bytes(r, sv))
 }
 
 // ==================== SM2 sealed envelope (GM/T 0009 style) ====================
-
-///|
-/// `sm2_sig_from_der` as a `Result`. See `sm2_ct_from_der_or` for why the
-/// message is uniform. v0.89.0.
-pub fn sm2_sig_from_der_or(der : Bytes) -> Result[Bytes, String] {
-  match sm2_sig_from_der(der) {
-    (raw, true) => Ok(raw)
-    (_, _) =>
-      Err("sm2_sig_from_der: not a canonical SM2 signature DER encoding")
-  }
-}
 
 ///|
 /// Seal a message for an SM2 recipient: a fresh SM4 key + IV are encrypted
@@ -622,41 +591,38 @@ pub fn sm2_seal_or(
 }
 
 ///|
-/// Open a sealed envelope. Returns (b"", false) on malformed input, failed
-/// SM2 decryption, or GCM tag mismatch.
-pub fn sm2_open(sk : Bytes, envelope : Bytes) -> (Bytes, Bool) {
+/// The one message `sm2_open` gives for an envelope that does not open: too
+/// short, a rejected encrypted key, or a failed SM4-GCM tag. Three checks, one
+/// message -- which of them failed is what a peer probing the recipient's key
+/// would want to know. v0.92.0.
+let sm2_open_rejected : String = "sm2_open: rejected (malformed envelope, bad encrypted key, or authentication failure)"
+
+///|
+/// Open an SM2 sealed envelope (GM/T 0009): `enc_key(125) || iv(12) ||
+/// ciphertext || tag(16)`. `Err` for anything a peer can get wrong; there is no
+/// aborting form, because a forged envelope must not be able to panic the
+/// recipient.
+pub fn sm2_open(sk : Bytes, envelope : Bytes) -> Result[Bytes, String] {
   // 125 (enc key) + 12 (iv) + 16 (tag) = 153 bytes of overhead minimum
   if envelope.length() < 153 {
-    return (b"", false)
+    return Err(sm2_open_rejected)
   }
   let enc_key = ec_slice(envelope, 0, 125)
   let iv = ec_slice(envelope, 125, 12)
   let ct_len = envelope.length() - 153
   let ct = ec_slice(envelope, 137, ct_len)
   let tag = ec_slice(envelope, 137 + ct_len, 16)
-  let (payload, ok) = sm2_decrypt(sk, enc_key)
-  if !ok || payload.length() != 28 {
-    return (b"", false)
+  let payload = match sm2_decrypt(sk, enc_key) {
+    Ok(p) => p
+    Err(_) => return Err(sm2_open_rejected)
+  }
+  if payload.length() != 28 {
+    return Err(sm2_open_rejected)
   }
   let sm4_key = ec_slice(payload, 0, 16)
-  let (pt, ok2) = sm4_gcm_decrypt(ct, sm4_key, iv, b"", tag)
-  if !ok2 {
-    return (b"", false)
-  }
-  (pt, true)
-}
-
-///|
-/// `sm2_open` as a `Result`: `Err` for a short envelope, a rejected encrypted
-/// key, or a failed SM4-GCM tag -- one message for all three, since telling
-/// them apart would be an oracle on the recipient's key. v0.89.0.
-pub fn sm2_open_or(sk : Bytes, envelope : Bytes) -> Result[Bytes, String] {
-  match sm2_open(sk, envelope) {
-    (pt, true) => Ok(pt)
-    (_, _) =>
-      Err(
-        "sm2_open: rejected (malformed envelope, bad encrypted key, or authentication failure)",
-      )
+  match sm4_gcm_decrypt(ct, sm4_key, iv, b"", tag) {
+    Ok(pt) => Ok(pt)
+    Err(_) => Err(sm2_open_rejected)
   }
 }
 

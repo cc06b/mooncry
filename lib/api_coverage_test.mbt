@@ -1,3 +1,16 @@
+///|
+/// Adapter for the `(Bytes, Bool)` channel that v0.92.0 collapsed into
+/// `Result`. The suites assert "did it verify", which the channel change does
+/// not alter, so they adapt at the boundary instead of being rewritten: `Ok` is
+/// `(bytes, true)` and every `Err` is `(empty, false)`, exactly what the old
+/// functions returned.
+fn bb_flag(r : Result[Bytes, String]) -> (Bytes, Bool) {
+  match r {
+    Ok(b) => (b, true)
+    Err(_) => (Bytes::make(0, b'\x00'), false)
+  }
+}
+
 // ========== Public entry points that had no direct test (audit item #5) ==========
 //
 // Found by cross-referencing every `pub fn` against the test sources: these are
@@ -675,32 +688,6 @@ fn wave7_err(label : String, got : Result[Bytes, String]) -> Unit {
 }
 
 ///|
-/// A twin and its legacy original must agree on every input: `Ok` exactly
-/// when the original reported success, carrying the same bytes.
-fn wave5_pair(
-  label : String,
-  legacy : (Bytes, Bool),
-  twin : Result[Bytes, String],
-  want : Bytes,
-) -> Unit {
-  let (got, ok) = legacy
-  match twin {
-    Ok(g2) =>
-      if !(ok && bytes_equal(got, want) && bytes_equal(g2, want)) {
-        wave5_fails.push(
-          label + ": twin said Ok, legacy disagreed or the bytes differ",
-        )
-      }
-    Err(_) =>
-      if ok {
-        wave5_fails.push(
-          label + ": twin said Err but the legacy form succeeded",
-        )
-      }
-  }
-}
-
-///|
 test "the Result twins of the legacy-channel decoders and openers" {
   // v0.89.0: every legacy-channel entry point whose logic could be wrapped
   // without restructuring it now has an `_or` twin, so 1.0 can retire
@@ -716,98 +703,33 @@ test "the Result twins of the legacy-channel decoders and openers" {
   // ---- PKCS#8 / SPKI / PEM ----
   let pkcs8 = sm2_sk_to_pkcs8_der(sk)
   let spki = sm2_pk_to_spki_der(pk)
-  wave5_pair(
-    "pkcs8_der_to_sk",
-    sm2_pkcs8_der_to_sk(pkcs8),
-    sm2_pkcs8_der_to_sk_or(pkcs8),
-    sk,
-  )
-  wave5_pair(
-    "spki_der_to_pk",
-    sm2_spki_der_to_pk(spki),
-    sm2_spki_der_to_pk_or(spki),
-    pk,
-  )
+  wave7_ok("pkcs8_der_to_sk", sm2_pkcs8_der_to_sk(pkcs8), sk)
+  wave7_ok("spki_der_to_pk", sm2_spki_der_to_pk(spki), pk)
   let sk_pem = sm2_sk_to_pem(sk)
   let pk_pem = sm2_pk_to_pem(pk)
-  wave5_pair(
-    "sk_from_pem",
-    sm2_sk_from_pem(sk_pem),
-    sm2_sk_from_pem_or(sk_pem),
-    sk,
-  )
-  wave5_pair(
-    "pk_from_pem",
-    sm2_pk_from_pem(pk_pem),
-    sm2_pk_from_pem_or(pk_pem),
-    pk,
-  )
+  wave7_ok("sk_from_pem", sm2_sk_from_pem(sk_pem), sk)
+  wave7_ok("pk_from_pem", sm2_pk_from_pem(pk_pem), pk)
   // hostile inputs: both forms must reject
   let bad_der = Bytes::make(10, b'\x30')
-  wave5_pair(
-    "pkcs8 bad",
-    sm2_pkcs8_der_to_sk(bad_der),
-    sm2_pkcs8_der_to_sk_or(bad_der),
-    sk,
-  )
-  wave5_pair(
-    "spki empty",
-    sm2_spki_der_to_pk(b""),
-    sm2_spki_der_to_pk_or(b""),
-    pk,
-  )
-  wave5_pair(
-    "sk pem junk",
-    sm2_sk_from_pem("not a pem"),
-    sm2_sk_from_pem_or("not a pem"),
-    sk,
-  )
+  wave7_err("pkcs8 bad", sm2_pkcs8_der_to_sk(bad_der))
+  wave7_err("spki empty", sm2_spki_der_to_pk(b""))
+  wave7_err("sk pem junk", sm2_sk_from_pem("not a pem"))
   let bad_pem = "-----BEGIN PUBLIC KEY-----\n@@@@\n-----END PUBLIC KEY-----\n"
-  wave5_pair(
-    "pk pem junk",
-    sm2_pk_from_pem(bad_pem),
-    sm2_pk_from_pem_or(bad_pem),
-    pk,
-  )
+  wave7_err("pk pem junk", sm2_pk_from_pem(bad_pem))
   // ---- ciphertext and signature DER ----
   let ct = sm2_encrypt(pk, msg, rand)
   let der_ct = sm2_ct_to_der(ct)
-  wave5_pair(
-    "ct_from_der",
-    sm2_ct_from_der(der_ct),
-    sm2_ct_from_der_or(der_ct),
-    ct,
-  )
-  wave5_pair(
-    "ct_from_der bad",
-    sm2_ct_from_der(bad_der),
-    sm2_ct_from_der_or(bad_der),
-    ct,
-  )
+  wave7_ok("ct_from_der", sm2_ct_from_der(der_ct), ct)
+  wave7_err("ct_from_der bad", sm2_ct_from_der(bad_der))
   let sig = sm2_sign(sk, msg, b"1234567812345678", rand)
   let der_sig = sm2_sig_to_der(sig)
-  wave5_pair(
-    "sig_from_der",
-    sm2_sig_from_der(der_sig),
-    sm2_sig_from_der_or(der_sig),
-    sig,
-  )
-  wave5_pair(
-    "sig_from_der empty",
-    sm2_sig_from_der(b""),
-    sm2_sig_from_der_or(b""),
-    sig,
-  )
+  wave7_ok("sig_from_der", sm2_sig_from_der(der_sig), sig)
+  wave7_err("sig_from_der empty", sm2_sig_from_der(b""))
   // ---- the GM/T 0009 envelope ----
   let env = sm2_seal(pk, msg, rand)
-  wave5_pair("sm2_open", sm2_open(sk, env), sm2_open_or(sk, env), msg)
+  wave7_ok("sm2_open", sm2_open(sk, env), msg)
   let short_env = Bytes::make(20, b'\x00')
-  wave5_pair(
-    "sm2_open short",
-    sm2_open(sk, short_env),
-    sm2_open_or(sk, short_env),
-    msg,
-  )
+  wave7_err("sm2_open short", sm2_open(sk, short_env))
   // ---- the Option family: ML-KEM hybrid envelopes ----
   let (ek5, dk5) = ml_kem_512_keygen(
     Bytes::make(32, b'\x01'),
@@ -896,47 +818,31 @@ test "the five mixed-semantics twins agree with their aborting originals" {
   let msg = b"wave6 plaintext"
   // ---- AES-GCM ----
   let (ct, tag) = aes_gcm_encrypt(msg, key32, iv12, aad)
-  wave5_pair(
-    "aes_gcm",
-    aes_gcm_decrypt(ct, key32, iv12, aad, tag),
-    aes_gcm_decrypt_or(ct, key32, iv12, aad, tag),
-    msg,
-  )
+  wave7_ok("aes_gcm", aes_gcm_decrypt(ct, key32, iv12, aad, tag), msg)
   let bad_tag = tag.to_array()
   bad_tag[0] = (bad_tag[0].to_int() ^ 1).to_byte()
   let forged = Bytes::from_array(bad_tag[:])
-  wave5_pair(
-    "aes_gcm forged",
-    aes_gcm_decrypt(ct, key32, iv12, aad, forged),
-    aes_gcm_decrypt_or(ct, key32, iv12, aad, forged),
-    msg,
-  )
-  // a 20-byte key: the original aborts, the twin must report it
-  match aes_gcm_decrypt_or(ct, Bytes::make(20, b'\x01'), iv12, aad, tag) {
-    Ok(_) => assert_true(false, msg="aes_gcm_decrypt_or accepted a 20-byte key")
+  wave7_err("aes_gcm forged", aes_gcm_decrypt(ct, key32, iv12, aad, forged))
+  // a 20-byte key is a caller shape error: reported, not aborted (v0.92.0)
+  match aes_gcm_decrypt(ct, Bytes::make(20, b'\x01'), iv12, aad, tag) {
+    Ok(_) =>
+      assert_true(false, msg="aes_gcm_decrypt reported a 20-byte key as Err")
     Err(_) => ()
   }
   // ---- SM4-GCM ----
   let k16 = Bytes::make(16, b'\x01')
   let (sct, stag) = sm4_gcm_encrypt(msg, k16, iv12, aad)
-  wave5_pair(
-    "sm4_gcm",
-    sm4_gcm_decrypt(sct, k16, iv12, aad, stag),
-    sm4_gcm_decrypt_or(sct, k16, iv12, aad, stag),
-    msg,
-  )
+  wave7_ok("sm4_gcm", sm4_gcm_decrypt(sct, k16, iv12, aad, stag), msg)
   let s_bad_tag = stag.to_array()
   s_bad_tag[3] = (s_bad_tag[3].to_int() ^ 1).to_byte()
-  wave5_pair(
+  wave7_err(
     "sm4_gcm forged",
     sm4_gcm_decrypt(sct, k16, iv12, aad, Bytes::from_array(s_bad_tag[:])),
-    sm4_gcm_decrypt_or(sct, k16, iv12, aad, Bytes::from_array(s_bad_tag[:])),
-    msg,
   )
-  // An 8-byte tag is a caller shape error, so the original aborts on it and
-  // only the twin can be asked: it must report, not abort.
-  match sm4_gcm_decrypt_or(sct, k16, iv12, aad, Bytes::make(8, b'\x00')) {
-    Ok(_) => assert_true(false, msg="sm4_gcm_decrypt_or accepted an 8-byte tag")
+  // An 8-byte tag is a caller shape error: reported, not aborted (v0.92.0).
+  match sm4_gcm_decrypt(sct, k16, iv12, aad, Bytes::make(8, b'\x00')) {
+    Ok(_) =>
+      assert_true(false, msg="sm4_gcm_decrypt reported an 8-byte tag as Err")
     Err(_) => ()
   }
   // ---- AES-GCM-SIV ----
@@ -954,17 +860,15 @@ test "the five mixed-semantics twins agree with their aborting originals" {
   let pk2 = sm2_public_key(sk2)
   let rand2 = sm2_test_rand(23)
   let c2 = sm2_encrypt(pk2, msg, rand2)
-  wave5_pair("sm2_decrypt", sm2_decrypt(sk2, c2), sm2_decrypt_or(sk2, c2), msg)
+  wave7_ok("sm2_decrypt", sm2_decrypt(sk2, c2), msg)
   let c2_bad = c2.to_array()
   c2_bad[c2_bad.length() - 1] = (c2_bad[c2_bad.length() - 1].to_int() ^ 1).to_byte()
-  wave5_pair(
+  wave7_err(
     "sm2_decrypt forged",
     sm2_decrypt(sk2, Bytes::from_array(c2_bad[:])),
-    sm2_decrypt_or(sk2, Bytes::from_array(c2_bad[:])),
-    msg,
   )
-  match sm2_decrypt_or(Bytes::make(31, b'\x01'), c2) {
-    Ok(_) => assert_true(false, msg="sm2_decrypt_or accepted a 31-byte sk")
+  match sm2_decrypt(Bytes::make(31, b'\x01'), c2) {
+    Ok(_) => assert_true(false, msg="sm2_decrypt reported a 31-byte sk as Err")
     Err(_) => ()
   }
   // ---- HPKE ----

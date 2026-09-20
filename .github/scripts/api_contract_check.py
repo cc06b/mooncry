@@ -84,8 +84,9 @@ LEGACY_RESULT = {
     "ml_kem_512_hybrid_open",
     "ml_kem_768_hybrid_open",
     "ml_kem_1024_hybrid_open",
-}
-LEGACY_BYTES_BOOL = {
+    # The (Bytes, Bool) channel was collapsed the same way in v0.92.0. No
+    # aborting twin exists for any of them: they all consume peer input, where
+    # an abort is a denial of service.
     "aes_gcm_decrypt",
     "sm4_gcm_decrypt",
     "sm2_decrypt",
@@ -97,6 +98,9 @@ LEGACY_BYTES_BOOL = {
     "sm2_sk_from_pem",
     "sm2_pk_from_pem",
 }
+# Empty since v0.92.0, when the ten `(Bytes, Bool)` entry points became
+# `Result` themselves and their `_or` twins were deleted. Must stay empty.
+LEGACY_BYTES_BOOL = set()
 # Empty since v0.91.0 and it must stay empty: `Option` is no longer a channel
 # this library reports failures through.
 LEGACY_OPTION = set()

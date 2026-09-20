@@ -77,16 +77,15 @@ pub fn sealed_box_open(
     tag[i] = envelope[13 + ct_len + i]
   }
   let key = hkdf_sha256(context, master_key, sealed_box_info, 32)
-  let (pt, ok) = aes_gcm_decrypt(
-    Bytes::from_array(ct[:]),
-    key,
-    Bytes::from_array(nonce[:]),
-    aad,
-    Bytes::from_array(tag[:]),
-  )
-  if ok {
-    Ok(pt)
-  } else {
-    Err("sealed_box_open: authentication failed")
+  match
+    aes_gcm_decrypt(
+      Bytes::from_array(ct[:]),
+      key,
+      Bytes::from_array(nonce[:]),
+      aad,
+      Bytes::from_array(tag[:]),
+    ) {
+    Ok(pt) => Ok(pt)
+    Err(_) => Err("sealed_box_open: authentication failed")
   }
 }

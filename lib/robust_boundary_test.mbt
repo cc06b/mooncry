@@ -102,12 +102,14 @@ test "boundary-aes-gcm-family" {
         let (ct, tag) = aes_gcm_encrypt(pt, key, nonce, aad)
         assert_true(ct.length() == pt_len, msg="aes_gcm " + label + ": ct len")
         assert_true(tag.length() == 16, msg="aes_gcm " + label + ": tag len")
-        let (got, ok) = aes_gcm_decrypt(ct, key, nonce, aad, tag)
+        let (got, ok) = bb_flag(aes_gcm_decrypt(ct, key, nonce, aad, tag))
         assert_true(ok && rb_eq(got, pt), msg="aes_gcm " + label)
         rb_assert_tamper_rejected(
           r,
           ct,
-          fn(c : Bytes) -> Bool { aes_gcm_decrypt(c, key, nonce, aad, tag).1 },
+          fn(c : Bytes) -> Bool {
+            bb_flag(aes_gcm_decrypt(c, key, nonce, aad, tag)).1
+          },
           "aes_gcm " + label,
         )
         // GMAC is the empty-plaintext GCM tag: it must match
@@ -119,12 +121,14 @@ test "boundary-aes-gcm-family" {
       // SM4-GCM (128-bit key only)
       let (sct, stag) = sm4_gcm_encrypt(pt, key16, nonce, aad)
       assert_true(sct.length() == pt_len, msg="sm4_gcm " + label + ": ct len")
-      let (sgot, sok) = sm4_gcm_decrypt(sct, key16, nonce, aad, stag)
+      let (sgot, sok) = bb_flag(sm4_gcm_decrypt(sct, key16, nonce, aad, stag))
       assert_true(sok && rb_eq(sgot, pt), msg="sm4_gcm " + label)
       rb_assert_tamper_rejected(
         r,
         sct,
-        fn(c : Bytes) -> Bool { sm4_gcm_decrypt(c, key16, nonce, aad, stag).1 },
+        fn(c : Bytes) -> Bool {
+          bb_flag(sm4_gcm_decrypt(c, key16, nonce, aad, stag)).1
+        },
         "sm4_gcm " + label,
       )
       // AES-GCM-SIV (RFC 8452), both key sizes
@@ -371,12 +375,12 @@ test "boundary-kem-envelopes" {
       env.length() == 125 + 12 + pt_len + 16,
       msg=label + ": envelope length " + env.length().to_string(),
     )
-    let (got, ok) = sm2_open(sk, env)
+    let (got, ok) = bb_flag(sm2_open(sk, env))
     assert_true(ok && rb_eq(got, pt), msg=label + ": round trip")
     rb_assert_tamper_rejected(
       r,
       env,
-      fn(e : Bytes) -> Bool { sm2_open(sk, e).1 },
+      fn(e : Bytes) -> Bool { bb_flag(sm2_open(sk, e)).1 },
       label,
     )
   }
