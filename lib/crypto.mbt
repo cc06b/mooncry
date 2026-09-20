@@ -124,6 +124,9 @@ fn hex_char_to_int(c : Int) -> Int {
 }
 
 ///|
+/// Decode a hex string (either case) to bytes. Aborts on an odd length or
+/// a non-hex character; `hex_to_bytes_or` reports both as `Err` and is what
+/// a parser should use on input it did not produce.
 pub fn hex_to_bytes(hex : String) -> Bytes {
   // delegates to the `_or` twin so the two cannot drift: they used to be
   // separate loops with separate messages ("hex string length must be even" /
@@ -260,6 +263,8 @@ fn repeat_byte(byte : Byte, count : Int) -> Bytes {
 }
 
 ///|
+/// HMAC-SHA-256 (RFC 2104): a 32-byte tag over `message` under `key` of any
+/// length (longer keys are hashed first, shorter ones zero-padded).
 pub fn hmac_sha256(key : Bytes, message : Bytes) -> Bytes {
   let block_size = 64
 
@@ -760,6 +765,9 @@ fn pkcs7_unpad(data : Bytes) -> Bytes {
 // ==================== AES-CBC (NIST SP 800-38A) ====================
 
 ///|
+/// AES-CBC encrypt with PKCS#7 padding, returning **`iv || ciphertext`** --
+/// the IV travels with the output, which is what `aes_decrypt_cbc` expects.
+/// Aborts on a key that is not 16/24/32 bytes or an IV that is not 16.
 pub fn aes_encrypt_cbc(data : Bytes, key : Bytes, iv : Bytes) -> Bytes {
   if key.length() != 16 && key.length() != 24 && key.length() != 32 {
     abort("aes_encrypt_cbc: key length must be 16, 24, or 32 bytes")
@@ -804,6 +812,14 @@ pub fn aes_encrypt_cbc(data : Bytes, key : Bytes, iv : Bytes) -> Bytes {
 }
 
 ///|
+/// AES-CBC decrypt of `iv || ciphertext`, removing PKCS#7 padding.
+///
+/// The padding check is **lenient**: `pkcs7_unpad` returns its input
+/// unchanged when the padding is invalid, so this cannot tell "the plaintext
+/// legitimately ends in a byte > 16" from "the ciphertext was tampered with".
+/// Use `aes_decrypt_cbc_or`, which validates strictly and reports `Err` --
+/// and note that CBC is unauthenticated, so neither form detects a flipped
+/// ciphertext bit the way an AEAD does.
 pub fn aes_decrypt_cbc(data : Bytes, key : Bytes, iv : Bytes) -> Bytes {
   if key.length() != 16 && key.length() != 24 && key.length() != 32 {
     abort("aes_decrypt_cbc: key length must be 16, 24, or 32 bytes")

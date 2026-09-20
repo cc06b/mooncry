@@ -1559,6 +1559,36 @@ rejects import cycles (`Import loop detected`). A directory without a
 `moon.pkg` is not a package at all and will not be found, which looks exactly
 like a visibility error.
 
+## Versioning
+
+This library stays in **0.x**. 1.0 is a gate, not a date.
+
+Breaking changes ship in **minor** versions, which semver allows in 0.x: 0.91.0
+collapsed the `Option` channel, 0.92.0 the `(Bytes, Bool)` one, and
+0.93.0–0.94.0 replaced every public same-type tuple with a struct. Each entry in
+[`CHANGELOG.md`](CHANGELOG.md) says what moved and what to write instead.
+Patch versions (`0.x.y`) never change a signature.
+
+What 1.0 would have to mean, and where each gate stands:
+
+| Gate | Status |
+| --- | --- |
+| Every public item documented, every API contract machine-checked | **met** — CI rules C1–C5; 574/574 public items carry a real doc comment |
+| A published support and disclosure process | **met** — [SECURITY.md](SECURITY.md); private vulnerability reporting is on |
+| The API shapes frozen so they stop moving | **met** — two failure channels, both enforced; no same-type tuples; internals in a compiler-enforced `internal` package |
+| An independent security audit | **not met** — there has never been one, and 1.0 should not ship without it |
+| Side-channel resistance for the table-based primitives | **not met** — AES, GHASH, ZUC and Falcon keygen/sign are documented as not constant-time; 1.0 would have to fix them or scope them out explicitly |
+| Coverage-guided fuzzing beyond the in-repo hostile-input suites | **not met** — today it is seed rotation (35 rounds) plus four parameter-probe waves |
+| A real downstream consumer and a quiet period | **not met** — five consecutive minors were breaking |
+
+Until the last four are met, treat the API as *converging* rather than stable:
+the shapes are frozen by CI, but new primitives can still arrive and a minor may
+still move something.
+
+To report a security problem, see [SECURITY.md](SECURITY.md) — it also lists what
+is a documented property rather than a defect (the non-constant-time paths, the
+absence of any RNG, aborts on caller-shape errors).
+
 ## Publishing (maintainers)
 
 `moon.mod` declares `name = "cc06b/mooncry"`, license `Apache-2.0`. Publishing

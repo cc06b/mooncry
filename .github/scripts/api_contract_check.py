@@ -35,6 +35,9 @@ Three checks, all static, all seconds:
       `_verify` / `_check` must return `Bool`. The legacy lists are the point:
       growing one is a review decision, not a default.
 
+  C5  every public item in lib/ and internal/ carries a real doc comment -- a
+      bare `///|` marker does not count. 574/574 as of v0.95.0.
+
 Exit code is non-zero if any check fails; violations are also emitted as
 GitHub workflow annotations.
 """
@@ -326,6 +329,41 @@ def documented_tokens(readme):
     return toks
 
 
+def doc_coverage(dirs):
+    """(documented, undocumented_names) for every public item.
+
+    `///|` on its own is the marker moonc wants above a definition; it carries no
+    information, so an item counts as documented only when some `///` line above
+    it (before the definition, allowing blank lines) has actual text. v0.95.0
+    took this from 544/576 to 574/574 and C5 keeps it there.
+    """
+    total = 0
+    missing = []
+    for d in dirs:
+        if not os.path.isdir(d):
+            continue
+        for f in sorted(os.listdir(d)):
+            if not f.endswith(".mbt") or f.endswith("_test.mbt"):
+                continue
+            lines = io.open(os.path.join(d, f), encoding="utf-8").read().split("\n")
+            for i, line in enumerate(lines):
+                m = re.match(r"pub (?:fn|let|struct|enum|type) ([A-Za-z0-9_]+)", line)
+                if not m:
+                    continue
+                total += 1
+                j = i - 1
+                ok = False
+                while j >= 0 and (lines[j].strip().startswith("///") or not lines[j].strip()):
+                    t = lines[j].strip()
+                    if t.startswith("///") and t != "///|" and len(t) > 4:
+                        ok = True
+                        break
+                    j -= 1
+                if not ok:
+                    missing.append("%s/%s:%d %s" % (os.path.basename(d), f, i + 1, m.group(1)))
+    return total, missing
+
+
 def main():
     libdir = ROOT
     if "--lib" in sys.argv:
@@ -337,6 +375,7 @@ def main():
     if os.path.isdir(sibling):
         dirs.append(sibling)
     problems = []
+    c5 = 0
 
     funcs = {}          # name -> (file, sig, ret, body)
     graph = {}          # every fn name -> set(callees), for transitive delegation
@@ -508,6 +547,15 @@ def main():
           % (len(same_type_tuples), MAX_SAME_TYPE_TUPLES,
              ", ".join(t.split(" -> ")[0] for t in same_type_tuples[:6]) +
              (" ..." if len(same_type_tuples) > 6 else "")))
+
+    # ---- C5: every public item is documented ----
+    total, missing = doc_coverage(dirs)
+    for m in missing:
+        c5 += 1
+        problems.append("C5 %s has no doc comment (`///|` alone does not count)" % m)
+    print("C5  public items with a real doc comment: %d/%d%s"
+          % (total - len(missing), total,
+             "" if not missing else " -- MISSING: " + ", ".join(missing[:6])))
 
     for p in problems:
         print("::error::%s" % p)

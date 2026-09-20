@@ -5,6 +5,10 @@
 // full sigVer suite). v0.31.0.
 
 ///|
+/// Which hash family an SLH-DSA parameter set is built on -- `Sha2`
+/// (SHA-256/384/512) or `Shake` (SHAKE128/256). It selects the H, T and F
+/// constructions of FIPS 205 §4, so it is part of every parameter set's
+/// identity rather than an option.
 pub enum SlhKind {
   Sha2
   Shake

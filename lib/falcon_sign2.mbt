@@ -56,12 +56,6 @@ fn falcon_complete_private(
 }
 
 ///|
-pub let fp_invsqrt2 : Double = 4604544271217802189UL.reinterpret_as_double()
-
-///|
-pub let fp_invsqrt8 : Double = 4600040671590431693UL.reinterpret_as_double()
-
-///|
 fn fpr_inv_sigma_at(logn : Int) -> Double {
   @internal.falcon_sigma_inv_bits[logn].reinterpret_as_double()
 }

@@ -1046,6 +1046,9 @@ pub let falcon_bitlength_avg : Array[Int] = [
 ]
 
 ///|
+/// The standard-deviation half of the C reference's `BITLENGTH[logn]`
+/// (avg, std) pair -- the spread of the `f`/`g` coefficient bit lengths that
+/// keygen's acceptance test allows. Index is logn.
 pub let falcon_bitlength_std : Array[Int] = [0, 1, 1, 1, 1, 2, 4, 5, 8, 13, 25]
 
 ///|

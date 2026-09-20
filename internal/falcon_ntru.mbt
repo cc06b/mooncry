@@ -15,6 +15,8 @@ let fp_mask31 : Int = 0x7FFFFFFF
 // ---------------------------------------------------------------------------
 
 ///|
+/// Fold a residue that may be slightly negative into [0, p) by adding p once
+/// (every caller passes a value already greater than -p).
 pub fn modp_set(x : Int, p : Int) -> Int {
   let mut w = x
   if w < 0 {
@@ -24,6 +26,9 @@ pub fn modp_set(x : Int, p : Int) -> Int {
 }
 
 ///|
+/// Centre a residue into [-p/2, p/2) -- the signed representative the C
+/// reference's `modp_norm` produces, and the form the coefficient bounds are
+/// checked against.
 pub fn modp_norm(x : Int, p : Int) -> Int {
   let half = (p + 1) >> 1
   if x >= half {
@@ -47,11 +52,15 @@ pub fn modp_ninv31(p : Int) -> Int {
 }
 
 ///|
+/// 2^31 mod p, computed as `fp_2_31 - p` (valid because p < 2^31). It is the
+/// Montgomery R for the 31-bit window the modp layer uses.
 pub fn modp_r(p : Int) -> Int {
   fp_2_31 - p
 }
 
 ///|
+/// Modular addition of two residues in [0, p), with one conditional subtraction
+/// instead of a division.
 pub fn modp_add(a : Int, b : Int, p : Int) -> Int {
   let mut d = a + b - p
   if d < 0 {
@@ -61,6 +70,7 @@ pub fn modp_add(a : Int, b : Int, p : Int) -> Int {
 }
 
 ///|
+/// Modular subtraction of two residues in [0, p), with one conditional addition.
 pub fn modp_sub(a : Int, b : Int, p : Int) -> Int {
   let mut d = a - b
   if d < 0 {

@@ -94,21 +94,26 @@ pub fn sha3_finalize(h : Sha3Hasher) -> Bytes {
 }
 
 ///|
+/// Streaming SHA3-224: rate 144 bytes, 28-byte output, domain suffix 0x06.
+/// Feed with `sha3_update`, finish with `sha3_finalize`.
 pub fn sha3_224_new() -> Sha3Hasher {
   sha3_new(144, 28, 0x06)
 }
 
 ///|
+/// Streaming SHA3-256: rate 136, 32-byte output, domain 0x06.
 pub fn sha3_256_new() -> Sha3Hasher {
   sha3_new(136, 32, 0x06)
 }
 
 ///|
+/// Streaming SHA3-384: rate 104, 48-byte output, domain 0x06.
 pub fn sha3_384_new() -> Sha3Hasher {
   sha3_new(104, 48, 0x06)
 }
 
 ///|
+/// Streaming SHA3-512: rate 72, 64-byte output, domain 0x06.
 pub fn sha3_512_new() -> Sha3Hasher {
   sha3_new(72, 64, 0x06)
 }
@@ -141,11 +146,15 @@ fn sha3_squeeze(h : Sha3Hasher, out_len : Int) -> Bytes {
 }
 
 ///|
+/// Streaming SHAKE128: rate 168, domain 0x1F, and no fixed output length --
+/// `shake_finalize(h, out_len)` squeezes as much as you ask for.
 pub fn shake_128_new() -> Sha3Hasher {
   sha3_new(168, 0, 0x1F)
 }
 
 ///|
+/// Streaming SHAKE256: rate 136, domain 0x1F, output length chosen at
+/// `shake_finalize`.
 pub fn shake_256_new() -> Sha3Hasher {
   sha3_new(136, 0, 0x1F)
 }

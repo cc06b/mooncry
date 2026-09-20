@@ -3,6 +3,10 @@
 // (ROTL) and 80 rounds. Verified against Python `hashlib.sha1` + RFC 1321.
 
 ///|
+/// Incremental SHA-1 state: `sha1_new`, then `sha1_update`, then
+/// `sha1_finalize` for the 20-byte digest. Like every hasher here it is
+/// single-use -- finalize pads the state in place. SHA-1 is collision-broken
+/// and stays only for compatibility (HMAC-SHA-1, HOTP, legacy signatures).
 pub struct Sha1Hasher {
   state : Array[UInt]
   buffer : Array[Byte]

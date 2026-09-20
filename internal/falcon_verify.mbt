@@ -4,6 +4,7 @@
 // produced by the C reference (see falcon_m3_test.mbt).
 
 ///|
+/// Falcon's NTT modulus q = 12289.
 pub let falcon_q : Int = 12289
 
 ///|
@@ -13,6 +14,9 @@ let falcon_q0i : Int = 12287
 let falcon_r_mont : Int = 4091
 
 ///|
+/// R^2 = 2^32 mod q = 10952, the Montgomery conversion constant: multiplying a
+/// residue by it once moves it into the Montgomery domain the mod-q NTT works
+/// in. (`falcon_r_mont`, 2^16 mod q, is the per-step one.)
 pub let falcon_r2 : Int = 10952
 
 ///|

@@ -5,6 +5,10 @@
 // the memmove points (identical data flow, no shared-memory hazards).
 
 ///|
+/// The C reference's bound on the (f,g) resultant norm, as the bit pattern
+/// of the double 16822.4121 -- written as bits so every target rejects the
+/// same keygen attempts. `falcon_solve2.mbt` reinterprets it back to a
+/// `Double`.
 pub let fp_bnorm_max_bits : UInt64 = 4670353323383631276UL
 
 ///|
@@ -230,6 +234,10 @@ fn zint_rebuild_crt_at(
 // ---------------------------------------------------------------------------
 
 ///|
+/// The deepest level of the solve_NTRU descent, working in place on `f`/`g`
+/// with `tmp` as scratch. Returns false when the pair degenerates (a zero or
+/// non-invertible coefficient), which makes keygen draw new randomness --
+/// the C reference's `solve_NTRU_deepest`.
 pub fn solve_ntru_deepest_at(
   logn_top : Int,
   f : Array[Int],
@@ -275,6 +283,9 @@ pub fn solve_ntru_deepest_at(
 }
 
 ///|
+/// One intermediate level of the same descent (any depth above the binary
+/// level), halving the degree of `f` and `g` and lifting the accumulated
+/// solution back up. Returns false on a degenerate pair.
 pub fn solve_ntru_intermediate(
   logn_top : Int,
   f : Array[Int],
@@ -513,6 +524,9 @@ pub fn solve_ntru_intermediate(
 }
 
 ///|
+/// Copy `cnt` words inside one array, overlap-safe: it goes through a temporary
+/// buffer because the C original is a `memmove` and the ranges do overlap at the
+/// lift points.
 pub fn copy_words(a : Array[Int], src : Int, dst : Int, cnt : Int) -> Unit {
   let buf = Array::make(cnt, 0)
   for i = 0; i < cnt; i = i + 1 {
@@ -524,6 +538,8 @@ pub fn copy_words(a : Array[Int], src : Int, dst : Int, cnt : Int) -> Unit {
 }
 
 ///|
+/// The binary level (degree 1) of the descent, where the pair is solved
+/// directly with the Bézout identity instead of recursing.
 pub fn solve_ntru_depth1(
   logn_top : Int,
   f : Array[Int],

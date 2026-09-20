@@ -108,11 +108,17 @@ pub struct FalconTestRng {
 }
 
 ///|
+/// Start the deterministic RNG the C vector harness uses, so the Falcon KATs
+/// reproduce byte for byte. **Not a CSPRNG** -- see `FalconTestRng`.
 pub fn falcon_test_rng_init() -> FalconTestRng {
   { x: falcon_xof_init(), ctr: 0UL, }
 }
 
 ///|
+/// The next `n` bytes of that deterministic stream: SHAKE256 over
+/// `16 x 0xA5 || u64le(counter)`, the C reference's `randombytes` stand-in.
+/// Anyone can reproduce the whole stream from the call order alone, so using
+/// it for a key, a nonce or `ikm` produces material an attacker can recompute.
 pub fn falcon_test_rng_bytes(r : FalconTestRng, n : Int) -> Bytes {
   let seed = Array::make(24, (0xA5).to_byte())
   let c = r.ctr

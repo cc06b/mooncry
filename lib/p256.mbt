@@ -521,6 +521,9 @@ pub fn p256_dbg_mul(a : Bytes, b : Bytes) -> Bytes {
 }
 
 ///|
+/// Reference modular multiplication (generic `BigInt`) that
+/// `lib/p256_dbg_test.mbt` compares against `p256_dbg_mul`, the native-field
+/// one. Both take and return 32-byte big-endian residues.
 pub fn p256_dbg_ref_mul(a : Bytes, b : Bytes) -> Bytes {
   let x = @bigint.BigInt::from_octets(a) % p256_curve.p
   let y = @bigint.BigInt::from_octets(b) % p256_curve.p
@@ -528,6 +531,7 @@ pub fn p256_dbg_ref_mul(a : Bytes, b : Bytes) -> Bytes {
 }
 
 ///|
+/// The native-field base-point scalar multiplication, as 32-byte `x || y`.
 pub fn p256_dbg_gmul(k : Int) -> Bytes {
   let g = ec_g_point(p256_curve)
   let pt = p256_scalar_mult_native(@bigint.BigInt::from_int(k), g)
@@ -535,6 +539,8 @@ pub fn p256_dbg_gmul(k : Int) -> Bytes {
 }
 
 ///|
+/// The same computation through the generic Jacobian path, for the
+/// differential test to compare against `p256_dbg_gmul`.
 pub fn p256_dbg_ref_gmul(k : Int) -> Bytes {
   let g = ec_g_point(p256_curve)
   let pt = jac_to_affine(
